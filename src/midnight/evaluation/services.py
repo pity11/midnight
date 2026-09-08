@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from midnight.env.container_manager import (
+    _DIRECT_PACKAGE_HOSTS,
     _apt_mirror,
     _docker_build_proxy,
     _host_needs_platform,
@@ -106,6 +107,7 @@ class BenchmarkServiceManager:
             context, dockerfile = self._paths(service)
             args = ["docker", "build", "-t", service.image]
             proxy_value = os.getenv("MIDNIGHT_BUILD_PROXY", "").strip()
+            direct_hosts = set(_DIRECT_PACKAGE_HOSTS)
             if proxy_value:
                 proxy = _docker_build_proxy(proxy_value)
                 args += ["--build-arg", f"HTTP_PROXY={proxy}"]
@@ -115,9 +117,12 @@ class BenchmarkServiceManager:
                 mirror = _apt_mirror(mirror_value)
                 args += ["--build-arg", f"APT_MIRROR={mirror}"]
                 mirror_host = urlsplit(mirror).hostname
-                if proxy_value and mirror_host:
-                    args += ["--build-arg", f"NO_PROXY={mirror_host}"]
-                    args += ["--build-arg", f"no_proxy={mirror_host}"]
+                if mirror_host:
+                    direct_hosts.add(mirror_host)
+            if proxy_value:
+                no_proxy = ",".join(sorted(direct_hosts))
+                args += ["--build-arg", f"NO_PROXY={no_proxy}"]
+                args += ["--build-arg", f"no_proxy={no_proxy}"]
             args += ["-f", str(dockerfile)]
             if _host_needs_platform(service.platform):
                 args += ["--platform", service.platform]

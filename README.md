@@ -134,8 +134,8 @@ export MIDNIGHT_APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ubuntu
 
 Use an HTTP mirror during the bootstrap layer because the minimal Ubuntu base
 does not contain the CA certificate bundle until that layer installs it. When
-both settings are present, the APT mirror bypasses the proxy while other build
-downloads continue through it.
+both settings are present, OS package repositories bypass the proxy while
+other build downloads continue through it.
 
 After independent attempts finish, aggregate their reports in attempt order:
 

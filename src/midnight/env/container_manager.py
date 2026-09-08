@@ -28,6 +28,15 @@ _ARCH_ALIASES = {
     "linux/arm64": {"aarch64", "arm64"},
 }
 
+_DIRECT_PACKAGE_HOSTS = {
+    "archive.ubuntu.com",
+    "deb.debian.org",
+    "dl-cdn.alpinelinux.org",
+    "ports.ubuntu.com",
+    "security.debian.org",
+    "security.ubuntu.com",
+}
+
 
 def _host_needs_platform(target_platform: str) -> bool:
     """True if the image's target platform differs from the host arch.
@@ -249,6 +258,7 @@ class ContainerManager:
             f"midnight.dockerfile_sha256={source_digest}",
         ]
         build_proxy = os.getenv("MIDNIGHT_BUILD_PROXY", "").strip()
+        direct_hosts = set(_DIRECT_PACKAGE_HOSTS)
         if build_proxy:
             proxy = _docker_build_proxy(build_proxy)
             build_args += ["--build-arg", f"HTTP_PROXY={proxy}"]
@@ -258,11 +268,12 @@ class ContainerManager:
             mirror = _apt_mirror(apt_mirror)
             mirror_host = urlsplit(mirror).hostname
             build_args += ["--build-arg", f"APT_MIRROR={mirror}"]
-            # Domestic package mirrors are faster and more reliable when they
-            # bypass the local proxy. Other build traffic still uses it.
-            if build_proxy and mirror_host:
-                build_args += ["--build-arg", f"NO_PROXY={mirror_host}"]
-                build_args += ["--build-arg", f"no_proxy={mirror_host}"]
+            if mirror_host:
+                direct_hosts.add(mirror_host)
+        if build_proxy:
+            no_proxy = ",".join(sorted(direct_hosts))
+            build_args += ["--build-arg", f"NO_PROXY={no_proxy}"]
+            build_args += ["--build-arg", f"no_proxy={no_proxy}"]
         build_args += ["-f", str(dockerfile)]
         if _host_needs_platform(spec.platform):
             build_args += ["--platform", spec.platform]
