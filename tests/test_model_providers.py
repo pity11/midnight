@@ -172,6 +172,16 @@ def test_json_protocol_rejects_unknown_tool_arguments_after_bounded_repairs():
         model.invoke("probe")
 
 
+def test_json_protocol_falls_back_to_plain_completion_after_bounded_repairs():
+    delegate = ScriptedModel(replies=["working", "still working", "final narrative"])
+    model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
+
+    result = model.invoke("probe")
+
+    assert result.content == "final narrative"
+    assert result.tool_calls == []
+
+
 def test_cuc_factory_uses_registry_defaults_without_network(monkeypatch):
     from midnight.config import ModelSpec, get_config
     from midnight.models import build_llm

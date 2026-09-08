@@ -257,8 +257,17 @@ class JsonProtocolChatModel(BaseChatModel):
                 return ChatResult(generations=[
                     ChatGeneration(message=self._attach_metadata(parsed, *responses))
                 ])
-            except RuntimeError:
+            except RuntimeError as exc:
                 if repair_attempt == 2:
+                    if str(exc).startswith("MODEL_ACTION_JSON_INVALID"):
+                        content = response.content
+                        if isinstance(content, str) and content.strip():
+                            fallback = AIMessage(content=content)
+                            return ChatResult(generations=[
+                                ChatGeneration(
+                                    message=self._attach_metadata(fallback, *responses)
+                                )
+                            ])
                     raise
                 names = ", ".join(
                     item["function"]["name"] for item in self.bound_tools
@@ -288,8 +297,17 @@ class JsonProtocolChatModel(BaseChatModel):
                 return ChatResult(generations=[
                     ChatGeneration(message=self._attach_metadata(parsed, *responses))
                 ])
-            except RuntimeError:
+            except RuntimeError as exc:
                 if repair_attempt == 2:
+                    if str(exc).startswith("MODEL_ACTION_JSON_INVALID"):
+                        content = response.content
+                        if isinstance(content, str) and content.strip():
+                            fallback = AIMessage(content=content)
+                            return ChatResult(generations=[
+                                ChatGeneration(
+                                    message=self._attach_metadata(fallback, *responses)
+                                )
+                            ])
                     raise
                 names = ", ".join(
                     item["function"]["name"] for item in self.bound_tools
