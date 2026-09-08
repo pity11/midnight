@@ -8,6 +8,7 @@ locally, and retried once only for formatting errors.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from typing import Any, Literal
 from uuid import uuid4
@@ -59,26 +60,28 @@ def _text(message: BaseMessage) -> str:
 
 
 def _json_payload(raw: str) -> str:
-    """Unwrap common JSON-only markers emitted by compatible gateways."""
+    """Extract one action object from common gateway presentation text."""
     stripped = raw.strip()
     try:
         value = json.loads(stripped)
     except ValueError:
-        start = stripped.find("{")
-        if start < 0:
-            raise ValueError("no JSON object") from None
-        value, consumed = json.JSONDecoder().raw_decode(stripped[start:])
-        prefix = stripped[:start].strip().lower()
-        suffix = stripped[start + consumed :].strip().lower()
-        allowed_prefixes = {"```", "```json", "<json>", "<tool_call>"}
-        allowed_suffixes = {"```", "</json>", "</tool_call>"}
-        if prefix not in allowed_prefixes or suffix not in allowed_suffixes:
-            raise ValueError("unexpected text outside JSON object") from None
+        decoder = json.JSONDecoder()
+        candidates: list[dict[str, Any]] = []
+        for match in re.finditer(r"\{", stripped):
+            try:
+                candidate, _ = decoder.raw_decode(stripped[match.start() :])
+            except ValueError:
+                continue
+            if isinstance(candidate, dict) and any(
+                key in candidate for key in ("type", "tool", "name", "function")
+            ):
+                candidates.append(candidate)
+        if not candidates:
+            raise ValueError("no JSON action object") from None
+        value = candidates[-1]
     if not isinstance(value, dict):
         raise TypeError("JSON action must be an object")
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-
-
 class _StructuredRunnable(Runnable[Any, Any]):
     def __init__(self, model: JsonProtocolChatModel, schema: type[BaseModel]) -> None:
         self._model = model
@@ -131,32 +134,62 @@ class JsonProtocolChatModel(BaseChatModel):
     def _parse_action(self, raw: str) -> AIMessage:
         try:
             data = json.loads(_json_payload(raw))
-            if not isinstance(data, dict):
-                raise TypeError
-            if data.get("type") == "complete":
+        except (ValueError, TypeError) as exc:
+            raise RuntimeError("MODEL_ACTION_JSON_INVALID") from exc
+        function = data.get("function")
+        if isinstance(function, dict):
+            data = {
+                "type": "tool_call",
+                "tool": function.get("name"),
+                "arguments": function.get("arguments", {}),
+            }
+        action_type = data.get("type")
+        tool_name = data.get("tool") or data.get("name")
+        if action_type in {"tool", "function_call"} or (
+            action_type is None and tool_name is not None
+        ):
+            arguments = data.get("arguments", data.get("args", data.get("input", {})))
+            if isinstance(arguments, str):
+                try:
+                    arguments = json.loads(arguments)
+                except ValueError as exc:
+                    raise RuntimeError("MODEL_TOOL_ARGUMENTS_INVALID") from exc
+            data = {"type": "tool_call", "tool": tool_name, "arguments": arguments}
+        elif action_type in {"finish", "final"}:
+            data = {
+                "type": "complete",
+                "summary": data.get("summary", data.get("answer", data.get("content"))),
+            }
+        if data.get("type") == "complete":
+            try:
                 complete_action = _Complete.model_validate(data)
-                return AIMessage(content=complete_action.summary)
+            except ValidationError as exc:
+                raise RuntimeError("MODEL_COMPLETE_ACTION_INVALID") from exc
+            return AIMessage(content=complete_action.summary)
+        try:
             tool_action = _ToolCall.model_validate(data)
-            matching = [
-                item for item in self.bound_tools
-                if item["function"]["name"] == tool_action.tool
-            ]
-            if len(matching) != 1:
-                raise ValueError
-            params = matching[0]["function"].get("parameters", {})
-            Draft202012Validator(params).validate(tool_action.arguments)
-            return AIMessage(
-                content="",
-                tool_calls=[{
-                    "name": tool_action.tool,
-                    "args": tool_action.arguments,
-                    "id": f"json_{uuid4().hex}",
-                }],
-            )
-        except (ValueError, KeyError, TypeError, ValidationError) as exc:
+        except ValidationError as exc:
             raise RuntimeError("MODEL_TOOL_ACTION_INVALID") from exc
+        matching = [
+            item for item in self.bound_tools
+            if item["function"]["name"] == tool_action.tool
+        ]
+        if len(matching) != 1:
+            safe_name = tool_action.tool[:80].replace("\n", " ")
+            raise RuntimeError(f"MODEL_TOOL_UNKNOWN:{safe_name}")
+        params = matching[0]["function"].get("parameters", {})
+        try:
+            Draft202012Validator(params).validate(tool_action.arguments)
         except Exception as exc:  # jsonschema validation errors
             raise RuntimeError("MODEL_TOOL_ARGUMENTS_INVALID") from exc
+        return AIMessage(
+            content="",
+            tool_calls=[{
+                "name": tool_action.tool,
+                "args": tool_action.arguments,
+                "id": f"json_{uuid4().hex}",
+            }],
+        )
 
     @staticmethod
     def _attach_metadata(parsed: AIMessage, *responses: BaseMessage) -> AIMessage:
@@ -214,22 +247,30 @@ class JsonProtocolChatModel(BaseChatModel):
             result = self.delegate.invoke(messages, stop=stop, **kwargs)
             return ChatResult(generations=[ChatGeneration(message=result)])
         request = self._tool_messages(messages)
-        first = self.delegate.invoke(request, stop=stop, **kwargs)
-        try:
-            parsed = self._parse_action(_text(first))
-        except RuntimeError:
-            repair = HumanMessage(content=(
-                "Your previous response failed local schema validation. Return one valid JSON "
-                "object only, using exactly one available tool or the complete action."
-            ))
-            second = self.delegate.invoke([*request, first, repair], stop=stop, **kwargs)
-            parsed = self._parse_action(_text(second))
-            return ChatResult(
-                generations=[ChatGeneration(message=self._attach_metadata(parsed, first, second))]
-            )
-        return ChatResult(
-            generations=[ChatGeneration(message=self._attach_metadata(parsed, first))]
-        )
+        conversation = list(request)
+        responses: list[BaseMessage] = []
+        for repair_attempt in range(3):
+            response = self.delegate.invoke(conversation, stop=stop, **kwargs)
+            responses.append(response)
+            try:
+                parsed = self._parse_action(_text(response))
+                return ChatResult(generations=[
+                    ChatGeneration(message=self._attach_metadata(parsed, *responses))
+                ])
+            except RuntimeError:
+                if repair_attempt == 2:
+                    raise
+                names = ", ".join(
+                    item["function"]["name"] for item in self.bound_tools
+                )
+                repair = HumanMessage(content=(
+                    "The previous action failed local validation. Correct that action without "
+                    "changing the solving plan. Return one JSON object only. Use type=tool_call, "
+                    f"a tool from [{names}], and schema-valid arguments; or use type=complete "
+                    "with a summary."
+                ))
+                conversation.extend([response, repair])
+        raise AssertionError("unreachable")
 
     async def _agenerate(self, messages: list[BaseMessage], stop: list[str] | None = None,
                          run_manager: Any = None, **kwargs: Any) -> ChatResult:
@@ -237,22 +278,30 @@ class JsonProtocolChatModel(BaseChatModel):
             result = await self.delegate.ainvoke(messages, stop=stop, **kwargs)
             return ChatResult(generations=[ChatGeneration(message=result)])
         request = self._tool_messages(messages)
-        first = await self.delegate.ainvoke(request, stop=stop, **kwargs)
-        try:
-            parsed = self._parse_action(_text(first))
-        except RuntimeError:
-            repair = HumanMessage(content=(
-                "Your previous response failed local schema validation. Return one valid JSON "
-                "object only, using exactly one available tool or the complete action."
-            ))
-            second = await self.delegate.ainvoke([*request, first, repair], stop=stop, **kwargs)
-            parsed = self._parse_action(_text(second))
-            return ChatResult(
-                generations=[ChatGeneration(message=self._attach_metadata(parsed, first, second))]
-            )
-        return ChatResult(
-            generations=[ChatGeneration(message=self._attach_metadata(parsed, first))]
-        )
+        conversation = list(request)
+        responses: list[BaseMessage] = []
+        for repair_attempt in range(3):
+            response = await self.delegate.ainvoke(conversation, stop=stop, **kwargs)
+            responses.append(response)
+            try:
+                parsed = self._parse_action(_text(response))
+                return ChatResult(generations=[
+                    ChatGeneration(message=self._attach_metadata(parsed, *responses))
+                ])
+            except RuntimeError:
+                if repair_attempt == 2:
+                    raise
+                names = ", ".join(
+                    item["function"]["name"] for item in self.bound_tools
+                )
+                repair = HumanMessage(content=(
+                    "The previous action failed local validation. Correct that action without "
+                    "changing the solving plan. Return one JSON object only. Use type=tool_call, "
+                    f"a tool from [{names}], and schema-valid arguments; or use type=complete "
+                    "with a summary."
+                ))
+                conversation.extend([response, repair])
+        raise AssertionError("unreachable")
 
     def _structured_prompt(self, schema: type[BaseModel]) -> SystemMessage:
         rendered = json.dumps(schema.model_json_schema(), ensure_ascii=False, separators=(",", ":"))

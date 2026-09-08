@@ -64,6 +64,38 @@ def test_json_protocol_accepts_common_json_wrappers(wrapped):
     assert result.tool_calls[0]["name"] == "http_probe"
 
 
+def test_json_protocol_skips_flag_braces_before_action_object():
+    delegate = ScriptedModel(replies=[
+        (
+            'I found TEST{redacted} and will verify it.\n'
+            '{"type":"tool_call","tool":"http_probe","arguments":{"path":"/verify"}}'
+        )
+    ])
+    model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
+
+    result = model.invoke("probe")
+
+    assert result.tool_calls[0]["args"] == {"path": "/verify"}
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        '{"name":"http_probe","args":{"path":"/health"}}',
+        '{"type":"function_call","tool":"http_probe","input":{"path":"/health"}}',
+        '{"function":{"name":"http_probe","arguments":{"path":"/health"}}}',
+    ],
+)
+def test_json_protocol_normalizes_common_tool_action_variants(variant):
+    delegate = ScriptedModel(replies=[variant])
+    model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
+
+    result = model.invoke("probe")
+
+    assert result.tool_calls[0]["name"] == "http_probe"
+    assert result.tool_calls[0]["args"] == {"path": "/health"}
+
+
 def test_json_protocol_repairs_structured_output_once():
     class Decision(BaseModel):
         model_config = ConfigDict(extra="forbid")
@@ -128,12 +160,12 @@ def test_json_protocol_is_the_final_system_instruction():
     assert isinstance(delegate.seen[0][2], HumanMessage)
 
 
-def test_json_protocol_rejects_unknown_tool_arguments_after_one_repair():
+def test_json_protocol_rejects_unknown_tool_arguments_after_bounded_repairs():
     invalid = (
         '{"type":"tool_call","tool":"http_probe",'
         '"arguments":{"path":"/","unexpected":true}}'
     )
-    delegate = ScriptedModel(replies=[invalid, invalid])
+    delegate = ScriptedModel(replies=[invalid, invalid, invalid])
     model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
 
     with pytest.raises(RuntimeError, match="MODEL_TOOL_ARGUMENTS_INVALID"):
