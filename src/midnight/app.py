@@ -90,6 +90,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="list discovered challenges and exit (no solving)",
     )
     p.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help="validate bundles, images, and run identity, write the manifest, then exit",
+    )
+    p.add_argument(
         "--check-config",
         action="store_true",
         help="validate configuration and exit",
@@ -265,6 +270,11 @@ async def _amain(args: argparse.Namespace) -> int:
         run_id = manifest_run_id
         run_manifest.write(args.run_manifest_path)
         task_timeout = evaluation_spec.time_budget_seconds
+        if args.preflight_only:
+            log.info("evaluation preflight passed; manifest written to %s", args.run_manifest_path)
+            if platform is not None:
+                await platform.close()
+            return 0
     else:
         run_id = args.run_id or uuid4().hex
         task_timeout = None

@@ -147,7 +147,8 @@ uv run midnight-stage \
 MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight \
   --bundles-dir /evaluator/bundles \
   --evaluator-manifest /evaluator/private/answers.json \
-  --evaluation-spec config/evaluation.example.json
+  --evaluation-spec config/evaluation.example.json \
+  --preflight-only
 ```
 
 The runner verifies every bundle hash and file inventory before use. It derives
