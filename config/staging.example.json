@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "suite": "example-suite",
+  "suite_version": "upstream-commit-or-release",
+  "upstream_revision": "full-upstream-commit",
+  "challenge_id": "reverse-001",
+  "name": "Example Reverse Challenge",
+  "description": "Recover the flag from the supplied binary.",
+  "category": "reverse",
+  "remote": null,
+  "flag_format": "CTF\\{[^}]+\\}",
+  "internet_policy": "disabled",
+  "allowed_targets": [],
+  "visible_files": [
+    {
+      "source": "dist/chall",
+      "target": "chall"
+    }
+  ],
+  "contamination_patterns": ["EXAMPLE_SECRET_PREFIX\\{[^}]+\\}"],
+  "approved_findings": []
+}

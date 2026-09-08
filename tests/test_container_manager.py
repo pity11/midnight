@@ -31,3 +31,27 @@ async def test_cleanup_run_uses_managed_run_labels(monkeypatch):
     assert any("label=midnight.managed=true" in call for call in calls)
     assert any("label=midnight.run_id=run-1" in call for call in calls)
     assert ("docker", "rm", "-f", "container-a") in calls
+
+
+@pytest.mark.asyncio
+async def test_image_digest_resolves_immutable_id(monkeypatch):
+    async def fake_ensure(self, ctype):
+        return "midnight/pwn:latest"
+
+    async def fake_run(*args: str, timeout=None):
+        return ExecResult(0, "sha256:" + "a" * 64 + "\n", "")
+
+    monkeypatch.setattr(ContainerManager, "ensure_image", fake_ensure)
+    monkeypatch.setattr(container_module, "_run", fake_run)
+    digest = await ContainerManager().image_digest("pwn")
+    assert digest == "sha256:" + "a" * 64
+
+
+@pytest.mark.asyncio
+async def test_target_only_network_fails_closed(monkeypatch):
+    async def fake_ensure(self, ctype):
+        return "midnight/pwn:latest"
+
+    monkeypatch.setattr(ContainerManager, "ensure_image", fake_ensure)
+    with pytest.raises(NotImplementedError, match="target-only"):
+        await ContainerManager().create("pwn", "test", network_policy="target_only")

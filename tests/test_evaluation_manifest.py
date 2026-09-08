@@ -7,12 +7,14 @@ from midnight.evaluation.manifest import RunManifest, sha256_tree
 
 def _run_manifest(**changes) -> RunManifest:
     values = {
+        "suite": "cybench",
         "suite_version": "cybench-abc123",
-        "task_bundle_sha256": "a" * 64,
+        "task_bundles": {"task-1": "a" * 64},
         "midnight_revision": "deadbeef",
-        "model": "provider/model-2026-09-01",
+        "models": {"default": "provider/model-2026-09-01"},
         "prompt_revision": "b" * 64,
-        "tool_image_digest": "sha256:" + "c" * 64,
+        "config_revision": "d" * 64,
+        "tool_image_digests": {"pwn": "sha256:" + "c" * 64},
         "track": "standard",
         "attempt": 1,
         "random_seed": 7,
@@ -47,4 +49,4 @@ def test_run_identity_changes_with_experimental_variable(tmp_path):
     path = original.write(tmp_path / "run.json")
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["attempt"] == 1
-    assert payload["task_bundle_sha256"] == "a" * 64
+    assert payload["task_bundles"] == {"task-1": "a" * 64}

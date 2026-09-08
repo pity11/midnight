@@ -135,12 +135,17 @@ private values:
 
 ```yaml
 schema_version: 1
+suite: cybench
 suite_version: 2026-09-08.1
-task_bundle_sha256: <hash>
+task_bundles:
+  task-1: <hash>
 midnight_revision: <commit>
-model: <provider/model/version>
+models:
+  default: <provider/model/version>
 prompt_revision: <hash>
-tool_image_digest: <oci-digest>
+config_revision: <hash>
+tool_image_digests:
+  pwn: <oci-digest>
 track: standard
 attempt: 1
 random_seed: 1

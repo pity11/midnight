@@ -117,6 +117,32 @@ MIDNIGHT_PER_TASK_TIMEOUT=1800
 MIDNIGHT_RECURSION_LIMIT=100
 ```
 
+## Trusted benchmark bundles
+
+Formal evaluations use allowlist-based clean bundles. The upstream repository
+and evaluator answers must remain outside the bundle root:
+
+```bash
+uv run midnight-stage \
+  --source-root /evaluator/upstream/challenge \
+  --spec config/staging.example.json \
+  --output /evaluator/bundles/reverse-001
+
+MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight \
+  --bundles-dir /evaluator/bundles \
+  --evaluator-manifest /evaluator/private/answers.json \
+  --evaluation-spec config/evaluation.example.json
+```
+
+The runner verifies every bundle hash and file inventory before use. It derives
+the run ID from the effective task bundles, Midnight revision, model mapping,
+prompt and configuration hashes, Docker image IDs, budgets, network policy,
+attempt, and seed. Reusing the same identity resumes that attempt; changing the
+attempt creates an independent run.
+
+Target-only egress and hard token-budget enforcement currently fail closed and
+must be implemented before those policies can be claimed in a formal result.
+
 ## Safety and testing
 
 Local fixtures are the default execution target. Competition-specific access is

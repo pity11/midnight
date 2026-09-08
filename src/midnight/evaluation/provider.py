@@ -90,7 +90,14 @@ class ValidatedBundleProvider:
             round_id=manifest.suite_version,
             source_hash=manifest.bundle_sha256,
             file_hashes={},
+            internet_policy=manifest.internet_policy,
+            allowed_targets=manifest.allowed_targets,
         )
+
+    def bundle_manifest(self, challenge_id: str) -> BundleManifest:
+        """Return a freshly validated public manifest."""
+        _, manifest, _ = self._validate(challenge_id)
+        return manifest
 
     async def download_files(self, challenge_id: str, dest: str) -> list[str]:
         root, manifest, _ = self._validate(challenge_id)

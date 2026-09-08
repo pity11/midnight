@@ -57,6 +57,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="evaluator-only JSON oracle used with --bundles-dir",
     )
     p.add_argument(
+        "--evaluation-spec",
+        help="immutable evaluation protocol JSON used with --bundles-dir",
+    )
+    p.add_argument(
+        "--run-manifest-path",
+        default="logs/run-manifest.json",
+        help="write the effective immutable evaluation run manifest",
+    )
+    p.add_argument(
         "--submit",
         action="store_true",
         help="allow submissions when using an HTTP platform (default: dry run)",
@@ -141,8 +150,8 @@ async def _amain(args: argparse.Namespace) -> int:
 
     if args.platform_config and args.bundles_dir:
         raise ValueError("--platform-config and --bundles-dir are mutually exclusive")
-    if args.evaluator_manifest and not args.bundles_dir:
-        raise ValueError("--evaluator-manifest requires --bundles-dir")
+    if (args.evaluator_manifest or args.evaluation_spec) and not args.bundles_dir:
+        raise ValueError("--evaluator-manifest and --evaluation-spec require --bundles-dir")
 
     platform = _load_http_adapter(args.platform_config) if args.platform_config else None
     provider: ChallengeProvider
@@ -154,8 +163,8 @@ async def _amain(args: argparse.Namespace) -> int:
         )
 
         provider = ValidatedBundleProvider(args.bundles_dir)
-        if not args.evaluator_manifest:
-            raise ValueError("--bundles-dir requires --evaluator-manifest")
+        if not args.evaluator_manifest or not args.evaluation_spec:
+            raise ValueError("--bundles-dir requires evaluator manifest and evaluation spec")
         bundle_root = Path(args.bundles_dir).resolve()
         evaluator_path = Path(args.evaluator_manifest).resolve()
         if evaluator_path.is_relative_to(bundle_root):
@@ -192,7 +201,45 @@ async def _amain(args: argparse.Namespace) -> int:
 
     from midnight.orchestrator.scheduler import Scheduler
 
-    run_id = args.run_id or uuid4().hex
+    run_manifest = None
+    if args.bundles_dir:
+        from typing import cast
+
+        from midnight.env.container_manager import ContainerManager
+        from midnight.evaluation.provider import ValidatedBundleProvider
+        from midnight.evaluation.run import (
+            apply_random_seed,
+            build_run_manifest,
+            load_evaluation_spec,
+        )
+        from midnight.state import ChallengeType
+
+        clean_provider = cast(ValidatedBundleProvider, provider)
+        evaluation_spec = load_evaluation_spec(args.evaluation_spec)
+        if evaluation_spec.token_budget is not None:
+            raise ValueError("token budget enforcement is not implemented; omit token_budget")
+        apply_random_seed(evaluation_spec.random_seed)
+        bundle_manifests = [clean_provider.bundle_manifest(ch["id"]) for ch in challenges]
+        categories = {cast(ChallengeType, manifest.category) for manifest in bundle_manifests}
+        image_manager = ContainerManager(run_id="manifest-preflight")
+        image_digests: dict[str, str] = {
+            category: await image_manager.image_digest(category) for category in sorted(categories)
+        }
+        run_manifest = build_run_manifest(
+            evaluation_spec,
+            bundle_manifests,
+            config=cfg,
+            image_digests=image_digests,
+        )
+        manifest_run_id = run_manifest.run_identity
+        if args.run_id and args.run_id != manifest_run_id:
+            raise ValueError("--run-id must equal the immutable run manifest identity")
+        run_id = manifest_run_id
+        run_manifest.write(args.run_manifest_path)
+        task_timeout = evaluation_spec.time_budget_seconds
+    else:
+        run_id = args.run_id or uuid4().hex
+        task_timeout = None
     log.info("run id: %s", run_id)
     submitter = SubmissionGate(
         delegate,
@@ -208,6 +255,7 @@ async def _amain(args: argparse.Namespace) -> int:
             run_id=run_id,
             checkpoint_store=CheckpointStore(args.checkpoint_path),
             artifacts_root=args.artifacts_root,
+            per_task_timeout=task_timeout,
         )
         started = time.monotonic()
         results = await scheduler.solve_all(challenges)
@@ -216,6 +264,7 @@ async def _amain(args: argparse.Namespace) -> int:
             results,
             elapsed_seconds=time.monotonic() - started,
             models={role: spec.model for role, spec in cfg.models.items()},
+            run_manifest_id=run_manifest.run_identity if run_manifest else None,
         )
         report.write(args.report_path)
         log.info("report written to %s", Path(args.report_path).resolve())

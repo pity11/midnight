@@ -129,7 +129,21 @@ class ContainerManager:
             raise RuntimeError(f"image build failed for {spec.image}:\n{build.stderr[-2000:]}")
         return spec.image
 
-    async def create(self, ctype: ChallengeType, name: str) -> str:
+    async def image_digest(self, ctype: ChallengeType) -> str:
+        """Return the immutable local Docker image ID used for a category."""
+        image = await self.ensure_image(ctype)
+        result = await _run("docker", "image", "inspect", "--format", "{{.Id}}", image, timeout=30)
+        if not result.ok or not result.stdout.strip().startswith("sha256:"):
+            raise RuntimeError(f"could not resolve image digest for {image}: {result.stderr.strip()}")
+        return result.stdout.strip()
+
+    async def create(
+        self,
+        ctype: ChallengeType,
+        name: str,
+        *,
+        network_policy: str | None = None,
+    ) -> str:
         """Start a container for ``ctype`` and return its id.
 
         Issues ``docker run -d`` with platform / network / cap / resource flags
@@ -165,11 +179,16 @@ class ContainerManager:
             args += ["--platform", spec.platform]
         for cap in spec.cap_add:
             args += ["--cap-add", cap]
-        if spec.network == "none":
+        effective_network = "none" if network_policy == "disabled" else spec.network
+        if network_policy == "target_only":
+            raise NotImplementedError(
+                "target-only egress enforcement is not implemented; refusing an untrusted run"
+            )
+        if effective_network == "none":
             args += ["--network", "none"]
-        elif spec.network:
-            await self.ensure_network(spec.network)
-            args += ["--network", spec.network]
+        elif effective_network:
+            await self.ensure_network(effective_network)
+            args += ["--network", effective_network]
         # workdir + keep-alive entrypoint comes from the image CMD (sleep infinity)
         args += [spec.image]
 

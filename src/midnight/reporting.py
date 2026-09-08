@@ -55,6 +55,7 @@ class RunReport:
     repeated_tool_calls: int
     tool_errors: int
     category_results: dict[str, dict[str, int]]
+    run_manifest_id: str | None = None
 
     @classmethod
     def from_results(
@@ -64,6 +65,7 @@ class RunReport:
         *,
         elapsed_seconds: float,
         models: dict[str, str] | None = None,
+        run_manifest_id: str | None = None,
     ) -> RunReport:
         materialized = list(results)
         counts = Counter(result.status for result in materialized)
@@ -111,6 +113,7 @@ class RunReport:
             repeated_tool_calls=sum(result.repeated_tool_calls for result in materialized),
             tool_errors=sum(result.tool_errors for result in materialized),
             category_results=dict(sorted(categories.items())),
+            run_manifest_id=run_manifest_id,
         )
 
     def write(self, path: str | Path) -> Path:

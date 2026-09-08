@@ -28,6 +28,8 @@ class Challenge(TypedDict, total=False):
     round_id: str | None  # platform round/version identifier
     file_hashes: dict[str, str]  # attachment name -> SHA-256
     source_hash: str | None  # deterministic challenge revision hash
+    internet_policy: str | None  # evaluation network policy
+    allowed_targets: list[str]  # evaluator-declared challenge targets
 
 
 class CTFState(TypedDict, total=False):

@@ -81,7 +81,11 @@ def build_main_graph(
         ch = state["challenge"]
         name = manager.container_name(ch.get("id", "x"))
         await manager.stop(name)
-        cid = await manager.create(ctype, name)
+        cid = await manager.create(
+            ctype,
+            name,
+            network_policy=ch.get("internet_policy"),
+        )
         env = CTFEnvironment(
             container_id=cid,
             workdir=cfg.settings.workdir,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Literal
@@ -88,18 +89,27 @@ class BundleManifest(StrictManifest):
 
 class RunManifest(StrictManifest):
     schema_version: Literal[1] = 1
+    suite: str = Field(min_length=1)
     suite_version: str = Field(min_length=1)
-    task_bundle_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    task_bundles: dict[str, str] = Field(min_length=1)
     midnight_revision: str = Field(min_length=1)
-    model: str = Field(min_length=1)
+    models: dict[str, str] = Field(min_length=1)
     prompt_revision: str = Field(min_length=1)
-    tool_image_digest: str = Field(min_length=1)
+    config_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
+    tool_image_digests: dict[str, str] = Field(min_length=1)
     track: Literal["standard", "long_horizon", "open_world"]
     attempt: int = Field(ge=1)
     random_seed: int
     time_budget_seconds: int = Field(gt=0)
     token_budget: int | None = Field(default=None, gt=0)
     internet_policy: Literal["disabled", "target_only", "open_world"]
+
+    @field_validator("task_bundles")
+    @classmethod
+    def validate_bundle_hashes(cls, value: dict[str, str]) -> dict[str, str]:
+        if any(not re.fullmatch(r"[a-f0-9]{64}", digest) for digest in value.values()):
+            raise ValueError("task bundle hashes must be lowercase SHA-256 values")
+        return dict(sorted(value.items()))
 
     @property
     def run_identity(self) -> str:
