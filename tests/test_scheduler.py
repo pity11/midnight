@@ -173,3 +173,23 @@ async def test_managed_provider_instance_is_always_stopped(tmp_path):
     assert result.status == "failed"
     assert provider.started
     assert provider.stopped
+
+
+@pytest.mark.asyncio
+async def test_scheduler_preserves_hydrated_metadata_on_solver_failure(tmp_path):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"fixture")
+    scheduler = Scheduler(
+        provider=FixtureProvider(source),
+        submitter=NoopSubmitter(),
+        artifacts_root=tmp_path / "artifacts",
+    )
+
+    async def fail(challenge):
+        raise RuntimeError("graph failed")
+
+    scheduler._solve_one = fail
+    result = (await scheduler.solve_all([{"id": "pwn-1"}]))[0]
+    assert result.status == "failed"
+    assert result.category == "pwn"
+    assert result.revision is not None

@@ -38,6 +38,13 @@ def test_container_names_are_run_scoped_and_sanitized():
     assert len(first.container_name("x" * 100)) <= 66
 
 
+def test_challenge_scopes_get_distinct_container_and_network_names():
+    first = ContainerManager(run_id="run-1", scope_id="run-1-challenge-a")
+    second = ContainerManager(run_id="run-1", scope_id="run-1-challenge-b")
+    assert first.container_name("relay") != second.container_name("relay")
+    assert first.scope_id != second.scope_id
+
+
 @pytest.mark.asyncio
 async def test_cleanup_run_uses_managed_run_labels(monkeypatch):
     calls: list[tuple[str, ...]] = []

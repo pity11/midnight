@@ -120,12 +120,15 @@ class ContainerManager:
 
     config: AppConfig = field(default_factory=get_config)
     run_id: str = "local"
+    scope_id: str | None = None
     _containers: set[str] = field(default_factory=set)
     _networks: set[str] = field(default_factory=set)
     _owned_networks: set[str] = field(default_factory=set)
 
     def container_name(self, challenge_id: str) -> str:
-        safe_run = re.sub(r"[^a-zA-Z0-9_.-]", "-", self.run_id)[:24]
+        safe_run = re.sub(
+            r"[^a-zA-Z0-9_.-]", "-", self.scope_id or self.run_id
+        )[:24]
         safe_challenge = re.sub(r"[^a-zA-Z0-9_.-]", "-", challenge_id)[:32]
         return f"midnight-{safe_run}-{safe_challenge}".lower()
 
@@ -152,7 +155,9 @@ class ContainerManager:
         return name
 
     async def ensure_target_network(self) -> str:
-        safe_run = re.sub(r"[^a-zA-Z0-9_.-]", "-", self.run_id)[:32].lower()
+        safe_run = re.sub(
+            r"[^a-zA-Z0-9_.-]", "-", self.scope_id or self.run_id
+        )[:32].lower()
         name = f"midnight-{safe_run}-targets"
         result = await _run("docker", "network", "inspect", name)
         if not result.ok:

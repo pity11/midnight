@@ -138,6 +138,7 @@ class Scheduler:
             async with sem:
                 started = time.monotonic()
                 challenge_id = ch.get("id", "?")
+                hydrated: Challenge | None = None
                 self._event("challenge_started", challenge_id)
                 instance_started = False
                 try:
@@ -174,6 +175,9 @@ class Scheduler:
                     return Result(
                         challenge_id,
                         status="timeout",
+                        revision=(hydrated or ch).get("source_hash")
+                        or (hydrated or ch).get("round_id"),
+                        category=(hydrated or ch).get("category_hint"),
                         duration_seconds=round(time.monotonic() - started, 3),
                     )
                 except Exception as exc:  # noqa: BLE001
@@ -187,6 +191,9 @@ class Scheduler:
                         challenge_id,
                         status="failed",
                         error=str(exc),
+                        revision=(hydrated or ch).get("source_hash")
+                        or (hydrated or ch).get("round_id"),
+                        category=(hydrated or ch).get("category_hint"),
                         duration_seconds=round(time.monotonic() - started, 3),
                     )
                 finally:
@@ -271,7 +278,11 @@ class Scheduler:
                 )
 
         cfg = get_config()
-        manager = ContainerManager(run_id=self.run_id)  # per-challenge manager -> isolated cleanup
+        challenge_scope = hashlib.sha256(ch.get("id", "?").encode()).hexdigest()[:12]
+        manager = ContainerManager(
+            run_id=self.run_id,
+            scope_id=f"{self.run_id[:16]}-{challenge_scope}",
+        )
 
         async def invoke(checkpointer=None):
             graph = build_graph(checkpointer)
