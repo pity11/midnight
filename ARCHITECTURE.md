@@ -12,9 +12,9 @@
 
 保留它已有的分类器、题型专家、交互式工具和 Docker 生命周期管理。LangGraph 负责有边界的工作流，不负责平台协议或凭据。
 
-### 2. 移植 `midnights` 的协议边界
+### 2. 建立平台无关的协议边界
 
-将 `ChallengeProvider`、`FlagSubmitter`、尝试状态、截止时间和错误分类抽象成平台无关接口。NSSCTF、湾区杯、CTFd、Cybench 和本地 fixture 各自实现 adapter，不把平台字段散落在 solver 中。
+将 `ChallengeProvider`、`FlagSubmitter`、尝试状态、截止时间和错误分类抽象成平台无关接口。CTFd、Cybench、其他赛事平台和本地 fixture 各自实现 adapter，不把平台字段散落在 solver 中。
 
 ### 3. 采用 `baidu-agent` 的可观测性，但统一事件模型
 
@@ -106,4 +106,3 @@ V0 的离线指标稳定后，再评估题型专家间的结构化协作、并�
 - 模拟平台拒绝、网络中断、模型超时、进程重启后，任务能恢复或明确失败，不重复提交。
 - 任意一次提交都能追溯到题目版本、候选来源、工具输出和模型调用事件。
 - 真实平台 adapter 在没有凭据时只能运行 dry-run；所有单元测试和 benchmark 测试不触碰真实赛事。
-
