@@ -1,12 +1,60 @@
 .venv/
 __pycache__/
 *.pyc
+
+# Local credentials and provider overrides
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+/secrets/
+/config/private/
+/config/*.local.yaml
+/config/*.local.json
+/config/platform.yaml
+/config/providers.local.yaml
+
+# Evaluator-only benchmark material
+/benchmark/private/
+/benchmarks/private/
+/benchmark/specs/
+/benchmarks/specs/
+
+# Local evaluation state and outputs
+/runs/
+/benchmark/runs/
+/benchmarks/runs/
+/artifacts/
+/checkpoints/
+*.sqlite
+*.sqlite3
+*.db
+*.jsonl
+run-manifest.json
+report.json
+submission-ledger.json
+submissions.json
+
+# Python tooling and build output
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 *.egg-info/
 dist/
 build/
 logs/
+*.log
+
+# Local container exports
+*.docker.tar
+*.oci
+
+# OS metadata
 .DS_Store
