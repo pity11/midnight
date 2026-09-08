@@ -37,6 +37,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/midnight"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"config" = "midnight/_assets/config"
+"docker" = "midnight/_assets/docker"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

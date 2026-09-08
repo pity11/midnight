@@ -13,8 +13,12 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, Field
 
-# project root = three levels up from this file (src/midnight/config.py)
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# A source checkout keeps assets at the repository root. Built wheels include
+# the same directories under ``midnight/_assets`` so installed CLI runs do not
+# depend on the caller's current working directory.
+_SOURCE_ROOT = Path(__file__).resolve().parents[2]
+_PACKAGED_ROOT = Path(__file__).resolve().parent / "_assets"
+PROJECT_ROOT = _SOURCE_ROOT if (_SOURCE_ROOT / "config").is_dir() else _PACKAGED_ROOT
 CONFIG_DIR = PROJECT_ROOT / "config"
 
 
