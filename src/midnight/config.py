@@ -120,6 +120,7 @@ def _apply_env_overrides(settings: Settings) -> Settings:
         "MIDNIGHT_MAX_CONCURRENCY": ("max_concurrency", int),
         "MIDNIGHT_PER_TASK_TIMEOUT": ("per_task_timeout", int),
         "MIDNIGHT_RECURSION_LIMIT": ("recursion_limit", int),
+        "MIDNIGHT_SPECIALIST_STEP_LIMIT": ("specialist_step_limit", int),
     }
     data = settings.model_dump()
     for env_key, (field, caster) in mapping.items():
