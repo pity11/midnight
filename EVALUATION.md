@@ -25,6 +25,12 @@ Public suites are calibration evidence. B3, B4, and especially B5 carry the
 main capability claim. No aggregate "Midnight score" may combine engineering
 fixtures with challenge solves.
 
+The first evaluation release uses single-category challenges across Pwn,
+Reverse, Web, Crypto, Forensics, and Misc. Mixed-category challenges are
+deferred until category routing and per-specialist baselines are stable. They
+will later form a separate cross-specialist evaluation and will not be inserted
+retroactively into an existing suite version.
+
 ## Tracks
 
 ### Standard
@@ -67,6 +73,85 @@ platform control-plane base URL.
 Every staged bundle receives a content hash. Reports record this hash and the
 upstream repository revision so a result can be reproduced without disclosing
 answers. Private holdout material must be stored outside this repository.
+
+### Staging pipeline
+
+```text
+upstream benchmark
+  -> pinned source snapshot
+  -> allowlist-based extraction
+  -> contamination scan
+  -> clean immutable bundle
+  -> isolated agent execution
+  -> evaluator-side grading
+  -> metrics and trace export
+```
+
+Extraction is allowlist based. A task adapter must explicitly identify every
+player-visible file; the stager does not copy an upstream challenge directory
+and then try to delete known secret files. Symlinks, path traversal, files
+outside the declared challenge root, device files, and archives that expand
+outside their destination are rejected.
+
+After extraction, the stager scans filenames and text content for generic and
+suite-specific leakage indicators, including flag patterns, `solution`,
+`writeup`, `answer`, `grader`, and `expected_flag`. It also inspects Dockerfiles,
+compose files, test scripts, environment templates, and recursively unpacked
+archives within configured size limits. A match blocks the task until an
+evaluator reviews or explicitly suppresses that exact finding.
+
+The scan is defense in depth. Passing it does not make a bundle trusted; trust
+comes from the player-visible allowlist and the separation between the staging,
+solver, and evaluator environments.
+
+### Immutable manifests
+
+Each clean task bundle contains a public manifest similar to:
+
+```yaml
+schema_version: 1
+suite: cybench
+suite_version: 2026-09-08.1
+upstream_revision: <commit>
+challenge_id: <stable-id>
+category: pwn
+bundle_sha256: <canonical-bundle-hash>
+created_at: <utc-timestamp>
+internet_policy: disabled
+allowed_targets: []
+agent_visible:
+  - statement.md
+  - files/chall
+excluded_classes:
+  - flag
+  - solution
+  - writeup
+  - grader
+```
+
+The evaluator stores a separate private manifest for answers, graders, scoring,
+and secrets. The run manifest references the task manifest without copying
+private values:
+
+```yaml
+schema_version: 1
+suite_version: 2026-09-08.1
+task_bundle_sha256: <hash>
+midnight_revision: <commit>
+model: <provider/model/version>
+prompt_revision: <hash>
+tool_image_digest: <oci-digest>
+track: standard
+attempt: 1
+random_seed: 1
+time_budget_seconds: 1800
+token_budget: <integer-or-null>
+internet_policy: disabled
+```
+
+Manifests are canonicalized and hashed. Published results are immutable: any
+change to a task bundle, prompt, model, tool image, budget, or network policy
+creates a new run identity instead of overwriting an earlier result.
 
 ## Controlled comparisons
 
@@ -111,6 +196,40 @@ never written to reports.
 7. Run selected hard recent tasks under both Standard and Long-horizon tracks.
 8. Run the private holdout once for a release decision. Do not tune on it.
 
+## Release gates
+
+The evaluation pipeline is introduced through four gates:
+
+1. **Trust gate:** staging is allowlist based, leakage scans pass, bundle hashes
+   are reproducible, and the solver cannot read evaluator-only files.
+2. **Reproducibility gate:** an interrupted run resumes within the same attempt,
+   while a new attempt receives no previous state. Re-running a manifest
+   reconstructs the same task bundle and runtime configuration.
+3. **Measurement gate:** the report contains the required identifiers, outcomes,
+   timing, model usage, tool activity, and failure classifications without raw
+   flags or credentials.
+4. **Capability gate:** Midnight and the bare control complete B2 under matched
+   budgets before B3/B4 results are used for claims. A release capability claim
+   requires B3 evidence and an untouched B5 evaluation.
+
+Tsecbench results may satisfy part of B2 or provide an additional closed-book
+result, but they remain a separate scorecard because task definitions, platform
+availability, and scoring are controlled externally.
+
+## Private holdout construction
+
+The initial B5 set contains 20-30 new tasks and covers all six categories. Its
+target distribution is approximately 15% easy, 35% medium, 35% hard, and 15%
+very hard, adjusted when pilot human solves show that organizer labels are
+miscalibrated. Difficulty is based on blinded human solve evidence, not only the
+author's estimate.
+
+Holdout authors and evaluators do not expose task content to Agent developers.
+The set is versioned and retired after use for prompt or system tuning. Reused
+tasks become public calibration tasks in later evaluations. Mixed-category
+tasks are optional in the first private set and are reported separately if
+included.
+
 ## Dataset notes
 
 - Cybench contains Crypto, Web, Reverse, Forensics, Misc, and Pwn tasks.
@@ -122,4 +241,3 @@ never written to reports.
 - Public test splits are held out from Midnight development by convention, but
   are not described as unseen or blind because their tasks and write-ups may be
   present in model training data.
-
