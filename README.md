@@ -125,6 +125,13 @@ in the resulting image environment:
 export MIDNIGHT_BUILD_PROXY=http://127.0.0.1:7890
 ```
 
+If the proxy has unreliable access to Ubuntu's default archive, select a
+compatible mirror for package installation:
+
+```bash
+export MIDNIGHT_APT_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ubuntu
+```
+
 ## Trusted benchmark bundles
 
 Formal evaluations use allowlist-based clean bundles. The upstream repository

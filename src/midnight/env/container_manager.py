@@ -53,6 +53,21 @@ def _docker_build_proxy(value: str) -> str:
     return urlunsplit((parsed.scheme, f"{hostname}:{parsed.port}", "", "", ""))
 
 
+def _apt_mirror(value: str) -> str:
+    """Validate an unauthenticated Ubuntu repository base URL."""
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("MIDNIGHT_APT_MIRROR must be a plain http(s) repository URL")
+    return value.rstrip("/")
+
+
 @dataclass
 class ExecResult:
     exit_code: int
@@ -236,6 +251,9 @@ class ContainerManager:
             proxy = _docker_build_proxy(build_proxy)
             build_args += ["--build-arg", f"HTTP_PROXY={proxy}"]
             build_args += ["--build-arg", f"HTTPS_PROXY={proxy}"]
+        apt_mirror = os.getenv("MIDNIGHT_APT_MIRROR", "").strip()
+        if apt_mirror:
+            build_args += ["--build-arg", f"APT_MIRROR={_apt_mirror(apt_mirror)}"]
         build_args += ["-f", str(dockerfile)]
         if _host_needs_platform(spec.platform):
             build_args += ["--platform", spec.platform]
