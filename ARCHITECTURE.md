@@ -107,3 +107,10 @@ The stable runtime is the control group for model routing, parallel candidate
 racing, structured cross-agent memory, and context compression. Each experiment
 must report success rate, time, model usage, incorrect submissions, and recovery
 behavior on a fixed benchmark before it becomes a default feature.
+
+Capability evaluation follows [EVALUATION.md](EVALUATION.md). In particular,
+local CTFd is an infrastructure test, Cybench and NYU CTF Bench are public
+calibration sets, recent competition replays are the primary public capability
+evidence, and fresh private tasks are the blind holdout. Tsecbench is retained as
+a standardized external evaluation provider and will receive a dedicated
+adapter for challenge lifecycle, multi-target instances, and multi-flag status.

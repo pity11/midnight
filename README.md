@@ -6,6 +6,8 @@ execution environments, and auditable run events.
 
 The current codebase provides a platform-neutral competition runtime. See
 [ARCHITECTURE.md](ARCHITECTURE.md) for its design and implementation roadmap.
+The benchmark policy and capability-claim criteria are defined in
+[EVALUATION.md](EVALUATION.md).
 
 ## Features
 
@@ -120,3 +122,10 @@ MIDNIGHT_RECURSION_LIMIT=100
 Local fixtures are the default execution target. Competition-specific access is
 implemented through separate adapters and explicit configuration. Offline tests
 must not read production credentials or contact live competition services.
+
+Engineering fixtures and local CTFd runs validate the runtime; they are not
+reported as solving capability. Public legacy suites provide reproducible
+calibration, recent competition replays test the hard tail, and fresh private
+challenges provide the final blind holdout. Benchmark repositories are staged
+outside the solver container so solutions, flags, graders, and write-ups cannot
+enter the model context.
