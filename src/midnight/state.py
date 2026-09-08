@@ -57,6 +57,7 @@ class CTFState(TypedDict, total=False):
     verified: bool
     submitted: bool
     submit_result: str | None
+    points: int | None
 
     # —— control ——
     step_count: int
@@ -83,6 +84,7 @@ def initial_state(challenge: Challenge, *, workdir: str = "/ctf") -> CTFState:
         verified=False,
         submitted=False,
         submit_result=None,
+        points=None,
         step_count=0,
         attempt=0,
         escalation_depth=0,

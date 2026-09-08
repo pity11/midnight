@@ -44,6 +44,45 @@ class Result:
     error: str | None = None
     duration_seconds: float = 0.0
     revision: str | None = None
+    category: str | None = None
+    attempts: int = 0
+    points: int | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    tool_calls: int = 0
+    repeated_tool_calls: int = 0
+    tool_errors: int = 0
+
+
+def _transcript_metrics(messages: list) -> dict[str, int]:
+    """Extract provider-neutral usage and tool activity from graph messages."""
+    input_tokens = 0
+    output_tokens = 0
+    tool_calls = 0
+    tool_errors = 0
+    call_counts: dict[str, int] = {}
+    for message in messages:
+        usage = getattr(message, "usage_metadata", None) or {}
+        input_tokens += int(usage.get("input_tokens", 0) or 0)
+        output_tokens += int(usage.get("output_tokens", 0) or 0)
+        calls = getattr(message, "tool_calls", None) or []
+        for call in calls:
+            name = str(call.get("name") or "")
+            args = call.get("args") or {}
+            signature = json.dumps([name, args], sort_keys=True, ensure_ascii=False, default=str)
+            call_counts[signature] = call_counts.get(signature, 0) + 1
+            tool_calls += 1
+        if getattr(message, "type", "") == "tool":
+            content = str(getattr(message, "content", ""))
+            if "[error]" in content or re.search(r"\[exit=[1-9][0-9]*\]", content):
+                tool_errors += 1
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "tool_calls": tool_calls,
+        "repeated_tool_calls": sum(max(count - 1, 0) for count in call_counts.values()),
+        "tool_errors": tool_errors,
+    }
 
 
 class Scheduler:
@@ -232,6 +271,10 @@ class Scheduler:
                 flag=final.get("flag"),
                 error=final.get("error"),
                 revision=ch.get("source_hash") or ch.get("round_id"),
+                category=final.get("challenge_type") or ch.get("category_hint"),
+                attempts=final.get("attempt", 0),
+                points=final.get("points"),
+                **_transcript_metrics(final.get("messages") or []),
             )
         finally:
             await manager.cleanup_all()

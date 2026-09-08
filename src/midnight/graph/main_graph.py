@@ -223,6 +223,7 @@ def build_main_graph(
             return {
                 "submitted": True,
                 "submit_result": res.message,
+                "points": res.points,
                 "status": "solved",
             }
         if res.status == "dry_run":

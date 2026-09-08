@@ -27,6 +27,14 @@ class ChallengeSummary:
     error: str | None = None
     duration_seconds: float = 0.0
     revision: str | None = None
+    category: str | None = None
+    attempts: int = 0
+    points: int | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    tool_calls: int = 0
+    repeated_tool_calls: int = 0
+    tool_errors: int = 0
 
 
 @dataclass(frozen=True)
@@ -40,6 +48,13 @@ class RunReport:
     status_counts: dict[str, int]
     challenges: list[ChallengeSummary]
     models: dict[str, str]
+    total_points: int
+    input_tokens: int
+    output_tokens: int
+    tool_calls: int
+    repeated_tool_calls: int
+    tool_errors: int
+    category_results: dict[str, dict[str, int]]
 
     @classmethod
     def from_results(
@@ -60,11 +75,25 @@ class RunReport:
                 error=_redact_error(result.error),
                 duration_seconds=result.duration_seconds,
                 revision=result.revision,
+                category=result.category,
+                attempts=result.attempts,
+                points=result.points,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                tool_calls=result.tool_calls,
+                repeated_tool_calls=result.repeated_tool_calls,
+                tool_errors=result.tool_errors,
             )
             for result in materialized
         ]
         solved = counts.get("solved", 0)
         total = len(materialized)
+        categories: dict[str, dict[str, int]] = {}
+        for result in materialized:
+            category = result.category or "unknown"
+            entry = categories.setdefault(category, {"total": 0, "solved": 0})
+            entry["total"] += 1
+            entry["solved"] += int(result.status == "solved")
         return cls(
             run_id=run_id,
             generated_at=datetime.now(UTC).isoformat(timespec="seconds"),
@@ -75,6 +104,13 @@ class RunReport:
             status_counts=dict(sorted(counts.items())),
             challenges=summaries,
             models=dict(sorted((models or {}).items())),
+            total_points=sum(result.points or 0 for result in materialized),
+            input_tokens=sum(result.input_tokens for result in materialized),
+            output_tokens=sum(result.output_tokens for result in materialized),
+            tool_calls=sum(result.tool_calls for result in materialized),
+            repeated_tool_calls=sum(result.repeated_tool_calls for result in materialized),
+            tool_errors=sum(result.tool_errors for result in materialized),
+            category_results=dict(sorted(categories.items())),
         )
 
     def write(self, path: str | Path) -> Path:

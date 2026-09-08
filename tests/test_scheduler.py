@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from midnight.interfaces.submitter import SubmitResult
-from midnight.orchestrator.scheduler import Result, Scheduler
+from midnight.orchestrator.scheduler import Result, Scheduler, _transcript_metrics
 
 
 class FixtureProvider:
@@ -100,3 +101,31 @@ async def test_unsafe_challenge_id_is_rejected(tmp_path):
     )
     with pytest.raises(ValueError, match="unsafe challenge id"):
         await scheduler._hydrate({"id": "../escape"})
+
+
+def test_transcript_metrics_count_usage_repeats_and_errors():
+    messages = [
+        SimpleNamespace(
+            type="ai",
+            usage_metadata={"input_tokens": 20, "output_tokens": 5},
+            tool_calls=[
+                {"name": "run_shell", "args": {"command": "file chall"}},
+                {"name": "run_shell", "args": {"command": "file chall"}},
+            ],
+            content="",
+        ),
+        SimpleNamespace(
+            type="tool",
+            usage_metadata={},
+            tool_calls=[],
+            content="failed\n[exit=1]",
+        ),
+    ]
+    metrics = _transcript_metrics(messages)
+    assert metrics == {
+        "input_tokens": 20,
+        "output_tokens": 5,
+        "tool_calls": 2,
+        "repeated_tool_calls": 1,
+        "tool_errors": 1,
+    }
