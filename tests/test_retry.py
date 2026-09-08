@@ -26,14 +26,12 @@ def _image_exists() -> bool:
     return subprocess.run([DOCKER, "image", "inspect", IMAGE], capture_output=True).returncode == 0
 
 
-pytestmark = pytest.mark.skipif(
-    not _image_exists(), reason="docker / misc image not available"
-)
+pytestmark = pytest.mark.skipif(not _image_exists(), reason="docker / misc image not available")
 
 
 def _run_challenge(cid: str):
-    from midnight.interfaces.local_mock import LocalDirProvider, ManualSubmitter
     from midnight.graph.main_graph import build_main_graph
+    from midnight.interfaces.local_mock import LocalDirProvider, ManualSubmitter
     from midnight.state import initial_state
 
     async def go():
@@ -60,4 +58,5 @@ def test_reject_path_retries_then_fails():
     assert "flag{decoy_wrong}" in (final.get("rejected_flags") or [])
     # attempts should have hit the configured cap
     from midnight.config import get_config
+
     assert final.get("attempt") == get_config().settings.max_attempts

@@ -38,7 +38,8 @@ def test_gdb_tool_disassembles():
     name = f"ctf-gdb-test-{uuid.uuid4().hex[:8]}"
     cid = subprocess.run(
         [DOCKER, "run", "-d", "--name", name, "--cap-add", "SYS_PTRACE", IMAGE],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     assert cid
 

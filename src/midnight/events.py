@@ -6,16 +6,17 @@ import json
 import os
 import re
 import threading
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping
-
+from typing import Any
 
 _SECRET_MARKERS = ("token", "secret", "password", "cookie", "authorization", "api_key")
 _VALUE_PATTERNS = (
     re.compile(r"(?i)Bearer\s+[A-Za-z0-9._~+/-]+=*"),
     re.compile(r"\b(?:sk|ghp|github_pat)-?[A-Za-z0-9_]{16,}\b"),
+    re.compile(r"\b[A-Za-z0-9_]+\{[^}\r\n]+\}"),
 )
 
 
@@ -47,7 +48,7 @@ class RunEvent:
     challenge_id: str | None = None
     payload: Mapping[str, Any] = field(default_factory=dict)
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+        default_factory=lambda: datetime.now(UTC).isoformat(timespec="milliseconds")
     )
 
     def to_record(self) -> dict[str, Any]:

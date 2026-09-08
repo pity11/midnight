@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any
 
 
 @dataclass
@@ -52,8 +52,8 @@ class DockerInteractiveSession(InteractiveSession):
 
     container_id: str = ""
     workdir: str = "/ctf"
-    idle_timeout: float = 0.4   # seconds of silence treated as "command done"
-    _child: object = field(default=None, repr=False)
+    idle_timeout: float = 0.4  # seconds of silence treated as "command done"
+    _child: Any | None = field(default=None, repr=False)
 
     async def start(self) -> None:
         import pexpect
@@ -80,7 +80,6 @@ class DockerInteractiveSession(InteractiveSession):
 
         def _read() -> str:
             buf: list[str] = []
-            deadline = asyncio.get_event_loop().time if False else None  # noqa
             import time as _t
 
             end = _t.time() + timeout
@@ -89,7 +88,7 @@ class DockerInteractiveSession(InteractiveSession):
                     chunk = child.read_nonblocking(size=4096, timeout=self.idle_timeout)
                     if chunk:
                         buf.append(chunk)
-                        if self.prompt and self.prompt in "".join(buf)[-len(self.prompt) - 8:]:
+                        if self.prompt and self.prompt in "".join(buf)[-len(self.prompt) - 8 :]:
                             break
                 except pexpect.TIMEOUT:
                     if buf:  # got something then went idle -> command done
@@ -104,8 +103,10 @@ class DockerInteractiveSession(InteractiveSession):
     async def send(self, data: str, *, timeout: float = 10.0) -> str:
         if self._child is None:
             await self.start()
+        child = self._child
+        assert child is not None
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, lambda: self._child.sendline(data))
+        await loop.run_in_executor(None, lambda: child.sendline(data))
         return await self._drain(timeout)
 
     async def read(self, *, timeout: float = 10.0) -> str:
@@ -114,7 +115,8 @@ class DockerInteractiveSession(InteractiveSession):
     async def interrupt(self) -> None:
         if self._child is not None:
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, lambda: self._child.sendcontrol("c"))
+            child = self._child
+            await loop.run_in_executor(None, lambda: child.sendcontrol("c"))
 
     async def close(self) -> None:
         if self._child is not None:

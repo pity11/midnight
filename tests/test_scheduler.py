@@ -1,0 +1,102 @@
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+import pytest
+
+from midnight.interfaces.submitter import SubmitResult
+from midnight.orchestrator.scheduler import Result, Scheduler
+
+
+class FixtureProvider:
+    def __init__(self, source: Path):
+        self.source = source
+        self.download_calls = 0
+
+    async def list_challenges(self):
+        return []
+
+    async def fetch(self, challenge_id: str):
+        return {
+            "id": challenge_id,
+            "name": challenge_id,
+            "description": "fixture",
+            "category_hint": "pwn",
+            "files": [],
+        }
+
+    async def download_files(self, challenge_id: str, dest: str):
+        self.download_calls += 1
+        target = Path(dest) / self.source.name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(self.source.read_bytes())
+        return [str(target)]
+
+
+class NoopSubmitter:
+    async def submit(self, challenge_id: str, flag: str):
+        return SubmitResult(accepted=True)
+
+
+@pytest.mark.asyncio
+async def test_hydration_downloads_files_and_assigns_content_revision(tmp_path):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"version one")
+    provider = FixtureProvider(source)
+    scheduler = Scheduler(
+        provider=provider,
+        submitter=NoopSubmitter(),
+        artifacts_root=tmp_path / "artifacts",
+        run_id="run-1",
+    )
+
+    first = await scheduler._hydrate({"id": "pwn-1"})
+    source.write_bytes(b"version two")
+    second = await scheduler._hydrate({"id": "pwn-1"})
+
+    assert provider.download_calls == 2
+    assert first["source_hash"] != second["source_hash"]
+    assert len(first["file_hashes"]["source.bin"]) == 64
+
+
+@pytest.mark.asyncio
+async def test_native_binary_category_limit_is_shared(tmp_path):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"fixture")
+    provider = FixtureProvider(source)
+    scheduler = Scheduler(
+        provider=provider,
+        submitter=NoopSubmitter(),
+        artifacts_root=tmp_path / "artifacts",
+        run_id="run-1",
+        max_concurrency=2,
+    )
+    active = 0
+    maximum_active = 0
+
+    async def fake_solve(challenge):
+        nonlocal active, maximum_active
+        active += 1
+        maximum_active = max(maximum_active, active)
+        await asyncio.sleep(0.02)
+        active -= 1
+        return Result(challenge["id"], "failed")
+
+    scheduler._solve_one = fake_solve
+    await scheduler.solve_all([{"id": "pwn-1"}, {"id": "pwn-2"}])
+
+    assert maximum_active == 1
+
+
+@pytest.mark.asyncio
+async def test_unsafe_challenge_id_is_rejected(tmp_path):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"fixture")
+    scheduler = Scheduler(
+        provider=FixtureProvider(source),
+        submitter=NoopSubmitter(),
+        artifacts_root=tmp_path,
+    )
+    with pytest.raises(ValueError, match="unsafe challenge id"):
+        await scheduler._hydrate({"id": "../escape"})

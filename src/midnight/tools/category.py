@@ -8,8 +8,6 @@ session.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.tools.interactive.session import DockerInteractiveSession
 from midnight.tools.registry import register_tool
@@ -27,7 +25,7 @@ def make_checksec(*, env: CTFEnvironment, **_) -> object:
         Uses pwntools' checksec; falls back to readelf-based heuristics.
         """
         res = await env.exec(
-            f"python3 -c \"from pwn import ELF; e=ELF({binary!r}); print(e.checksec())\" "
+            f'python3 -c "from pwn import ELF; e=ELF({binary!r}); print(e.checksec())" '
             f"2>/dev/null || checksec --file={binary} 2>/dev/null || "
             f"(echo '[fallback]'; readelf -lW {binary} | grep -E 'GNU_STACK|GNU_RELRO')"
         )
@@ -58,11 +56,10 @@ def make_rop_gadget(*, env: CTFEnvironment, **_) -> object:
 def make_r2_interact(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
 
-    state = {"session": None}  # type: dict[str, Optional[DockerInteractiveSession]]
+    state: dict[str, DockerInteractiveSession | None] = {"session": None}
 
     async def _ensure(binary: str | None) -> DockerInteractiveSession:
         if state["session"] is None:
-            launch = "r2 -q0" + (f" {binary}" if binary else " -")
             # -q0 prints a NUL then enters interactive; analysis commands like aaa work.
             sess = DockerInteractiveSession(
                 launch_cmd="r2" + (f" {binary}" if binary else " -"),
@@ -72,7 +69,9 @@ def make_r2_interact(*, env: CTFEnvironment, **_) -> object:
             )
             await sess.start()
             state["session"] = sess
-        return state["session"]
+        session = state["session"]
+        assert session is not None
+        return session
 
     @tool
     async def r2_interact(command: str, binary: str = "") -> str:

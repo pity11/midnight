@@ -25,17 +25,21 @@ def _image_exists() -> bool:
     return subprocess.run([DOCKER, "image", "inspect", IMAGE], capture_output=True).returncode == 0
 
 
-pytestmark = pytest.mark.skipif(
-    not _image_exists(), reason="docker / misc image not available"
-)
+pytestmark = pytest.mark.skipif(not _image_exists(), reason="docker / misc image not available")
 
 
 def test_escalation_guard_blocks_cycle_and_depth():
     from midnight.tools.ask_expert import check_escalation
 
-    assert check_escalation(current_expert="web", target_type="pwn", depth=0, stack=[], max_depth=2).ok
-    assert not check_escalation(current_expert="pwn", target_type="web", depth=1, stack=["web"], max_depth=2).ok
-    assert not check_escalation(current_expert="web", target_type="pwn", depth=2, stack=[], max_depth=2).ok
+    assert check_escalation(
+        current_expert="web", target_type="pwn", depth=0, stack=[], max_depth=2
+    ).ok
+    assert not check_escalation(
+        current_expert="pwn", target_type="web", depth=1, stack=["web"], max_depth=2
+    ).ok
+    assert not check_escalation(
+        current_expert="web", target_type="pwn", depth=2, stack=[], max_depth=2
+    ).ok
 
 
 def test_run_helper_solves_subtask_in_same_container():
@@ -46,7 +50,8 @@ def test_run_helper_solves_subtask_in_same_container():
     name = f"ctf-helper-test-{uuid.uuid4().hex[:8]}"
     cid = subprocess.run(
         [DOCKER, "run", "-d", "--name", name, IMAGE],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     assert cid
 
@@ -62,20 +67,28 @@ def test_run_helper_solves_subtask_in_same_container():
         env = CTFEnvironment(container_id=cid, workdir="/ctf")
         collected: list[str] = []
         st = initial_state(
-            {"id": "deleg", "name": "deleg", "description": "", "files": [],
-             "flag_format": r"flag\{[^}]+\}"}
+            {
+                "id": "deleg",
+                "name": "deleg",
+                "description": "",
+                "files": [],
+                "flag_format": r"flag\{[^}]+\}",
+            }
         )
         run_helper = make_run_helper(base_state=st, record_flag=lambda f: collected.append(f))
         result = await run_helper(
             target_type="misc",
             subtask="Read the files in the workdir and report any flag you find.",
-            env=env, depth=1, stack=["web"],
+            env=env,
+            depth=1,
+            stack=["web"],
         )
         return result, collected
 
     try:
         result, collected = asyncio.run(run())
-        assert "flag{delegated_ok}" in result or "flag{delegated_ok}" in collected, \
+        assert "flag{delegated_ok}" in result or "flag{delegated_ok}" in collected, (
             f"result={result!r} collected={collected!r}"
+        )
     finally:
         subprocess.run([DOCKER, "rm", "-f", cid or name], capture_output=True)

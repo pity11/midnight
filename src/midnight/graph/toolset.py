@@ -7,12 +7,12 @@ flag recorder, escalation context, helper runner).
 
 from __future__ import annotations
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
+import midnight.tools  # noqa: F401  ensure tools are registered
 from midnight.config import get_config
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.state import CTFState
-import midnight.tools  # noqa: F401  ensure tools are registered
 from midnight.tools.registry import REGISTRY
 from midnight.utils.logging import get_logger
 
@@ -25,7 +25,7 @@ def build_specialist_tools(
     env: CTFEnvironment,
     state: CTFState,
     record_flag: Callable[[str], None],
-    run_helper: Optional[Callable[..., object]] = None,
+    run_helper: Callable[..., object] | None = None,
 ) -> list[object]:
     """Instantiate the tools configured for ``expert``, bound to ``env``."""
     cfg = get_config()
@@ -33,17 +33,17 @@ def build_specialist_tools(
     ch = state.get("challenge", {})
     flag_format = ch.get("flag_format")
 
-    factory_kwargs = dict(
-        env=env,
-        state=state,
-        record_flag=record_flag,
-        flag_format=flag_format,
-        current_expert=expert,
-        depth=state.get("escalation_depth", 0),
-        stack=state.get("escalation_stack", []),
-        max_depth=cfg.settings.escalation_max_depth,
-        run_helper=run_helper,
-    )
+    factory_kwargs = {
+        "env": env,
+        "state": state,
+        "record_flag": record_flag,
+        "flag_format": flag_format,
+        "current_expert": expert,
+        "depth": state.get("escalation_depth", 0),
+        "stack": state.get("escalation_stack", []),
+        "max_depth": cfg.settings.escalation_max_depth,
+        "run_helper": run_helper,
+    }
 
     tools: list[object] = []
     for name in tool_names:

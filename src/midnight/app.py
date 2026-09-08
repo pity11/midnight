@@ -13,12 +13,23 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import time
 from pathlib import Path
 from uuid import uuid4
 
+import yaml
+
 from midnight.config import get_config
 from midnight.events import EventJournal
+from midnight.interfaces.http_platform import (
+    EndpointMap,
+    HTTPPlatformAdapter,
+    HTTPPlatformConfig,
+)
 from midnight.interfaces.local_mock import LocalDirProvider, ManualSubmitter
+from midnight.interfaces.submission_gate import SubmissionGate
+from midnight.persistence import CheckpointStore
+from midnight.reporting import RunReport
 from midnight.utils.logging import get_logger
 
 log = get_logger("midnight.app")
@@ -30,6 +41,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--challenges-dir",
         default="tests/fixtures",
         help="local fixtures directory for the mock provider",
+    )
+    p.add_argument(
+        "--platform-config",
+        help="YAML configuration for the generic HTTP platform adapter",
+    )
+    p.add_argument(
+        "--submit",
+        action="store_true",
+        help="allow submissions when using an HTTP platform (default: dry run)",
     )
     p.add_argument("--id", help="solve a single challenge by id (default: all)")
     p.add_argument(
@@ -47,20 +67,71 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="logs/events.jsonl",
         help="append-only JSONL event journal",
     )
+    p.add_argument(
+        "--checkpoint-path",
+        default="logs/checkpoints.sqlite",
+        help="SQLite checkpoint database",
+    )
+    p.add_argument(
+        "--run-id",
+        help="stable run identifier; reuse it to resume an interrupted run",
+    )
+    p.add_argument(
+        "--report-path",
+        default="logs/report.json",
+        help="write a JSON benchmark summary without flag values",
+    )
+    p.add_argument(
+        "--submission-ledger-path",
+        default="logs/submissions.sqlite",
+        help="durable candidate submission ledger",
+    )
+    p.add_argument(
+        "--artifacts-root",
+        default="logs/artifacts",
+        help="downloaded challenge attachment directory",
+    )
+    p.add_argument(
+        "--cleanup-run",
+        metavar="RUN_ID",
+        help="remove orphaned Midnight containers for a run and exit",
+    )
     return p.parse_args(argv)
+
+
+def _load_http_adapter(path: str) -> HTTPPlatformAdapter:
+    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    endpoint_raw = raw.pop("endpoints", {})
+    config = HTTPPlatformConfig(
+        **raw,
+        endpoints=EndpointMap(**endpoint_raw),
+    )
+    return HTTPPlatformAdapter(config)
 
 
 async def _amain(args: argparse.Namespace) -> int:
     cfg = get_config()
-    log.info("config loaded: %d model roles, %d image specs, %d expert toolsets",
-             len(cfg.models), len(cfg.images), len(cfg.tools))
+    log.info(
+        "config loaded: %d model roles, %d image specs, %d expert toolsets",
+        len(cfg.models),
+        len(cfg.images),
+        len(cfg.tools),
+    )
+
+    if args.cleanup_run:
+        from midnight.env.container_manager import ContainerManager
+
+        removed = await ContainerManager(run_id=args.cleanup_run).cleanup_run()
+        log.info("removed %d container(s) for run %s", removed, args.cleanup_run)
+        return 0
 
     if args.check_config:
         log.info("configuration OK")
         return 0
 
-    provider = LocalDirProvider(args.challenges_dir)
-    submitter = ManualSubmitter(args.challenges_dir)
+    platform = _load_http_adapter(args.platform_config) if args.platform_config else None
+    provider = platform or LocalDirProvider(args.challenges_dir)
+    delegate = platform or ManualSubmitter(args.challenges_dir)
 
     if args.id:
         challenges = [await provider.fetch(args.id)]
@@ -68,26 +139,57 @@ async def _amain(args: argparse.Namespace) -> int:
         challenges = await provider.list_challenges()
     if not challenges:
         log.warning("no challenges found under %s", Path(args.challenges_dir).resolve())
+        if platform is not None:
+            await platform.close()
         return 0
 
     log.info("discovered %d challenge(s):", len(challenges))
     for ch in challenges:
-        log.info("  - %s (%s) remote=%s files=%d",
-                 ch.get("id"), ch.get("category_hint") or "?",
-                 ch.get("remote"), len(ch.get("files") or []))
+        log.info(
+            "  - %s (%s) remote=%s files=%d",
+            ch.get("id"),
+            ch.get("category_hint") or "?",
+            ch.get("remote"),
+            len(ch.get("files") or []),
+        )
 
     if args.list_only:
+        if platform is not None:
+            await platform.close()
         return 0
 
     from midnight.orchestrator.scheduler import Scheduler
 
-    scheduler = Scheduler(
-        provider=provider,
-        submitter=submitter,
-        journal=EventJournal(args.events_path),
-        run_id=uuid4().hex,
+    run_id = args.run_id or uuid4().hex
+    log.info("run id: %s", run_id)
+    submitter = SubmissionGate(
+        delegate,
+        enabled=platform is None or args.submit,
+        ledger_path=args.submission_ledger_path,
+        namespace=run_id,
     )
-    results = await scheduler.solve_all(challenges)
+    try:
+        scheduler = Scheduler(
+            provider=provider,
+            submitter=submitter,
+            journal=EventJournal(args.events_path),
+            run_id=run_id,
+            checkpoint_store=CheckpointStore(args.checkpoint_path),
+            artifacts_root=args.artifacts_root,
+        )
+        started = time.monotonic()
+        results = await scheduler.solve_all(challenges)
+        report = RunReport.from_results(
+            run_id,
+            results,
+            elapsed_seconds=time.monotonic() - started,
+            models={role: spec.model for role, spec in cfg.models.items()},
+        )
+        report.write(args.report_path)
+        log.info("report written to %s", Path(args.report_path).resolve())
+    finally:
+        if platform is not None:
+            await platform.close()
 
     log.info("=== results ===")
     solved = 0
@@ -95,7 +197,7 @@ async def _amain(args: argparse.Namespace) -> int:
         mark = "OK " if r.status == "solved" else "-- "
         if r.status == "solved":
             solved += 1
-        log.info("  %s%s: %s flag=%s", mark, r.challenge_id, r.status, r.flag)
+        log.info("  %s%s: %s has_flag=%s", mark, r.challenge_id, r.status, bool(r.flag))
     log.info("solved %d/%d", solved, len(results))
     return 0 if solved == len(results) else 1
 

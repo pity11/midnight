@@ -8,8 +8,6 @@ tool calls within one specialist run.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.state import CTFState
 from midnight.tools.interactive.session import DockerInteractiveSession
@@ -18,7 +16,7 @@ from midnight.tools.summarizer import summarize
 
 
 @register_tool(name="connect_tool", groups=["pwn", "web"])
-def make_connect_tool(*, env: CTFEnvironment, state: Optional[CTFState] = None, **_) -> object:
+def make_connect_tool(*, env: CTFEnvironment, state: CTFState | None = None, **_) -> object:
     from langchain_core.tools import tool
 
     sessions: dict[str, DockerInteractiveSession] = {}

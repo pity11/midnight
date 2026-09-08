@@ -1,5 +1,5 @@
 """IAT interactive tools (gdb / connect / r2). Registered at import."""
 
-from midnight.tools.interactive import connect_tool, gdb_tool  # noqa: F401
+from midnight.tools.interactive import connect_tool, gdb_tool
 
-__all__ = ["gdb_tool", "connect_tool"]
+__all__ = ["connect_tool", "gdb_tool"]

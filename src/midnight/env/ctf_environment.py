@@ -27,8 +27,14 @@ class CTFEnvironment:
     async def exec(self, cmd: str, timeout: int = 120) -> ExecResult:
         """Run a shell command inside the container."""
         return await _run(
-            "docker", "exec", "-w", self.workdir, self.container_id,
-            "bash", "-c", cmd,
+            "docker",
+            "exec",
+            "-w",
+            self.workdir,
+            self.container_id,
+            "bash",
+            "-c",
+            cmd,
             timeout=timeout,
         )
 
@@ -38,7 +44,7 @@ class CTFEnvironment:
     async def copy_out(self, src: str, dst: str) -> ExecResult:
         return await _run("docker", "cp", f"{self.container_id}:{src}", dst)
 
-    async def open_session(self, cmd: str, *, prompt: str = "") -> "InteractiveSession":
+    async def open_session(self, cmd: str, *, prompt: str = "") -> InteractiveSession:
         """Open a non-blocking interactive session running ``cmd`` in this container.
 
         ``prompt`` is an optional marker string used to detect command completion

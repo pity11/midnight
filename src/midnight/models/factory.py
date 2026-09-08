@@ -6,7 +6,7 @@ config/models.yaml. Switching provider = editing YAML, no code change.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from midnight.config import AppConfig, model_spec_for
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
 
 
-def build_llm(role: str = "default", *, config: Optional[AppConfig] = None) -> "BaseChatModel":
+def build_llm(role: str = "default", *, config: AppConfig | None = None) -> BaseChatModel:
     """Build a chat model for a given role (classify / pwn / web / ...).
 
     ``spec.model`` is "<provider>:<model_name>", parsed by init_chat_model.

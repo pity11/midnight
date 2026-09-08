@@ -7,18 +7,17 @@ regex from text, never taken from an LLM's self-narration.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from midnight.config import get_config
 
 
-def flag_pattern(flag_format: Optional[str] = None) -> re.Pattern[str]:
+def flag_pattern(flag_format: str | None = None) -> re.Pattern[str]:
     """Compile the flag regex, preferring a per-challenge override."""
     pattern = flag_format or get_config().settings.flag_regex
     return re.compile(pattern)
 
 
-def extract_flags(text: str, *, flag_format: Optional[str] = None) -> list[str]:
+def extract_flags(text: str, *, flag_format: str | None = None) -> list[str]:
     """Extract all candidate flags from text, de-duplicated, order preserved."""
     if not text:
         return []
@@ -34,5 +33,5 @@ def extract_flags(text: str, *, flag_format: Optional[str] = None) -> list[str]:
     return out
 
 
-def looks_like_flag(text: str, *, flag_format: Optional[str] = None) -> bool:
+def looks_like_flag(text: str, *, flag_format: str | None = None) -> bool:
     return bool(flag_pattern(flag_format).search(text or ""))

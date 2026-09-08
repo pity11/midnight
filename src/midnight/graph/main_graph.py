@@ -18,8 +18,6 @@ CTFEnvironment, runs it on the shared ``messages``, then returns control.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
 
@@ -27,8 +25,8 @@ from midnight.config import get_config
 from midnight.env.container_manager import ContainerManager
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.graph.router import make_classify_node, route
-from midnight.graph.specialists.base_specialist import make_specialist
 from midnight.graph.specialists import prompts
+from midnight.graph.specialists.base_specialist import make_specialist
 from midnight.graph.toolset import build_specialist_tools
 from midnight.interfaces.provider import ChallengeProvider
 from midnight.interfaces.submitter import FlagSubmitter
@@ -51,6 +49,7 @@ SPECIALIST_NODES = (
     "reverse_specialist",
     "web_specialist",
     "crypto_specialist",
+    "forensics_specialist",
     "misc_specialist",
 )
 
@@ -60,6 +59,7 @@ _NODE_EXPERT = {
     "reverse_specialist": "reverse",
     "web_specialist": "web",
     "crypto_specialist": "crypto",
+    "forensics_specialist": "forensics",
     "misc_specialist": "misc",
 }
 
@@ -68,12 +68,28 @@ def build_main_graph(
     *,
     provider: ChallengeProvider,
     submitter: FlagSubmitter,
-    manager: Optional[ContainerManager] = None,
+    manager: ContainerManager | None = None,
+    checkpointer=None,
 ):
     """Compile and return the main graph for one challenge run."""
     cfg = get_config()
     manager = manager or ContainerManager()
     classify_node = make_classify_node()
+
+    async def prepare_container(state: CTFState) -> str:
+        ctype = state["challenge_type"]
+        ch = state["challenge"]
+        name = manager.container_name(ch.get("id", "x"))
+        await manager.stop(name)
+        cid = await manager.create(ctype, name)
+        env = CTFEnvironment(
+            container_id=cid,
+            workdir=cfg.settings.workdir,
+            manager=manager,
+        )
+        for path in ch.get("files") or []:
+            await env.copy_in(path, cfg.settings.workdir)
+        return cid
 
     # ---- nodes ----------------------------------------------------------
     async def fetch_challenge(state: CTFState) -> dict:
@@ -83,17 +99,14 @@ def build_main_graph(
         return {}
 
     async def setup_env(state: CTFState) -> dict:
-        ctype = state["challenge_type"]
         ch = state["challenge"]
-        name = f"ctf-{ch.get('id', 'x')}".replace("/", "-")
-        # clean any stale container with the same name
-        await manager.stop(name)
-        cid = await manager.create(ctype, name)
-        env = CTFEnvironment(container_id=cid, workdir=cfg.settings.workdir, manager=manager)
-        # copy starter files into the container workdir
-        for f in ch.get("files") or []:
-            await env.copy_in(f, cfg.settings.workdir)
-        log.info("container %s up for %s (%s)", cid[:12], ch.get("id"), ctype)
+        cid = await prepare_container(state)
+        log.info(
+            "container %s up for %s (%s)",
+            cid[:12],
+            ch.get("id"),
+            state["challenge_type"],
+        )
         return {"container_id": cid}
 
     def _make_specialist_node(node_name: str):
@@ -102,8 +115,13 @@ def build_main_graph(
         async def specialist(state: CTFState) -> dict:
             attempt = state.get("attempt", 0) + 1
             rejected = state.get("rejected_flags") or []
+            container_id = state.get("container_id")
+            if not await manager.is_running(container_id):
+                log.warning("challenge container missing; recreating it")
+                container_id = await prepare_container(state)
+            assert container_id is not None
             env = CTFEnvironment(
-                container_id=state["container_id"],
+                container_id=container_id,
                 workdir=state.get("workdir", cfg.settings.workdir),
                 manager=manager,
             )
@@ -122,8 +140,11 @@ def build_main_graph(
             run_helper = make_run_helper(base_state=state, record_flag=record_flag)
 
             tools = build_specialist_tools(
-                expert=expert, env=env, state=state,
-                record_flag=record_flag, run_helper=run_helper,
+                expert=expert,
+                env=env,
+                state=state,
+                record_flag=record_flag,
+                run_helper=run_helper,
             )
             llm = build_llm(expert)
             agent = make_specialist(
@@ -165,7 +186,8 @@ def build_main_graph(
             )
             # also scan the whole transcript for flags (defense in depth)
             transcript = "\n".join(
-                getattr(m, "content", "") or "" for m in result.get("messages", [])
+                getattr(m, "content", "") or ""
+                for m in result.get("messages", [])
                 if isinstance(getattr(m, "content", ""), str)
             )
             for f in extract_flags(transcript, flag_format=ch.get("flag_format")):
@@ -175,6 +197,7 @@ def build_main_graph(
                 "messages": result.get("messages", []),
                 "candidate_flags": collected,
                 "attempt": attempt,
+                "container_id": container_id,
             }
 
         return specialist
@@ -195,12 +218,24 @@ def build_main_graph(
         if not flag:
             return {"status": "failed", "submitted": False}
         res = await submitter.submit(ch["id"], flag)
-        log.info("submit %s -> accepted=%s (%s)", flag, res.accepted, res.message)
+        log.info("submission verdict: accepted=%s status=%s", res.accepted, res.status)
         if res.accepted:
             return {
                 "submitted": True,
                 "submit_result": res.message,
                 "status": "solved",
+            }
+        if res.status == "dry_run":
+            return {
+                "submitted": False,
+                "submit_result": res.message,
+                "status": "dry_run",
+            }
+        if res.status == "error":
+            return {
+                "submitted": False,
+                "submit_result": res.message,
+                "status": "failed",
             }
         # rejected: blacklist this flag so retries try something else
         rejected = list(state.get("rejected_flags") or [])
@@ -212,7 +247,7 @@ def build_main_graph(
             "rejected_flags": rejected,
             "flag": None,
             "verified": False,
-            "status": "running",   # keep running so retry logic can re-enter
+            "status": "running",  # keep running so retry logic can re-enter
         }
 
     async def cleanup(state: CTFState) -> dict:
@@ -221,7 +256,7 @@ def build_main_graph(
             await manager.stop(cid)
             log.info("cleaned up container %s", cid[:12])
         # if we reached cleanup without solving, the run failed
-        if state.get("status") != "solved":
+        if state.get("status") not in {"solved", "dry_run"}:
             return {"status": "failed"}
         return {}
 
@@ -232,19 +267,25 @@ def build_main_graph(
         if state.get("verified"):
             return NODE_SUBMIT
         if state.get("attempt", 0) < cfg.settings.max_attempts:
-            log.info("verify: no flag, retrying (attempt %d/%d)",
-                     state.get("attempt", 0), cfg.settings.max_attempts)
+            log.info(
+                "verify: no flag, retrying (attempt %d/%d)",
+                state.get("attempt", 0),
+                cfg.settings.max_attempts,
+            )
             return route(state)  # back to the matching specialist
         log.info("verify: no flag and attempts exhausted; giving up")
         return NODE_CLEANUP
 
     def after_submit(state: CTFState) -> str:
         # solved -> cleanup; rejected -> retry specialist if attempts remain.
-        if state.get("status") == "solved":
+        if state.get("status") in {"solved", "failed", "dry_run"}:
             return NODE_CLEANUP
         if state.get("attempt", 0) < cfg.settings.max_attempts:
-            log.info("submit rejected, retrying (attempt %d/%d)",
-                     state.get("attempt", 0), cfg.settings.max_attempts)
+            log.info(
+                "submit rejected, retrying (attempt %d/%d)",
+                state.get("attempt", 0),
+                cfg.settings.max_attempts,
+            )
             return route(state)
         log.info("submit rejected and attempts exhausted; giving up")
         return NODE_CLEANUP
@@ -262,21 +303,21 @@ def build_main_graph(
     g.add_edge(START, NODE_FETCH)
     g.add_edge(NODE_FETCH, NODE_CLASSIFY)
     g.add_edge(NODE_CLASSIFY, NODE_SETUP_ENV)
-    g.add_conditional_edges(
-        NODE_SETUP_ENV, route, {n: n for n in SPECIALIST_NODES}
-    )
+    g.add_conditional_edges(NODE_SETUP_ENV, route, {n: n for n in SPECIALIST_NODES})
     for node_name in SPECIALIST_NODES:
         g.add_edge(node_name, NODE_VERIFY)
     # verify can go to submit, back to any specialist (retry), or cleanup
     g.add_conditional_edges(
-        NODE_VERIFY, after_verify,
+        NODE_VERIFY,
+        after_verify,
         {**{n: n for n in SPECIALIST_NODES}, NODE_SUBMIT: NODE_SUBMIT, NODE_CLEANUP: NODE_CLEANUP},
     )
     # submit can go to cleanup or back to any specialist (retry after rejection)
     g.add_conditional_edges(
-        NODE_SUBMIT, after_submit,
+        NODE_SUBMIT,
+        after_submit,
         {**{n: n for n in SPECIALIST_NODES}, NODE_CLEANUP: NODE_CLEANUP},
     )
     g.add_edge(NODE_CLEANUP, END)
 
-    return g.compile()
+    return g.compile(checkpointer=checkpointer)

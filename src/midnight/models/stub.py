@@ -11,7 +11,7 @@ Activated via models.yaml using ``model: "stub:react"``.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -28,7 +28,7 @@ class StubReActModel(BaseChatModel):
     def _llm_type(self) -> str:
         return "stub-react"
 
-    def bind_tools(self, tools: Any, **kwargs: Any) -> "StubReActModel":  # noqa: D401
+    def bind_tools(self, tools: Any, **kwargs: Any) -> StubReActModel:
         # tools are irrelevant to the scripted policy; just return self.
         return self
 
@@ -69,11 +69,13 @@ class StubReActModel(BaseChatModel):
         if flag_match:
             return AIMessage(
                 content="Found the flag in tool output; submitting.",
-                tool_calls=[{
-                    "name": "submit_flag",
-                    "args": {"candidate": flag_match.group(0)},
-                    "id": "call_submit",
-                }],
+                tool_calls=[
+                    {
+                        "name": "submit_flag",
+                        "args": {"candidate": flag_match.group(0)},
+                        "id": "call_submit",
+                    }
+                ],
             )
 
         # Track which shell commands we've already issued (from prior AIMessages).
@@ -91,34 +93,42 @@ class StubReActModel(BaseChatModel):
         if not _already("cat /ctf"):
             return AIMessage(
                 content="Reading the challenge files.",
-                tool_calls=[{
-                    "name": "run_shell",
-                    "args": {"command": "cat /ctf/* 2>/dev/null"},
-                    "id": "call_cat",
-                }],
+                tool_calls=[
+                    {
+                        "name": "run_shell",
+                        "args": {"command": "cat /ctf/* 2>/dev/null"},
+                        "id": "call_cat",
+                    }
+                ],
             )
 
         # only attempt base64 decode if the cat output looked like printable b64
         printable = "".join(c for c in joined if c.isprintable() or c in "\n\r\t")
-        looks_b64 = bool(re.search(r"^[A-Za-z0-9+/]{16,}={0,2}\s*$", printable, re.M))
+        looks_b64 = bool(re.search(r"^[A-Za-z0-9+/]{16,}={0,2}\s*$", printable, re.MULTILINE))
         if looks_b64 and not _already("base64 -d"):
             return AIMessage(
                 content="Decoding the base64 content.",
-                tool_calls=[{
-                    "name": "run_shell",
-                    "args": {"command": "cat /ctf/* 2>/dev/null | base64 -d 2>/dev/null; echo"},
-                    "id": "call_decode",
-                }],
+                tool_calls=[
+                    {
+                        "name": "run_shell",
+                        "args": {"command": "cat /ctf/* 2>/dev/null | base64 -d 2>/dev/null; echo"},
+                        "id": "call_decode",
+                    }
+                ],
             )
 
         if not _already("strings"):
             return AIMessage(
                 content="No flag in plain files; running strings on binaries.",
-                tool_calls=[{
-                    "name": "run_shell",
-                    "args": {"command": "strings -n 6 /ctf/* 2>/dev/null | grep -iE 'flag|ctf' | head"},
-                    "id": "call_strings",
-                }],
+                tool_calls=[
+                    {
+                        "name": "run_shell",
+                        "args": {
+                            "command": "strings -n 6 /ctf/* 2>/dev/null | grep -iE 'flag|ctf' | head"
+                        },
+                        "id": "call_strings",
+                    }
+                ],
             )
 
         # give up gracefully
@@ -127,8 +137,8 @@ class StubReActModel(BaseChatModel):
     def _generate(
         self,
         messages: list[BaseMessage],
-        stop: Optional[list[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         msg = self._scripted_step(messages)
@@ -137,8 +147,8 @@ class StubReActModel(BaseChatModel):
     async def _agenerate(
         self,
         messages: list[BaseMessage],
-        stop: Optional[list[str]] = None,
-        run_manager: Optional[Any] = None,
+        stop: list[str] | None = None,
+        run_manager: Any | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         msg = self._scripted_step(messages)

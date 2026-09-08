@@ -13,6 +13,7 @@ Fixture layout (Cybench-style three elements):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -51,6 +52,12 @@ class LocalDirProvider:
             if files_dir.exists()
             else []
         )
+        file_hashes = {Path(path).name: self._sha256(Path(path)) for path in files}
+        source_hash = hashlib.sha256()
+        source_hash.update(json.dumps(meta, sort_keys=True).encode())
+        for name, digest in sorted(file_hashes.items()):
+            source_hash.update(name.encode())
+            source_hash.update(digest.encode())
         return Challenge(
             id=meta.get("id", challenge_id),
             name=meta.get("name", challenge_id),
@@ -59,7 +66,18 @@ class LocalDirProvider:
             remote=meta.get("remote"),
             category_hint=meta.get("category_hint"),
             flag_format=meta.get("flag_format"),
+            round_id=str(meta.get("round_id")) if meta.get("round_id") is not None else None,
+            file_hashes=file_hashes,
+            source_hash=source_hash.hexdigest(),
         )
+
+    @staticmethod
+    def _sha256(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     async def download_files(self, challenge_id: str, dest: str) -> list[str]:
         files_dir = self.root / challenge_id / "files"

@@ -1,24 +1,23 @@
 """Specialist subgraph factory.
 
-Every category expert is built the same way via ``create_react_agent``;
-Every category expert is built the same way via ``create_react_agent``;
+Every category expert is built through LangChain's ``create_agent`` factory;
 they differ only in injected tools + system prompt + model.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
 
 
-def make_specialist(*, llm: "BaseChatModel", tools: list[object], system_prompt: str):
+def make_specialist(*, llm: BaseChatModel, tools: list[Any], system_prompt: str):
     """Create a ReAct specialist subgraph.
 
-    Thin wrapper over langgraph.prebuilt.create_react_agent so all experts share
+    Thin wrapper over langchain.agents.create_agent so all experts share
     one construction path; differences come from tools/prompt/model.
     """
-    from langgraph.prebuilt import create_react_agent
+    from langchain.agents import create_agent
 
-    return create_react_agent(model=llm, tools=tools, prompt=system_prompt)
+    return create_agent(model=llm, tools=tools, system_prompt=system_prompt)

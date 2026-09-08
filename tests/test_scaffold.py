@@ -7,8 +7,6 @@ bare environment right after scaffolding.
 import asyncio
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
 
@@ -58,7 +56,9 @@ def test_escalation_guard():
     ok = check_escalation(current_expert="web", target_type="pwn", depth=0, stack=[], max_depth=2)
     assert ok.ok
     # cycle
-    cyc = check_escalation(current_expert="pwn", target_type="web", depth=1, stack=["web"], max_depth=2)
+    cyc = check_escalation(
+        current_expert="pwn", target_type="web", depth=1, stack=["web"], max_depth=2
+    )
     assert not cyc.ok
     # depth cap
     cap = check_escalation(current_expert="web", target_type="pwn", depth=2, stack=[], max_depth=2)

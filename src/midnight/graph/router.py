@@ -6,12 +6,12 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, Field
 
 from midnight.models import build_llm
-from midnight.state import CTFState
+from midnight.state import ChallengeType, CTFState
 from midnight.utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -22,15 +22,15 @@ _SPECIALIST_NODE = {
     "web": "web_specialist",
     "crypto": "crypto_specialist",
     "misc": "misc_specialist",
-    "forensics": "misc_specialist",
+    "forensics": "forensics_specialist",
     "unknown": "misc_specialist",
 }
 
 
 class Classification(BaseModel):
-    challenge_type: Literal[
-        "pwn", "reverse", "web", "crypto", "misc", "forensics", "unknown"
-    ] = Field(description="the CTF challenge category")
+    challenge_type: Literal["pwn", "reverse", "web", "crypto", "misc", "forensics", "unknown"] = (
+        Field(description="the CTF challenge category")
+    )
     reason: str = Field(description="one-sentence justification")
 
 
@@ -69,7 +69,7 @@ def make_classify_node():
             ctype, reason = result.challenge_type, result.reason
         except Exception as exc:  # noqa: BLE001
             # fall back to the platform hint, then 'unknown'
-            ctype = ch.get("category_hint") or "unknown"
+            ctype = cast(ChallengeType, ch.get("category_hint") or "unknown")
             if ctype not in _SPECIALIST_NODE:
                 ctype = "unknown"
             reason = f"classifier error ({exc}); fell back to hint"

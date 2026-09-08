@@ -13,8 +13,8 @@ injected via the ``run_helper`` factory kwarg.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.tools.registry import register_tool
@@ -30,7 +30,9 @@ def check_escalation(
     *, current_expert: str, target_type: str, depth: int, stack: list[str], max_depth: int
 ) -> EscalationGuard:
     if depth >= max_depth:
-        return EscalationGuard(False, f"escalation limit reached (depth={depth}); solve it yourself")
+        return EscalationGuard(
+            False, f"escalation limit reached (depth={depth}); solve it yourself"
+        )
     if target_type == current_expert:
         return EscalationGuard(False, f"already the {target_type} expert; no need to ask")
     if target_type in stack:
@@ -46,7 +48,7 @@ def make_ask_expert(
     depth: int,
     stack: list[str],
     max_depth: int,
-    run_helper: Callable[..., object] | None = None,
+    run_helper: Callable[..., Awaitable[str]] | None = None,
     **_,
 ) -> object:
     from langchain_core.tools import tool

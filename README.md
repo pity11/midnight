@@ -4,8 +4,8 @@ Midnight is an autonomous CTF solver for authorized competitions and reproducibl
 security benchmarks. It combines category routing, specialist workflows, isolated
 execution environments, and auditable run events.
 
-The current codebase is an early engineering prototype. See
-[ARCHITECTURE.md](ARCHITECTURE.md) for the design and implementation roadmap.
+The current codebase provides a platform-neutral competition runtime. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for its design and implementation roadmap.
 
 ## Features
 
@@ -15,7 +15,10 @@ The current codebase is an early engineering prototype. See
 - Stateful wrappers for interactive tools such as GDB and network sessions.
 - Bounded retries and rejected-candidate tracking.
 - Platform-neutral provider and submission interfaces.
+- A configurable JSON-over-HTTP competition adapter.
+- SQLite graph checkpoints and a durable, flag-redacted submission ledger.
 - Append-only JSONL run events with credential-field redaction.
+- Deterministic benchmark reports that do not persist flag values.
 - Local fixtures and stub models for offline development.
 
 ## Requirements
@@ -34,6 +37,7 @@ uv sync --extra dev
 cp .env.example .env
 MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --check-config
 MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --list-only
+MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --id sanity_misc --run-id smoke-1
 ```
 
 Cloud model credentials are optional when using the bundled stub configuration.
@@ -58,9 +62,46 @@ tests/           Offline tests and local challenge fixtures
 - [x] Concurrent challenge scheduling
 - [x] Bounded retry and rejected-candidate handling
 - [x] Redacted append-only event journal
-- [ ] Persistent graph checkpoints
-- [ ] Generic HTTP platform adapter
-- [ ] Reproducible benchmark runner and reports
+- [x] Persistent graph checkpoints and run recovery
+- [x] Generic HTTP platform adapter
+- [x] Durable submission idempotency
+- [x] Reproducible benchmark runner and reports
+
+## Run recovery
+
+Every challenge checkpoint is namespaced by the run ID, challenge ID, and a
+content-derived challenge revision. Reusing `--run-id` resumes interrupted work
+without applying stale state to changed attachments:
+
+```bash
+MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight \
+  --run-id benchmark-001 \
+  --checkpoint-path logs/checkpoints.sqlite
+```
+
+## HTTP platform adapter
+
+Copy `config/platform.example.yaml`, then map its endpoint paths to the
+competition API. The adapter keeps credentials in an environment variable,
+restricts attachment downloads to the configured origin by default, and runs
+with platform submission disabled unless `--submit` is present:
+
+```bash
+export MIDNIGHT_PLATFORM_TOKEN="..."
+uv run midnight --platform-config config/platform.local.yaml --list-only
+uv run midnight --platform-config config/platform.local.yaml --submit
+```
+
+The exact response-field mapping can be implemented as a small adapter once the
+official platform contract is available. The solver, scheduler, checkpoints,
+containers, reports, and submission policy do not depend on that contract.
+
+If a runner process is terminated before its cleanup executes, remove only the
+containers labeled for that run:
+
+```bash
+uv run midnight --cleanup-run benchmark-001
+```
 
 ## Configuration
 

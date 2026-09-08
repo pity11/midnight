@@ -1,0 +1,16 @@
+# Copy this file outside version control and adapt it when the competition API
+# contract is available. Credentials are read from the named environment
+# variable; never put token values in this file.
+base_url: "https://ctf.example.invalid"
+token_env: "MIDNIGHT_PLATFORM_TOKEN"
+auth_header: "Authorization"
+auth_scheme: "Bearer"
+timeout_seconds: 15
+allow_external_downloads: false
+max_attachment_bytes: 268435456
+
+endpoints:
+  health: "/api/health"
+  challenges: "/api/challenges"
+  challenge: "/api/challenges/{challenge_id}"
+  submit: "/api/challenges/{challenge_id}/submit"

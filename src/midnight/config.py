@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
@@ -40,7 +40,7 @@ class Settings(BaseModel):
     specialist_step_limit: int = 40
     helper_recursion_limit: int = 25
     escalation_max_depth: int = 2
-    max_attempts: int = 3         # specialist retry/fallback attempts per challenge
+    max_attempts: int = 3  # specialist retry/fallback attempts per challenge
     container_memory: str = "2g"
     container_cpus: str = "1.0"
     container_pids_limit: int = 256
@@ -81,8 +81,7 @@ def _flatten_tools(raw: dict[str, Any]) -> dict[str, list[str]]:
             else:
                 flat.append(item)
         # de-dup while preserving order
-        seen: set[str] = set()
-        out[expert] = [t for t in flat if not (t in seen or seen.add(t))]
+        out[expert] = list(dict.fromkeys(flat))
     return out
 
 
@@ -118,7 +117,7 @@ def get_config() -> AppConfig:
     )
 
 
-def model_spec_for(role: str, *, config: Optional[AppConfig] = None) -> ModelSpec:
+def model_spec_for(role: str, *, config: AppConfig | None = None) -> ModelSpec:
     """Return the ModelSpec for a role, falling back to 'default'."""
     cfg = config or get_config()
     return cfg.models.get(role) or cfg.models["default"]

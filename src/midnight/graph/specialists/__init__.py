@@ -5,7 +5,7 @@ with per-type tools/prompt/model. The per-file modules (pwn.py, web.py, ...) are
 reserved for type-specific overrides as the project grows.
 """
 
-from midnight.graph.specialists.base_specialist import make_specialist
 from midnight.graph.specialists import prompts
+from midnight.graph.specialists.base_specialist import make_specialist
 
 __all__ = ["make_specialist", "prompts"]

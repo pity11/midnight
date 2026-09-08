@@ -7,7 +7,7 @@ like recording candidate flags).
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.tools.registry import register_tool
@@ -93,7 +93,9 @@ def make_summarize_output(**_) -> object:
 
 
 @register_tool(name="submit_flag", groups=["pwn", "reverse", "web", "crypto", "misc"])
-def make_submit_flag(*, record_flag: Callable[[str], None], flag_format: str | None = None, **_) -> object:
+def make_submit_flag(
+    *, record_flag: Callable[[str], None], flag_format: str | None = None, **_
+) -> object:
     from langchain_core.tools import tool
 
     @tool

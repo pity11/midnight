@@ -10,8 +10,8 @@ because most tools need to be bound to a specific challenge's CTFEnvironment.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
 
 # A factory takes the per-challenge environment (and optionally a state accessor)
 # and returns a LangChain-compatible tool object. Typed loosely to avoid a hard

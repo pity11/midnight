@@ -8,8 +8,6 @@ within one specialist run share the same gdb process.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.tools.interactive.session import DockerInteractiveSession
 from midnight.tools.registry import register_tool
@@ -20,7 +18,7 @@ from midnight.tools.summarizer import summarize
 def make_gdb_tool(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
 
-    state = {"session": None}  # type: dict[str, Optional[DockerInteractiveSession]]
+    state: dict[str, DockerInteractiveSession | None] = {"session": None}
 
     async def _ensure(binary: str | None) -> DockerInteractiveSession:
         if state["session"] is None:
@@ -33,7 +31,9 @@ def make_gdb_tool(*, env: CTFEnvironment, **_) -> object:
             )
             await sess.start()
             state["session"] = sess
-        return state["session"]
+        session = state["session"]
+        assert session is not None
+        return session
 
     @tool
     async def gdb_tool(command: str, binary: str = "") -> str:

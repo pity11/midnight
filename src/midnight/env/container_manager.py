@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import platform as _platform
+import re
 from dataclasses import dataclass, field
-from typing import Optional
 
 from midnight.config import AppConfig, get_config
 from midnight.env.images import image_for
@@ -48,7 +48,7 @@ class ExecResult:
         return self.exit_code == 0
 
 
-async def _run(*args: str, timeout: Optional[int] = None) -> ExecResult:
+async def _run(*args: str, timeout: int | None = None) -> ExecResult:
     """Run a docker CLI command, capturing stdout/stderr."""
     proc = await asyncio.create_subprocess_exec(
         *args,
@@ -57,11 +57,13 @@ async def _run(*args: str, timeout: Optional[int] = None) -> ExecResult:
     )
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         await proc.wait()
         return ExecResult(124, "", f"timeout after {timeout}s")
-    return ExecResult(proc.returncode or 0, out.decode(errors="replace"), err.decode(errors="replace"))
+    return ExecResult(
+        proc.returncode or 0, out.decode(errors="replace"), err.decode(errors="replace")
+    )
 
 
 @dataclass
@@ -69,8 +71,27 @@ class ContainerManager:
     """Manages images, networks and the set of live containers."""
 
     config: AppConfig = field(default_factory=get_config)
+    run_id: str = "local"
     _containers: set[str] = field(default_factory=set)
     _networks: set[str] = field(default_factory=set)
+
+    def container_name(self, challenge_id: str) -> str:
+        safe_run = re.sub(r"[^a-zA-Z0-9_.-]", "-", self.run_id)[:24]
+        safe_challenge = re.sub(r"[^a-zA-Z0-9_.-]", "-", challenge_id)[:32]
+        return f"midnight-{safe_run}-{safe_challenge}".lower()
+
+    async def is_running(self, container_id_or_name: str | None) -> bool:
+        if not container_id_or_name:
+            return False
+        result = await _run(
+            "docker",
+            "inspect",
+            "--format",
+            "{{.State.Running}}",
+            container_id_or_name,
+            timeout=10,
+        )
+        return result.ok and result.stdout.strip().lower() == "true"
 
     async def ensure_network(self, name: str = "ctfnet") -> str:
         if name in self._networks:
@@ -92,7 +113,14 @@ class ContainerManager:
         from midnight.config import PROJECT_ROOT
 
         log.info("building image %s from %s ...", spec.image, spec.dockerfile)
-        build_args = ["docker", "build", "-t", spec.image, "-f", str(PROJECT_ROOT / spec.dockerfile)]
+        build_args = [
+            "docker",
+            "build",
+            "-t",
+            spec.image,
+            "-f",
+            str(PROJECT_ROOT / spec.dockerfile),
+        ]
         if _host_needs_platform(spec.platform):
             build_args += ["--platform", spec.platform]
         build_args.append(str(PROJECT_ROOT))
@@ -112,12 +140,23 @@ class ContainerManager:
 
         s = self.config.settings
         args = [
-            "docker", "run", "-d",
-            "--name", name,
-            "--memory", s.container_memory,
-            "--cpus", s.container_cpus,
-            "--pids-limit", str(s.container_pids_limit),
-            "--cap-drop", "ALL",
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            name,
+            "--memory",
+            s.container_memory,
+            "--cpus",
+            s.container_cpus,
+            "--pids-limit",
+            str(s.container_pids_limit),
+            "--cap-drop",
+            "ALL",
+            "--label",
+            "midnight.managed=true",
+            "--label",
+            f"midnight.run_id={self.run_id}",
         ]
         # Only pin platform when it differs from the host (e.g. amd64 image on
         # an arm host). On a native-arch host, passing --platform can make
@@ -150,3 +189,22 @@ class ContainerManager:
     async def cleanup_all(self) -> None:
         for cid in list(self._containers):
             await self.stop(cid)
+
+    async def cleanup_run(self) -> int:
+        """Remove orphaned managed containers belonging to this run ID."""
+        listed = await _run(
+            "docker",
+            "ps",
+            "-aq",
+            "--filter",
+            "label=midnight.managed=true",
+            "--filter",
+            f"label=midnight.run_id={self.run_id}",
+            timeout=30,
+        )
+        if not listed.ok:
+            raise RuntimeError(f"failed to list run containers: {listed.stderr.strip()}")
+        container_ids = [line for line in listed.stdout.splitlines() if line]
+        for container_id in container_ids:
+            await self.stop(container_id)
+        return len(container_ids)

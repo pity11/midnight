@@ -33,7 +33,8 @@ def test_interactive_python_repl():
     name = f"ctf-iat-test-{uuid.uuid4().hex[:8]}"
     cid = subprocess.run(
         [DOCKER, "run", "-d", "--name", name, IMAGE],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     assert cid, "failed to start container"
 
@@ -65,7 +66,8 @@ def test_env_open_session():
     name = f"ctf-iat-open-{uuid.uuid4().hex[:8]}"
     cid = subprocess.run(
         [DOCKER, "run", "-d", "--name", name, IMAGE],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     assert cid
 
