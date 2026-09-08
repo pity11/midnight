@@ -27,7 +27,9 @@ from midnight.interfaces.http_platform import (
     HTTPPlatformConfig,
 )
 from midnight.interfaces.local_mock import LocalDirProvider, ManualSubmitter
+from midnight.interfaces.provider import ChallengeProvider
 from midnight.interfaces.submission_gate import SubmissionGate
+from midnight.interfaces.submitter import FlagSubmitter
 from midnight.persistence import CheckpointStore
 from midnight.reporting import RunReport
 from midnight.utils.logging import get_logger
@@ -45,6 +47,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--platform-config",
         help="YAML configuration for the generic HTTP platform adapter",
+    )
+    p.add_argument(
+        "--bundles-dir",
+        help="root containing clean, immutable benchmark bundles",
+    )
+    p.add_argument(
+        "--evaluator-manifest",
+        help="evaluator-only JSON oracle used with --bundles-dir",
     )
     p.add_argument(
         "--submit",
@@ -129,9 +139,31 @@ async def _amain(args: argparse.Namespace) -> int:
         log.info("configuration OK")
         return 0
 
+    if args.platform_config and args.bundles_dir:
+        raise ValueError("--platform-config and --bundles-dir are mutually exclusive")
+    if args.evaluator_manifest and not args.bundles_dir:
+        raise ValueError("--evaluator-manifest requires --bundles-dir")
+
     platform = _load_http_adapter(args.platform_config) if args.platform_config else None
-    provider = platform or LocalDirProvider(args.challenges_dir)
-    delegate = platform or ManualSubmitter(args.challenges_dir)
+    provider: ChallengeProvider
+    delegate: FlagSubmitter
+    if args.bundles_dir:
+        from midnight.evaluation.provider import (
+            EvaluatorManifestSubmitter,
+            ValidatedBundleProvider,
+        )
+
+        provider = ValidatedBundleProvider(args.bundles_dir)
+        if not args.evaluator_manifest:
+            raise ValueError("--bundles-dir requires --evaluator-manifest")
+        bundle_root = Path(args.bundles_dir).resolve()
+        evaluator_path = Path(args.evaluator_manifest).resolve()
+        if evaluator_path.is_relative_to(bundle_root):
+            raise ValueError("evaluator manifest must be outside the clean bundle root")
+        delegate = EvaluatorManifestSubmitter(args.evaluator_manifest)
+    else:
+        provider = platform or LocalDirProvider(args.challenges_dir)
+        delegate = platform or ManualSubmitter(args.challenges_dir)
 
     if args.id:
         challenges = [await provider.fetch(args.id)]
