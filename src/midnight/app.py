@@ -251,7 +251,7 @@ async def _amain(args: argparse.Namespace) -> int:
         image_digests: dict[str, str] = {
             category: await image_manager.image_digest(category) for category in sorted(categories)
         }
-        if evaluation_spec.internet_policy == "target_only":
+        if any(manifest.internet_policy == "target_only" for manifest in bundle_manifests):
             image_digests["_relay"] = await image_manager.relay_image_digest()
         run_manifest = build_run_manifest(
             evaluation_spec,

@@ -22,6 +22,7 @@ def _run_manifest(**changes) -> RunManifest:
         "time_budget_seconds": 1800,
         "token_budget": 100_000,
         "internet_policy": "disabled",
+        "task_internet_policies": {"task-1": "disabled"},
     }
     values.update(changes)
     return RunManifest(**values)

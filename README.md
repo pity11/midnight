@@ -123,6 +123,22 @@ Formal evaluations use allowlist-based clean bundles. The upstream repository
 and evaluator answers must remain outside the bundle root:
 
 ```bash
+# Audit and atomically materialize the pinned Cybench smoke suite.
+uv run midnight-benchmark \
+  --repository /evaluator/upstream/cybench \
+  --selection config/benchmarks/cybench-core-12.json \
+  --report /evaluator/reports/cybench-core-12.json \
+  audit
+
+uv run midnight-benchmark \
+  --repository /evaluator/upstream/cybench \
+  --selection config/benchmarks/cybench-core-12.json \
+  --report /evaluator/reports/cybench-core-12.json \
+  stage \
+  --bundles /evaluator/bundles/cybench-core-12 \
+  --evaluator-manifest /evaluator/private/cybench-core-12.json
+
+# Stage one custom task.
 uv run midnight-stage \
   --source-root /evaluator/upstream/challenge \
   --spec config/staging.example.json \
@@ -139,6 +155,10 @@ the run ID from the effective task bundles, Midnight revision, model mapping,
 prompt and configuration hashes, Docker image IDs, budgets, network policy,
 attempt, and seed. Reusing the same identity resumes that attempt; changing the
 attempt creates an independent run.
+
+Mixed offline and target-only suites use `bundle_enforced`: every task retains
+its own immutable network policy, and the run manifest records the complete
+task-to-policy mapping. Open-world access is rejected in this mode.
 
 Target-only tasks place the solver on an internal Docker network and expose each
 allowlisted TCP endpoint through a dedicated fixed-destination relay. The relay

@@ -31,6 +31,7 @@ tsecbench = ["tsec-benchmark"]
 [project.scripts]
 midnight = "midnight.app:main"
 midnight-stage = "midnight.evaluation.cli:main"
+midnight-benchmark = "midnight.evaluation.suite_cli:main"
 
 [build-system]
 requires = ["hatchling"]

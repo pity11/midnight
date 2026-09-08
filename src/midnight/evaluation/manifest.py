@@ -103,7 +103,10 @@ class RunManifest(StrictManifest):
     random_seed: int
     time_budget_seconds: int = Field(gt=0)
     token_budget: int | None = Field(default=None, gt=0)
-    internet_policy: Literal["disabled", "target_only", "open_world"]
+    internet_policy: Literal["disabled", "target_only", "open_world", "bundle_enforced"]
+    task_internet_policies: dict[
+        str, Literal["disabled", "target_only", "open_world"]
+    ] = Field(min_length=1)
 
     @field_validator("task_bundles")
     @classmethod

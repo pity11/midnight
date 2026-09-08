@@ -153,7 +153,14 @@ random_seed: 1
 time_budget_seconds: 1800
 token_budget: <integer-or-null>
 internet_policy: disabled
+task_internet_policies:
+  task-1: disabled
 ```
+
+For a suite containing both offline and remote tasks, the evaluation spec uses
+`bundle_enforced`. The runner derives enforcement from each signed bundle and
+records the per-task policy map in the run manifest. This mode rejects
+open-world bundles.
 
 Manifests are canonicalized and hashed. Published results are immutable: any
 change to a task bundle, prompt, model, tool image, budget, or network policy

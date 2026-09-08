@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "name": "cybench-core-12-v1",
+  "upstream_revision": "1097a7226eb034d3821208114da38f10b8627ab1",
+  "expected_category_counts": {
+    "crypto": 2,
+    "forensics": 2,
+    "misc": 2,
+    "pwn": 2,
+    "reverse": 2,
+    "web": 2
+  },
+  "tasks": [
+    {
+      "path": "benchmark/hackthebox/cyber-apocalypse-2024/crypto/[Very Easy] Primary Knowledge",
+      "category": "crypto"
+    },
+    {
+      "path": "benchmark/hackthebox/cyber-apocalypse-2024/crypto/[Medium] Partial Tenacity",
+      "category": "crypto",
+      "approved_findings": ["d82a3b6869537758"],
+      "visible_files": [
+        {"source": "challenge/output.txt", "target": "output.txt"},
+        {"source": "challenge/source.py", "target": "source.py"}
+      ]
+    },
+    {
+      "path": "benchmark/hackthebox/cyber-apocalypse-2024/forensics/[Very Easy] It Has Begun",
+      "category": "forensics",
+      "visible_files": [
+        {"source": "release/forensics_it_has_begun.zip", "target": "forensics_it_has_begun.zip"}
+      ]
+    },
+    {
+      "path": "benchmark/hackthebox/cyber-apocalypse-2024/forensics/[Very Easy] Urgent",
+      "category": "forensics"
+    },
+    {
+      "path": "benchmark/hackthebox/cyber-apocalypse-2024/misc/[Easy] Unbreakable",
+      "category": "misc"
+    },
+    {
+      "path": "benchmark/hackthebox/cyber-apocalypse-2024/misc/[Medium] Were Pickle Phreaks Revenge",
+      "category": "misc"
+    },
+    {
+      "path": "benchmark/hackthebox/cyber-apocalypse-2024/pwn/[Very Easy] Delulu",
+      "category": "pwn",
+      "approved_findings": ["d82a3b6869537758"],
+      "visible_files": [
+        {"source": "challenge/delulu", "target": "delulu"},
+        {"source": "challenge/glibc/ld-linux-x86-64.so.2", "target": "glibc/ld-linux-x86-64.so.2"},
+        {"source": "challenge/glibc/libc.so.6", "target": "glibc/libc.so.6"}
+      ]
+    },
+    {
+      "path": "benchmark/project-sekai-ctf/sekaictf-2023/pwn/network-tools",
+      "category": "pwn",
+      "visible_files": [
+        {"source": "dist/main.rs", "target": "main.rs"},
+        {"source": "dist/nettools", "target": "nettools"}
+      ]
+    },
+    {
+      "path": "benchmark/hackthebox/cyber-apocalypse-2024/reversing/[Very Easy] PackedAway",
+      "category": "reverse",
+      "visible_files": [
+        {"source": "release/rev_packedaway.zip", "target": "rev_packedaway.zip"}
+      ]
+    },
+    {
+      "path": "benchmark/hackthebox/cyber-apocalypse-2024/reversing/[Easy] Crushing",
+      "category": "reverse",
+      "visible_files": [
+        {"source": "release/rev_crushing.zip", "target": "rev_crushing.zip"}
+      ]
+    },
+    {
+      "path": "benchmark/hackthebox/cyber-apocalypse-2024/web/[Very Easy] Flag Command",
+      "category": "web"
+    },
+    {
+      "path": "benchmark/hackthebox/cyber-apocalypse-2024/web/[Easy] Labyrinth Linguist",
+      "category": "web",
+      "visible_files": [
+        {"source": "release/web_labyrinth_linguist.zip", "target": "web_labyrinth_linguist.zip"}
+      ]
+    }
+  ]
+}

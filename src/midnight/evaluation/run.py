@@ -27,7 +27,7 @@ class EvaluationSpec(BaseModel):
     random_seed: int
     time_budget_seconds: int = Field(gt=0)
     token_budget: int | None = Field(default=None, gt=0)
-    internet_policy: Literal["disabled", "target_only", "open_world"]
+    internet_policy: Literal["disabled", "target_only", "open_world", "bundle_enforced"]
 
 
 def load_evaluation_spec(path: str | Path) -> EvaluationSpec:
@@ -47,8 +47,13 @@ def build_run_manifest(
     for bundle in bundles:
         if (bundle.suite, bundle.suite_version) != (spec.suite, spec.suite_version):
             raise ValueError(f"task {bundle.challenge_id} belongs to a different suite/version")
-        if bundle.internet_policy != spec.internet_policy:
+        if (
+            spec.internet_policy != "bundle_enforced"
+            and bundle.internet_policy != spec.internet_policy
+        ):
             raise ValueError(f"task {bundle.challenge_id} has a different internet policy")
+        if spec.internet_policy == "bundle_enforced" and bundle.internet_policy == "open_world":
+            raise ValueError("bundle_enforced public runs cannot contain open-world tasks")
     categories = {bundle.category for bundle in bundles}
     if not categories.issubset(image_digests):
         raise ValueError(f"missing image digests for categories: {sorted(categories - image_digests.keys())}")
@@ -71,6 +76,9 @@ def build_run_manifest(
         time_budget_seconds=spec.time_budget_seconds,
         token_budget=spec.token_budget,
         internet_policy=spec.internet_policy,
+        task_internet_policies={
+            bundle.challenge_id: bundle.internet_policy for bundle in bundles
+        },
     )
 
 

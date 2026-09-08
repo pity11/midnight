@@ -49,6 +49,7 @@ def test_build_run_manifest_binds_effective_inputs():
     assert len(manifest.prompt_revision) == 64
     assert len(manifest.config_revision) == 64
     assert len(manifest.run_identity) == 64
+    assert manifest.task_internet_policies == {"pwn-1": "disabled"}
 
 
 def test_build_run_manifest_rejects_suite_or_policy_mismatch():
@@ -66,3 +67,28 @@ def test_build_run_manifest_rejects_suite_or_policy_mismatch():
             config=get_config(),
             image_digests={"pwn": "sha256:" + "b" * 64},
         )
+
+
+def test_bundle_enforced_policy_supports_mixed_offline_and_target_tasks():
+    manifest = build_run_manifest(
+        _spec(internet_policy="bundle_enforced"),
+        [
+            _bundle(),
+            _bundle(
+                challenge_id="web-1",
+                category="web",
+                bundle_sha256="c" * 64,
+                internet_policy="target_only",
+                allowed_targets=["challenge:1337"],
+            ),
+        ],
+        config=get_config(),
+        image_digests={
+            "pwn": "sha256:" + "b" * 64,
+            "web": "sha256:" + "d" * 64,
+        },
+    )
+    assert manifest.task_internet_policies == {
+        "pwn-1": "disabled",
+        "web-1": "target_only",
+    }

@@ -9,5 +9,5 @@
   "random_seed": 1,
   "time_budget_seconds": 1800,
   "token_budget": null,
-  "internet_policy": "disabled"
+  "internet_policy": "bundle_enforced"
 }
