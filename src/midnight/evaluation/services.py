@@ -25,6 +25,7 @@ class BenchmarkService(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     context: str
     dockerfile: str = "Dockerfile"
+    dockerfile_override: str | None = None
     image: str
     target: str
     platform: str = "linux/amd64"
@@ -91,9 +92,14 @@ class BenchmarkServiceManager:
         context = (self.repository_root / service.context).resolve()
         if not context.is_relative_to(self.repository_root) or not context.is_dir():
             raise ValueError(f"service context escapes repository root: {service.context}")
-        dockerfile = (context / service.dockerfile).resolve()
-        if not dockerfile.is_relative_to(context) or not dockerfile.is_file():
-            raise ValueError(f"service Dockerfile escapes context: {service.dockerfile}")
+        if service.dockerfile_override:
+            dockerfile = (self.path.parent / service.dockerfile_override).resolve()
+            if not dockerfile.is_relative_to(self.path.parent) or not dockerfile.is_file():
+                raise ValueError("service Dockerfile override escapes evaluator directory")
+        else:
+            dockerfile = (context / service.dockerfile).resolve()
+            if not dockerfile.is_relative_to(context) or not dockerfile.is_file():
+                raise ValueError(f"service Dockerfile escapes context: {service.dockerfile}")
         return context, dockerfile
 
     @staticmethod

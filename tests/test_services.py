@@ -59,3 +59,15 @@ def test_service_manager_rejects_context_escape(tmp_path):
     service = manager.manifest.tasks["task-1"].model_copy(update={"context": "../private"})
     with pytest.raises(ValueError, match="escapes repository root"):
         manager._paths(service)
+
+
+def test_service_manager_accepts_private_dockerfile_override(tmp_path):
+    path = _manifest(tmp_path)
+    override = path.parent / "Dockerfile.override"
+    override.write_text("FROM scratch\n")
+    manager = BenchmarkServiceManager(path)
+    service = manager.manifest.tasks["task-1"].model_copy(
+        update={"dockerfile_override": "Dockerfile.override"}
+    )
+    _, selected = manager._paths(service)
+    assert selected == override.resolve()
