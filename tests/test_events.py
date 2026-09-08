@@ -13,6 +13,7 @@ def test_event_journal_appends_and_redacts_secrets(tmp_path):
                 "model": "stub",
                 "api_key": "must-not-persist",
                 "nested": {"authorization": "Bearer must-not-persist"},
+                "message": "request failed with Bearer abcdefghijklmnop",
             },
         )
     )
@@ -22,6 +23,7 @@ def test_event_journal_appends_and_redacts_secrets(tmp_path):
     assert records[0]["event"] == "run_started"
     assert records[0]["payload"]["api_key"] == "<redacted>"
     assert records[0]["payload"]["nested"]["authorization"] == "<redacted>"
+    assert records[0]["payload"]["message"] == "request failed with <redacted>"
     assert "must-not-persist" not in (tmp_path / "events.jsonl").read_text()
 
 

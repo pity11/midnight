@@ -14,8 +14,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 from pathlib import Path
+from uuid import uuid4
 
 from midnight.config import get_config
+from midnight.events import EventJournal
 from midnight.interfaces.local_mock import LocalDirProvider, ManualSubmitter
 from midnight.utils.logging import get_logger
 
@@ -39,6 +41,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--check-config",
         action="store_true",
         help="validate configuration and exit",
+    )
+    p.add_argument(
+        "--events-path",
+        default="logs/events.jsonl",
+        help="append-only JSONL event journal",
     )
     return p.parse_args(argv)
 
@@ -74,7 +81,12 @@ async def _amain(args: argparse.Namespace) -> int:
 
     from midnight.orchestrator.scheduler import Scheduler
 
-    scheduler = Scheduler(provider=provider, submitter=submitter)
+    scheduler = Scheduler(
+        provider=provider,
+        submitter=submitter,
+        journal=EventJournal(args.events_path),
+        run_id=uuid4().hex,
+    )
     results = await scheduler.solve_all(challenges)
 
     log.info("=== results ===")

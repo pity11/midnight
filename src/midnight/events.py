@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -12,6 +13,16 @@ from typing import Any, Mapping
 
 
 _SECRET_MARKERS = ("token", "secret", "password", "cookie", "authorization", "api_key")
+_VALUE_PATTERNS = (
+    re.compile(r"(?i)Bearer\s+[A-Za-z0-9._~+/-]+=*"),
+    re.compile(r"\b(?:sk|ghp|github_pat)-?[A-Za-z0-9_]{16,}\b"),
+)
+
+
+def _redact_string(value: str) -> str:
+    for pattern in _VALUE_PATTERNS:
+        value = pattern.sub("<redacted>", value)
+    return value
 
 
 def _redact(value: Any, key: str = "") -> Any:
@@ -24,6 +35,8 @@ def _redact(value: Any, key: str = "") -> Any:
         return [_redact(item) for item in value]
     if isinstance(value, Path):
         return str(value)
+    if isinstance(value, str):
+        return _redact_string(value)
     return value
 
 
