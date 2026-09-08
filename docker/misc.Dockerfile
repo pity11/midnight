@@ -6,13 +6,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash coreutils file xxd \
         python3 python3-pip python3-venv \
+        python3-pil \
         binwalk foremost exiftool steghide \
         zlib1g-dev \
         ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
-
-RUN python3 -m pip install --no-cache-dir --upgrade pip \
-    && python3 -m pip install --no-cache-dir pillow
 
 # NOTE: volatility / zsteg add on demand for specific forensics challenges.
 

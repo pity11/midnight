@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import subprocess
 from pathlib import Path
 from typing import Literal
 
@@ -33,6 +34,31 @@ class EvaluationSpec(BaseModel):
 def load_evaluation_spec(path: str | Path) -> EvaluationSpec:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     return EvaluationSpec.model_validate(payload)
+
+
+def verify_midnight_revision(spec: EvaluationSpec, repository: str | Path) -> None:
+    """Fail closed when a formal run does not match a clean Git revision."""
+    root = Path(repository).resolve()
+    actual = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if actual != spec.midnight_revision:
+        raise ValueError(
+            f"Midnight revision differs from evaluation spec: expected {spec.midnight_revision}, got {actual}"
+        )
+    dirty = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if dirty:
+        raise ValueError("formal evaluation requires a clean Midnight worktree")
 
 
 def build_run_manifest(

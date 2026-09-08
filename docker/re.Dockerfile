@@ -6,12 +6,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash coreutils file xxd binutils \
         python3 python3-pip python3-venv \
+        python3-capstone python3-pyelftools \
         gdb gcc libc6-dev binwalk curl \
         ca-certificates git unzip \
     && rm -rf /var/lib/apt/lists/*
-
-RUN python3 -m pip install --no-cache-dir --upgrade pip \
-    && python3 -m pip install --no-cache-dir capstone pyelftools
 
 # radare2 is not in Ubuntu repos and building from source is heavy/fragile in
 # CI. It is OPTIONAL: r2_interact degrades gracefully when r2 is absent. To add

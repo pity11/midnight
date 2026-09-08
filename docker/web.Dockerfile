@@ -6,13 +6,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash coreutils file \
         python3 python3-pip python3-venv \
+        python3-requests python3-httpx python3-bs4 \
         curl wget netcat-openbsd \
         sqlmap \
         ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
-
-RUN python3 -m pip install --no-cache-dir --upgrade pip \
-    && python3 -m pip install --no-cache-dir requests httpx beautifulsoup4
 
 WORKDIR /ctf
 CMD ["sleep", "infinity"]

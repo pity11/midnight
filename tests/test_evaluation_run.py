@@ -4,7 +4,7 @@ import pytest
 
 from midnight.config import get_config
 from midnight.evaluation.manifest import BundleManifest
-from midnight.evaluation.run import EvaluationSpec, build_run_manifest
+from midnight.evaluation.run import EvaluationSpec, build_run_manifest, verify_midnight_revision
 
 
 def _bundle(**changes) -> BundleManifest:
@@ -92,3 +92,19 @@ def test_bundle_enforced_policy_supports_mixed_offline_and_target_tasks():
         "pwn-1": "disabled",
         "web-1": "target_only",
     }
+
+
+def test_formal_revision_verification_rejects_mismatch(tmp_path):
+    import subprocess
+
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / "tracked").write_text("content", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "init"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    with pytest.raises(ValueError, match="revision differs"):
+        verify_midnight_revision(_spec(midnight_revision="0" * 40), tmp_path)

@@ -21,7 +21,7 @@ from uuid import uuid4
 
 import yaml
 
-from midnight.config import get_config
+from midnight.config import PROJECT_ROOT, get_config
 from midnight.events import EventJournal
 from midnight.interfaces.http_platform import (
     EndpointMap,
@@ -240,11 +240,13 @@ async def _amain(args: argparse.Namespace) -> int:
             apply_random_seed,
             build_run_manifest,
             load_evaluation_spec,
+            verify_midnight_revision,
         )
         from midnight.state import ChallengeType
 
         clean_provider = cast(ValidatedBundleProvider, provider)
         evaluation_spec = load_evaluation_spec(args.evaluation_spec)
+        verify_midnight_revision(evaluation_spec, PROJECT_ROOT)
         if evaluation_spec.agent_mode != args.agent_mode:
             raise ValueError("--agent-mode must match the immutable evaluation spec")
         if evaluation_spec.token_budget is not None:

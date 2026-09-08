@@ -9,8 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates git unzip \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir --upgrade pip
-
 WORKDIR /ctf
 # keep the container alive for `docker exec` driven interaction
 CMD ["sleep", "infinity"]
