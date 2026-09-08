@@ -3,6 +3,7 @@
   "suite": "example-suite",
   "suite_version": "upstream-commit-or-release",
   "midnight_revision": "full-midnight-commit",
+  "agent_mode": "midnight",
   "track": "standard",
   "attempt": 1,
   "random_seed": 1,

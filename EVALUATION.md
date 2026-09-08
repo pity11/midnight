@@ -140,6 +140,7 @@ suite_version: 2026-09-08.1
 task_bundles:
   task-1: <hash>
 midnight_revision: <commit>
+agent_mode: midnight
 models:
   default: <provider/model/version>
 prompt_revision: <hash>

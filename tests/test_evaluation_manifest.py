@@ -11,6 +11,7 @@ def _run_manifest(**changes) -> RunManifest:
         "suite_version": "cybench-abc123",
         "task_bundles": {"task-1": "a" * 64},
         "midnight_revision": "deadbeef",
+        "agent_mode": "midnight",
         "models": {"default": "provider/model-2026-09-01"},
         "prompt_revision": "b" * 64,
         "config_revision": "d" * 64,
@@ -43,8 +44,10 @@ def test_run_identity_changes_with_experimental_variable(tmp_path):
     original = _run_manifest()
     repeated = _run_manifest()
     changed = _run_manifest(time_budget_seconds=7200)
+    bare = _run_manifest(agent_mode="bare")
     assert original.run_identity == repeated.run_identity
     assert original.run_identity != changed.run_identity
+    assert original.run_identity != bare.run_identity
 
     path = original.write(tmp_path / "run.json")
     payload = json.loads(path.read_text(encoding="utf-8"))

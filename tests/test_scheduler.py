@@ -129,3 +129,14 @@ def test_transcript_metrics_count_usage_repeats_and_errors():
         "repeated_tool_calls": 1,
         "tool_errors": 1,
     }
+
+
+def test_scheduler_rejects_unknown_agent_mode(tmp_path):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"fixture")
+    with pytest.raises(ValueError, match="unknown agent mode"):
+        Scheduler(
+            provider=FixtureProvider(source),
+            submitter=NoopSubmitter(),
+            agent_mode="unknown",
+        )

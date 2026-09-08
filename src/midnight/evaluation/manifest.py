@@ -97,6 +97,7 @@ class RunManifest(StrictManifest):
     prompt_revision: str = Field(min_length=1)
     config_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
     tool_image_digests: dict[str, str] = Field(min_length=1)
+    agent_mode: Literal["midnight", "bare"]
     track: Literal["standard", "long_horizon", "open_world"]
     attempt: int = Field(ge=1)
     random_seed: int

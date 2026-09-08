@@ -97,6 +97,7 @@ class Scheduler:
         run_id: str | None = None,
         checkpoint_store: CheckpointStore | None = None,
         artifacts_root: str | Path = "logs/artifacts",
+        agent_mode: str = "midnight",
     ):
         cfg = get_config().settings
         self.provider = provider
@@ -107,6 +108,9 @@ class Scheduler:
         self.run_id = run_id or uuid4().hex
         self.checkpoint_store = checkpoint_store
         self.artifacts_root = Path(artifacts_root)
+        if agent_mode not in {"midnight", "bare"}:
+            raise ValueError(f"unknown agent mode: {agent_mode}")
+        self.agent_mode = agent_mode
         native_binary_limit = asyncio.Semaphore(cfg.pwn_max_concurrency)
         self._category_limits = {
             "pwn": native_binary_limit,
@@ -225,18 +229,32 @@ class Scheduler:
     async def _solve_one(self, ch: Challenge) -> Result:
         """Run one challenge end-to-end with its own graph + container."""
         # imported here to avoid importing langgraph at module load.
-        from midnight.graph.main_graph import build_main_graph
+        if self.agent_mode == "bare":
+            from midnight.graph.bare_graph import build_bare_graph
+
+            def build_graph(checkpointer=None):
+                return build_bare_graph(
+                    submitter=self.submitter,
+                    manager=manager,
+                    checkpointer=checkpointer,
+                )
+
+        else:
+            from midnight.graph.main_graph import build_main_graph
+
+            def build_graph(checkpointer=None):
+                return build_main_graph(
+                    provider=self.provider,
+                    submitter=self.submitter,
+                    manager=manager,
+                    checkpointer=checkpointer,
+                )
 
         cfg = get_config()
         manager = ContainerManager(run_id=self.run_id)  # per-challenge manager -> isolated cleanup
 
         async def invoke(checkpointer=None):
-            graph = build_main_graph(
-                provider=self.provider,
-                submitter=self.submitter,
-                manager=manager,
-                checkpointer=checkpointer,
-            )
+            graph = build_graph(checkpointer)
             config = {
                 "recursion_limit": cfg.settings.recursion_limit,
                 "configurable": {

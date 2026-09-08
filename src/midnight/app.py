@@ -72,6 +72,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--id", help="solve a single challenge by id (default: all)")
     p.add_argument(
+        "--agent-mode",
+        choices=("midnight", "bare"),
+        default="midnight",
+        help="full Midnight orchestration or matched single-agent control",
+    )
+    p.add_argument(
         "--list-only",
         action="store_true",
         help="list discovered challenges and exit (no solving)",
@@ -216,6 +222,8 @@ async def _amain(args: argparse.Namespace) -> int:
 
         clean_provider = cast(ValidatedBundleProvider, provider)
         evaluation_spec = load_evaluation_spec(args.evaluation_spec)
+        if evaluation_spec.agent_mode != args.agent_mode:
+            raise ValueError("--agent-mode must match the immutable evaluation spec")
         if evaluation_spec.token_budget is not None:
             raise ValueError("token budget enforcement is not implemented; omit token_budget")
         apply_random_seed(evaluation_spec.random_seed)
@@ -256,6 +264,7 @@ async def _amain(args: argparse.Namespace) -> int:
             checkpoint_store=CheckpointStore(args.checkpoint_path),
             artifacts_root=args.artifacts_root,
             per_task_timeout=task_timeout,
+            agent_mode=args.agent_mode,
         )
         started = time.monotonic()
         results = await scheduler.solve_all(challenges)

@@ -21,6 +21,7 @@ class EvaluationSpec(BaseModel):
     suite: str = Field(min_length=1)
     suite_version: str = Field(min_length=1)
     midnight_revision: str = Field(min_length=1)
+    agent_mode: Literal["midnight", "bare"] = "midnight"
     track: Literal["standard", "long_horizon", "open_world"]
     attempt: int = Field(ge=1)
     random_seed: int
@@ -63,6 +64,7 @@ def build_run_manifest(
         prompt_revision=prompt_revision,
         config_revision=config_revision,
         tool_image_digests={category: image_digests[category] for category in sorted(categories)},
+        agent_mode=spec.agent_mode,
         track=spec.track,
         attempt=spec.attempt,
         random_seed=spec.random_seed,
