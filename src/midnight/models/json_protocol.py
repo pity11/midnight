@@ -58,6 +58,27 @@ def _text(message: BaseMessage) -> str:
     return message.content
 
 
+def _json_payload(raw: str) -> str:
+    """Unwrap common JSON-only markers emitted by compatible gateways."""
+    stripped = raw.strip()
+    try:
+        value = json.loads(stripped)
+    except ValueError:
+        start = stripped.find("{")
+        if start < 0:
+            raise ValueError("no JSON object") from None
+        value, consumed = json.JSONDecoder().raw_decode(stripped[start:])
+        prefix = stripped[:start].strip().lower()
+        suffix = stripped[start + consumed :].strip().lower()
+        allowed_prefixes = {"```", "```json", "<json>", "<tool_call>"}
+        allowed_suffixes = {"```", "</json>", "</tool_call>"}
+        if prefix not in allowed_prefixes or suffix not in allowed_suffixes:
+            raise ValueError("unexpected text outside JSON object") from None
+    if not isinstance(value, dict):
+        raise TypeError("JSON action must be an object")
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
 class _StructuredRunnable(Runnable[Any, Any]):
     def __init__(self, model: JsonProtocolChatModel, schema: type[BaseModel]) -> None:
         self._model = model
@@ -109,7 +130,7 @@ class JsonProtocolChatModel(BaseChatModel):
 
     def _parse_action(self, raw: str) -> AIMessage:
         try:
-            data = json.loads(raw)
+            data = json.loads(_json_payload(raw))
             if not isinstance(data, dict):
                 raise TypeError
             if data.get("type") == "complete":
@@ -244,30 +265,30 @@ class JsonProtocolChatModel(BaseChatModel):
         request = [self._structured_prompt(schema), *_messages(input)]
         first = self.delegate.invoke(request, **kwargs)
         try:
-            return schema.model_validate_json(_text(first))
-        except (ValidationError, ValueError):
+            return schema.model_validate_json(_json_payload(_text(first)))
+        except (ValidationError, ValueError, TypeError):
             repair = HumanMessage(content=(
                 "The previous response failed local JSON Schema validation. Return only one "
                 "corrected JSON object; do not add commentary or Markdown."
             ))
             second = self.delegate.invoke([*request, first, repair], **kwargs)
             try:
-                return schema.model_validate_json(_text(second))
-            except (ValidationError, ValueError) as exc:
+                return schema.model_validate_json(_json_payload(_text(second)))
+            except (ValidationError, ValueError, TypeError) as exc:
                 raise RuntimeError("MODEL_JSON_INVALID") from exc
 
     async def _astructured(self, input: Any, schema: type[BaseModel], **kwargs: Any) -> BaseModel:
         request = [self._structured_prompt(schema), *_messages(input)]
         first = await self.delegate.ainvoke(request, **kwargs)
         try:
-            return schema.model_validate_json(_text(first))
-        except (ValidationError, ValueError):
+            return schema.model_validate_json(_json_payload(_text(first)))
+        except (ValidationError, ValueError, TypeError):
             repair = HumanMessage(content=(
                 "The previous response failed local JSON Schema validation. Return only one "
                 "corrected JSON object; do not add commentary or Markdown."
             ))
             second = await self.delegate.ainvoke([*request, first, repair], **kwargs)
             try:
-                return schema.model_validate_json(_text(second))
-            except (ValidationError, ValueError) as exc:
+                return schema.model_validate_json(_json_payload(_text(second)))
+            except (ValidationError, ValueError, TypeError) as exc:
                 raise RuntimeError("MODEL_JSON_INVALID") from exc

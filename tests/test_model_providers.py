@@ -47,6 +47,23 @@ def test_json_protocol_converts_validated_action_to_tool_call():
     assert "Available tool schemas" in delegate.seen[0][0].content
 
 
+@pytest.mark.parametrize(
+    "wrapped",
+    [
+        '<json>{"type":"tool_call","tool":"http_probe","arguments":{"path":"/"}}</json>',
+        '<tool_call>\n{"type":"tool_call","tool":"http_probe","arguments":{"path":"/"}}\n</tool_call>',
+        '```json\n{"type":"tool_call","tool":"http_probe","arguments":{"path":"/"}}\n```',
+    ],
+)
+def test_json_protocol_accepts_common_json_wrappers(wrapped):
+    delegate = ScriptedModel(replies=[wrapped])
+    model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
+
+    result = model.invoke("probe")
+
+    assert result.tool_calls[0]["name"] == "http_probe"
+
+
 def test_json_protocol_repairs_structured_output_once():
     class Decision(BaseModel):
         model_config = ConfigDict(extra="forbid")

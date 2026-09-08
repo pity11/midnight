@@ -72,6 +72,7 @@ class BenchmarkServiceManager:
         self.repository_root = (self.path.parent / self.manifest.repository_root).resolve()
         if not self.repository_root.is_dir():
             raise FileNotFoundError(f"service repository root not found: {self.repository_root}")
+        self._image_refs: dict[str, str] = {}
 
     @property
     def network(self) -> str:
@@ -111,6 +112,14 @@ class BenchmarkServiceManager:
         digests: dict[str, str] = {}
         for challenge_id, service in sorted(self.manifest.tasks.items()):
             context, dockerfile = self._paths(service)
+            inspected = await _run(
+                "docker", "image", "inspect", "--format", "{{.Id}}", service.image, timeout=30
+            )
+            digest = inspected.stdout.strip()
+            if inspected.ok and digest.startswith("sha256:"):
+                digests[f"_target/{challenge_id}"] = digest
+                self._image_refs[challenge_id] = digest
+                continue
             args = ["docker", "build", "-t", service.image]
             proxy_value = os.getenv("MIDNIGHT_BUILD_PROXY", "").strip()
             direct_hosts = set(_DIRECT_PACKAGE_HOSTS)
@@ -145,6 +154,7 @@ class BenchmarkServiceManager:
             if not inspected.ok or not digest.startswith("sha256:"):
                 raise RuntimeError(f"could not resolve target image digest for {challenge_id}")
             digests[f"_target/{challenge_id}"] = digest
+            self._image_refs[challenge_id] = digest
         return digests
 
     async def start_all(self) -> None:
@@ -184,7 +194,10 @@ class BenchmarkServiceManager:
                 ]
                 if _host_needs_platform(service.platform):
                     args += ["--platform", service.platform]
-                args.append(service.image)
+                image_ref = self._image_refs.get(challenge_id)
+                if image_ref is None:
+                    raise RuntimeError("target images must be resolved before services are started")
+                args.append(image_ref)
                 result = await _run(*args, timeout=60)
                 if not result.ok:
                     raise RuntimeError(f"target service failed to start: {result.stderr.strip()}")

@@ -43,6 +43,9 @@ async def test_service_manager_builds_and_records_digest(tmp_path, monkeypatch):
     async def fake_run(*args: str, timeout=None):
         calls.append(args)
         if args[1:4] == ("image", "inspect", "--format"):
+            inspect_count = sum(call[1:4] == ("image", "inspect", "--format") for call in calls)
+            if inspect_count == 1:
+                return ExecResult(1, "", "not found")
             return ExecResult(0, "sha256:1234\n", "")
         return ExecResult(0, "", "")
 
@@ -52,6 +55,33 @@ async def test_service_manager_builds_and_records_digest(tmp_path, monkeypatch):
     assert digests == {"_target/task-1": "sha256:1234"}
     assert any(call[1] == "build" for call in calls)
     assert manager.targets == {"task-1": "target_one:1337"}
+
+
+@pytest.mark.asyncio
+async def test_service_manager_reuses_and_pins_existing_image(tmp_path, monkeypatch):
+    calls: list[tuple[str, ...]] = []
+
+    async def fake_run(*args: str, timeout=None):
+        calls.append(args)
+        if args[1:4] == ("image", "inspect", "--format"):
+            return ExecResult(0, "sha256:" + "a" * 64 + "\n", "")
+        if args[1:3] == ("network", "inspect"):
+            return ExecResult(0, "", "")
+        return ExecResult(0, "", "")
+
+    monkeypatch.setattr(service_module, "_run", fake_run)
+    monkeypatch.setattr(BenchmarkServiceManager, "_wait_until_ready", lambda self: _done())
+    manager = BenchmarkServiceManager(_manifest(tmp_path))
+    await manager.ensure_images()
+    await manager.start_all()
+
+    assert not any(call[1] == "build" for call in calls)
+    run_call = next(call for call in calls if call[1] == "run" and "-d" in call)
+    assert run_call[-1] == "sha256:" + "a" * 64
+
+
+async def _done():
+    return None
 
 
 def test_service_manager_rejects_context_escape(tmp_path):
