@@ -3,7 +3,18 @@ from __future__ import annotations
 import pytest
 
 import midnight.env.container_manager as container_module
-from midnight.env.container_manager import ContainerManager, ExecResult
+from midnight.env.container_manager import ContainerManager, ExecResult, _docker_build_proxy
+
+
+def test_loopback_build_proxy_is_translated_for_docker():
+    assert _docker_build_proxy("http://127.0.0.1:7890") == (
+        "http://host.docker.internal:7890"
+    )
+
+
+def test_build_proxy_rejects_credentials():
+    with pytest.raises(ValueError, match="authenticated"):
+        _docker_build_proxy("http://user:secret@127.0.0.1:7890")
 
 
 def test_container_names_are_run_scoped_and_sanitized():

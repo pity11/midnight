@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 import platform as _platform
 import re
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit, urlunsplit
 
 from midnight.config import AppConfig, get_config
 from midnight.env.images import image_for
@@ -38,6 +40,19 @@ def _host_needs_platform(target_platform: str) -> bool:
     return host not in matches
 
 
+def _docker_build_proxy(value: str) -> str:
+    """Translate a host-loopback proxy into an address visible to Docker."""
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.port is None:
+        raise ValueError("MIDNIGHT_BUILD_PROXY must be an http(s) URL with an explicit port")
+    if parsed.username or parsed.password:
+        raise ValueError("authenticated build proxy URLs are not accepted on the command line")
+    hostname = parsed.hostname
+    if hostname in {"127.0.0.1", "localhost", "::1"}:
+        hostname = "host.docker.internal"
+    return urlunsplit((parsed.scheme, f"{hostname}:{parsed.port}", "", "", ""))
+
+
 @dataclass
 class ExecResult:
     exit_code: int
@@ -62,6 +77,14 @@ async def _run(*args: str, timeout: int | None = None) -> ExecResult:
         proc.kill()
         await proc.wait()
         return ExecResult(124, "", f"timeout after {timeout}s")
+    except asyncio.CancelledError:
+        proc.terminate()
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=5)
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+        raise
     return ExecResult(
         proc.returncode or 0, out.decode(errors="replace"), err.decode(errors="replace")
     )
@@ -207,9 +230,13 @@ class ContainerManager:
             spec.image,
             "--label",
             f"midnight.dockerfile_sha256={source_digest}",
-            "-f",
-            str(dockerfile),
         ]
+        build_proxy = os.getenv("MIDNIGHT_BUILD_PROXY", "").strip()
+        if build_proxy:
+            proxy = _docker_build_proxy(build_proxy)
+            build_args += ["--build-arg", f"HTTP_PROXY={proxy}"]
+            build_args += ["--build-arg", f"HTTPS_PROXY={proxy}"]
+        build_args += ["-f", str(dockerfile)]
         if _host_needs_platform(spec.platform):
             build_args += ["--platform", spec.platform]
         build_args.append(str(PROJECT_ROOT))

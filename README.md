@@ -117,6 +117,14 @@ MIDNIGHT_PER_TASK_TIMEOUT=1800
 MIDNIGHT_RECURSION_LIMIT=100
 ```
 
+If image construction needs a local HTTP proxy, expose it before preflight.
+Loopback addresses are translated to Docker's host gateway and are not stored
+in the resulting image environment:
+
+```bash
+export MIDNIGHT_BUILD_PROXY=http://127.0.0.1:7890
+```
+
 ## Trusted benchmark bundles
 
 Formal evaluations use allowlist-based clean bundles. The upstream repository
