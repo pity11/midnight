@@ -97,6 +97,8 @@ class RunManifest(StrictManifest):
     prompt_revision: str = Field(min_length=1)
     config_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
     tool_image_digests: dict[str, str] = Field(min_length=1)
+    relay_image_digest: str | None = None
+    target_image_digests: dict[str, str] = Field(default_factory=dict)
     agent_mode: Literal["midnight", "bare"]
     track: Literal["standard", "long_horizon", "open_world"]
     attempt: int = Field(ge=1)
@@ -114,6 +116,20 @@ class RunManifest(StrictManifest):
         if any(not re.fullmatch(r"[a-f0-9]{64}", digest) for digest in value.values()):
             raise ValueError("task bundle hashes must be lowercase SHA-256 values")
         return dict(sorted(value.items()))
+
+    @field_validator("tool_image_digests", "target_image_digests")
+    @classmethod
+    def validate_image_digests(cls, value: dict[str, str]) -> dict[str, str]:
+        if any(not re.fullmatch(r"sha256:[a-f0-9]{64}", digest) for digest in value.values()):
+            raise ValueError("image digests must be immutable SHA-256 IDs")
+        return dict(sorted(value.items()))
+
+    @field_validator("relay_image_digest")
+    @classmethod
+    def validate_relay_digest(cls, value: str | None) -> str | None:
+        if value is not None and not re.fullmatch(r"sha256:[a-f0-9]{64}", value):
+            raise ValueError("relay image digest must be an immutable SHA-256 ID")
+        return value
 
     @property
     def run_identity(self) -> str:

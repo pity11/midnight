@@ -42,10 +42,16 @@ def test_build_run_manifest_binds_effective_inputs():
         _spec(),
         [_bundle()],
         config=get_config(),
-        image_digests={"pwn": "sha256:" + "b" * 64},
+        image_digests={
+            "pwn": "sha256:" + "b" * 64,
+            "_relay": "sha256:" + "e" * 64,
+            "_target/pwn-1": "sha256:" + "f" * 64,
+        },
     )
     assert manifest.task_bundles == {"pwn-1": "a" * 64}
     assert manifest.tool_image_digests["pwn"].startswith("sha256:")
+    assert manifest.relay_image_digest == "sha256:" + "e" * 64
+    assert manifest.target_image_digests == {"pwn-1": "sha256:" + "f" * 64}
     assert len(manifest.prompt_revision) == 64
     assert len(manifest.config_revision) == 64
     assert len(manifest.run_identity) == 64

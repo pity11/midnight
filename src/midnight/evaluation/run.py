@@ -95,6 +95,12 @@ def build_run_manifest(
         prompt_revision=prompt_revision,
         config_revision=config_revision,
         tool_image_digests={category: image_digests[category] for category in sorted(categories)},
+        relay_image_digest=image_digests.get("_relay"),
+        target_image_digests={
+            key.removeprefix("_target/"): digest
+            for key, digest in sorted(image_digests.items())
+            if key.startswith("_target/")
+        },
         agent_mode=spec.agent_mode,
         track=spec.track,
         attempt=spec.attempt,

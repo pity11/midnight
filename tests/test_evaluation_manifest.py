@@ -46,9 +46,11 @@ def test_run_identity_changes_with_experimental_variable(tmp_path):
     repeated = _run_manifest()
     changed = _run_manifest(time_budget_seconds=7200)
     bare = _run_manifest(agent_mode="bare")
+    target_changed = _run_manifest(target_image_digests={"task-1": "sha256:" + "e" * 64})
     assert original.run_identity == repeated.run_identity
     assert original.run_identity != changed.run_identity
     assert original.run_identity != bare.run_identity
+    assert original.run_identity != target_changed.run_identity
 
     path = original.write(tmp_path / "run.json")
     payload = json.loads(path.read_text(encoding="utf-8"))
