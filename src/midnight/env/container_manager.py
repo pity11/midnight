@@ -183,12 +183,21 @@ class ContainerManager:
     async def ensure_image(self, ctype: ChallengeType) -> str:
         """Ensure the image for ``ctype`` exists locally, building if needed."""
         spec = image_for(ctype, config=self.config)
-        # already present?
-        res = await _run("docker", "image", "inspect", spec.image)
-        if res.ok:
-            return spec.image
-        # build from the Dockerfile (build context = project root)
         from midnight.config import PROJECT_ROOT
+
+        dockerfile = PROJECT_ROOT / spec.dockerfile
+        source_digest = hashlib.sha256(dockerfile.read_bytes()).hexdigest()
+        res = await _run(
+            "docker",
+            "image",
+            "inspect",
+            "--format",
+            '{{ index .Config.Labels "midnight.dockerfile_sha256" }}',
+            spec.image,
+        )
+        if res.ok and res.stdout.strip() == source_digest:
+            return spec.image
+        # Build when absent or when the effective Dockerfile changed.
 
         log.info("building image %s from %s ...", spec.image, spec.dockerfile)
         build_args = [
@@ -196,8 +205,10 @@ class ContainerManager:
             "build",
             "-t",
             spec.image,
+            "--label",
+            f"midnight.dockerfile_sha256={source_digest}",
             "-f",
-            str(PROJECT_ROOT / spec.dockerfile),
+            str(dockerfile),
         ]
         if _host_needs_platform(spec.platform):
             build_args += ["--platform", spec.platform]

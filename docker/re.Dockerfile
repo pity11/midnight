@@ -3,7 +3,9 @@
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i '/backports/d' /etc/apt/sources.list \
+    && apt-get -o Acquire::Retries=5 update \
+    && apt-get install -y --no-install-recommends \
         bash coreutils file xxd binutils \
         python3 python3-pip python3-venv \
         python3-capstone python3-pyelftools \

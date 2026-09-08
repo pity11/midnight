@@ -3,13 +3,20 @@
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i '/backports/d' /etc/apt/sources.list \
+    && apt-get -o Acquire::Retries=5 update \
+    && apt-get install -y --no-install-recommends \
         bash coreutils file \
         python3 python3-pip python3-venv \
         python3-pycryptodome python3-sympy python3-gmpy2 \
         libgmp-dev libmpfr-dev libmpc-dev \
         ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
+
+# Debian installs the collision-free Cryptodome namespace. CTF sources commonly
+# use PyCryptodome's Crypto namespace, so expose the same packaged modules there.
+RUN ln -s /usr/lib/python3/dist-packages/Cryptodome \
+        /usr/lib/python3/dist-packages/Crypto
 
 # NOTE: SageMath is heavy; add a dedicated sage image if a challenge needs it.
 
