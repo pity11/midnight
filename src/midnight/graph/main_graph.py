@@ -81,11 +81,20 @@ def build_main_graph(
         ch = state["challenge"]
         runtime_ch = Challenge(**ch)
         if ch.get("internet_policy") == "target_only":
-            source_target = ch.get("source_remote") or ch.get("remote")
-            if not source_target or source_target not in (ch.get("allowed_targets") or []):
-                raise ValueError("target-only challenge remote is not evaluator-allowlisted")
-            runtime_ch["source_remote"] = source_target
-            runtime_ch["remote"] = await manager.prepare_target_relay(source_target)
+            source_targets = ch.get("source_targets") or ch.get("targets") or []
+            if not source_targets:
+                single = ch.get("source_remote") or ch.get("remote")
+                source_targets = [single] if single else []
+            allowed = set(ch.get("allowed_targets") or [])
+            if not source_targets or not set(source_targets).issubset(allowed):
+                raise ValueError("target-only challenge endpoints are not evaluator-allowlisted")
+            runtime_targets = [
+                await manager.prepare_target_relay(target) for target in source_targets
+            ]
+            runtime_ch["source_targets"] = source_targets
+            runtime_ch["source_remote"] = source_targets[0]
+            runtime_ch["targets"] = runtime_targets
+            runtime_ch["remote"] = " ".join(runtime_targets)
         name = manager.container_name(ch.get("id", "x"))
         await manager.stop(name)
         cid = await manager.create(
@@ -126,6 +135,7 @@ def build_main_graph(
         async def specialist(state: CTFState) -> dict:
             attempt = state.get("attempt", 0) + 1
             rejected = state.get("rejected_flags") or []
+            accepted = state.get("accepted_flags") or []
             container_id = state.get("container_id")
             if not await manager.is_running(container_id):
                 log.warning("challenge container missing; recreating it")
@@ -138,11 +148,13 @@ def build_main_graph(
             )
             # carry over prior candidates minus anything the oracle rejected
             collected: list[str] = [
-                f for f in (state.get("candidate_flags") or []) if f not in rejected
+                f
+                for f in (state.get("candidate_flags") or [])
+                if f not in rejected and f not in accepted
             ]
 
             def record_flag(f: str) -> None:
-                if f not in collected and f not in rejected:
+                if f not in collected and f not in rejected and f not in accepted:
                     collected.append(f)
 
             # cross-expert delegation within the same container.
@@ -166,7 +178,7 @@ def build_main_graph(
             base_task = (
                 f"Challenge: {ch.get('name')}\n"
                 f"Type: {expert}\n"
-                f"Remote: {ch.get('remote') or 'none'}\n"
+                f"Targets: {', '.join(ch.get('targets') or []) or ch.get('remote') or 'none'}\n"
                 f"Files are in {cfg.settings.workdir}.\n\n"
                 f"{ch.get('description', '')}\n\n"
                 f"Find the flag. When found, call submit_flag with the exact string."
@@ -216,7 +228,12 @@ def build_main_graph(
     async def verify_flag(state: CTFState) -> dict:
         ch = state["challenge"]
         rejected = set(state.get("rejected_flags") or [])
-        candidates = [c for c in (state.get("candidate_flags") or []) if c not in rejected]
+        accepted = set(state.get("accepted_flags") or [])
+        candidates = [
+            candidate
+            for candidate in (state.get("candidate_flags") or [])
+            if candidate not in rejected and candidate not in accepted
+        ]
         # local format check only; the real oracle is the submitter.
         valid = extract_flags("\n".join(candidates), flag_format=ch.get("flag_format"))
         if valid:
@@ -231,23 +248,36 @@ def build_main_graph(
         res = await submitter.submit(ch["id"], flag)
         log.info("submission verdict: accepted=%s status=%s", res.accepted, res.status)
         if res.accepted:
+            accepted = list(state.get("accepted_flags") or [])
+            if flag not in accepted:
+                accepted.append(flag)
+            expected_count = ch.get("flag_count") or 1
+            total_points = (state.get("points") or 0) + (res.points or 0)
+            complete = len(accepted) >= expected_count
             return {
                 "submitted": True,
                 "submit_result": res.message,
-                "points": res.points,
-                "status": "solved",
+                "accepted_flags": accepted,
+                "points": total_points,
+                "last_submit_accepted": True,
+                "flag": flag if complete else None,
+                "verified": complete,
+                "attempt": state.get("attempt", 0) if complete else 0,
+                "status": "solved" if complete else "running",
             }
         if res.status == "dry_run":
             return {
                 "submitted": False,
                 "submit_result": res.message,
                 "status": "dry_run",
+                "last_submit_accepted": False,
             }
         if res.status == "error":
             return {
                 "submitted": False,
                 "submit_result": res.message,
                 "status": "failed",
+                "last_submit_accepted": False,
             }
         # rejected: blacklist this flag so retries try something else
         rejected = list(state.get("rejected_flags") or [])
@@ -260,6 +290,7 @@ def build_main_graph(
             "flag": None,
             "verified": False,
             "status": "running",  # keep running so retry logic can re-enter
+            "last_submit_accepted": False,
         }
 
     async def cleanup(state: CTFState) -> dict:
@@ -292,6 +323,8 @@ def build_main_graph(
         # solved -> cleanup; rejected -> retry specialist if attempts remain.
         if state.get("status") in {"solved", "failed", "dry_run"}:
             return NODE_CLEANUP
+        if state.get("last_submit_accepted"):
+            return NODE_VERIFY
         if state.get("attempt", 0) < cfg.settings.max_attempts:
             log.info(
                 "submit rejected, retrying (attempt %d/%d)",
@@ -328,7 +361,11 @@ def build_main_graph(
     g.add_conditional_edges(
         NODE_SUBMIT,
         after_submit,
-        {**{n: n for n in SPECIALIST_NODES}, NODE_CLEANUP: NODE_CLEANUP},
+        {
+            **{n: n for n in SPECIALIST_NODES},
+            NODE_VERIFY: NODE_VERIFY,
+            NODE_CLEANUP: NODE_CLEANUP,
+        },
     )
     g.add_edge(NODE_CLEANUP, END)
 

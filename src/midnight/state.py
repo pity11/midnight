@@ -31,6 +31,9 @@ class Challenge(TypedDict, total=False):
     internet_policy: str | None  # evaluation network policy
     allowed_targets: list[str]  # evaluator-declared challenge targets
     source_remote: str | None  # original target when runtime uses an isolated relay
+    targets: list[str]  # all challenge endpoints when a platform exposes more than one
+    source_targets: list[str]  # original endpoints when runtime uses isolated relays
+    flag_count: int | None
 
 
 class CTFState(TypedDict, total=False):
@@ -56,11 +59,13 @@ class CTFState(TypedDict, total=False):
     # —— output ——
     candidate_flags: list[str]
     rejected_flags: list[str]  # flags the submitter rejected (blacklist for retries)
+    accepted_flags: list[str]  # accepted values, retained only in private checkpoint state
     flag: str | None
     verified: bool
     submitted: bool
     submit_result: str | None
     points: int | None
+    last_submit_accepted: bool
 
     # —— control ——
     step_count: int
@@ -83,11 +88,13 @@ def initial_state(challenge: Challenge, *, workdir: str = "/ctf") -> CTFState:
         subtasks=None,
         candidate_flags=[],
         rejected_flags=[],
+        accepted_flags=[],
         flag=None,
         verified=False,
         submitted=False,
         submit_result=None,
         points=None,
+        last_submit_accepted=False,
         step_count=0,
         attempt=0,
         escalation_depth=0,

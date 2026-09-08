@@ -26,6 +26,7 @@ docker-sdk = ["docker"]
 openai = ["langchain-openai"]
 google = ["langchain-google-genai"]
 ollama = ["langchain-ollama"]
+tsecbench = ["tsec-benchmark"]
 
 [project.scripts]
 midnight = "midnight.app:main"

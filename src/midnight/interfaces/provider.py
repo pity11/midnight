@@ -25,3 +25,12 @@ class ChallengeProvider(Protocol):
     async def download_files(self, challenge_id: str, dest: str) -> list[str]:
         """Download starter files to ``dest``, returning local file paths."""
         ...
+
+
+@runtime_checkable
+class ManagedChallengeProvider(ChallengeProvider, Protocol):
+    """Provider that allocates and releases a dynamic challenge instance."""
+
+    async def start_challenge(self, challenge_id: str) -> None: ...
+
+    async def stop_challenge(self, challenge_id: str) -> None: ...

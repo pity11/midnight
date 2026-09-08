@@ -145,6 +145,17 @@ allowlisted TCP endpoint through a dedicated fixed-destination relay. The relay
 image ID is included in the Run Manifest. Hard token-budget enforcement still
 fails closed and must be implemented before that policy can be claimed.
 
+Tsecbench uses its official SDK and keeps platform credentials in the controller
+process. Challenge containers receive only fixed-destination relay addresses:
+
+```bash
+export BENCHMARK_BASE_URL="..."
+export BENCHMARK_TOKEN="..."
+uv sync --extra tsecbench
+uv run midnight --tsecbench --list-only
+uv run midnight --tsecbench --submit
+```
+
 ## Safety and testing
 
 Local fixtures are the default execution target. Competition-specific access is

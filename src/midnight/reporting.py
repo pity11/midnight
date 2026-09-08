@@ -35,6 +35,8 @@ class ChallengeSummary:
     tool_calls: int = 0
     repeated_tool_calls: int = 0
     tool_errors: int = 0
+    flags_solved: int = 0
+    flags_available: int = 1
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,8 @@ class RunReport:
     tool_errors: int
     category_results: dict[str, dict[str, int]]
     run_manifest_id: str | None = None
+    flags_solved: int = 0
+    flags_available: int = 0
 
     @classmethod
     def from_results(
@@ -85,6 +89,8 @@ class RunReport:
                 tool_calls=result.tool_calls,
                 repeated_tool_calls=result.repeated_tool_calls,
                 tool_errors=result.tool_errors,
+                flags_solved=result.flags_solved,
+                flags_available=result.flags_available,
             )
             for result in materialized
         ]
@@ -114,6 +120,8 @@ class RunReport:
             tool_errors=sum(result.tool_errors for result in materialized),
             category_results=dict(sorted(categories.items())),
             run_manifest_id=run_manifest_id,
+            flags_solved=sum(result.flags_solved for result in materialized),
+            flags_available=sum(result.flags_available for result in materialized),
         )
 
     def write(self, path: str | Path) -> Path:

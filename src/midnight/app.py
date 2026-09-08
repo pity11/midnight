@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import time
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import yaml
@@ -47,6 +49,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--platform-config",
         help="YAML configuration for the generic HTTP platform adapter",
+    )
+    p.add_argument(
+        "--tsecbench",
+        action="store_true",
+        help="use the official Tsecbench SDK and BENCHMARK_* environment variables",
     )
     p.add_argument(
         "--bundles-dir",
@@ -154,12 +161,23 @@ async def _amain(args: argparse.Namespace) -> int:
         log.info("configuration OK")
         return 0
 
-    if args.platform_config and args.bundles_dir:
-        raise ValueError("--platform-config and --bundles-dir are mutually exclusive")
+    selected_platforms = sum(bool(value) for value in (args.platform_config, args.bundles_dir, args.tsecbench))
+    if selected_platforms > 1:
+        raise ValueError("--platform-config, --bundles-dir, and --tsecbench are mutually exclusive")
     if (args.evaluator_manifest or args.evaluation_spec) and not args.bundles_dir:
         raise ValueError("--evaluator-manifest and --evaluation-spec require --bundles-dir")
 
-    platform = _load_http_adapter(args.platform_config) if args.platform_config else None
+    platform: Any = None
+    if args.tsecbench:
+        from midnight.interfaces.tsecbench import TsecbenchAdapter
+
+        base_url = os.environ.get("BENCHMARK_BASE_URL")
+        token = os.environ.get("BENCHMARK_TOKEN")
+        if not base_url or not token:
+            raise RuntimeError("Tsecbench requires BENCHMARK_BASE_URL and BENCHMARK_TOKEN")
+        platform = TsecbenchAdapter.from_sdk(base_url=base_url, token=token)
+    else:
+        platform = _load_http_adapter(args.platform_config) if args.platform_config else None
     provider: ChallengeProvider
     delegate: FlagSubmitter
     if args.bundles_dir:

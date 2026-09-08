@@ -38,11 +38,20 @@ def build_bare_graph(
         challenge = state["challenge"]
         runtime_ch = Challenge(**challenge)
         if challenge.get("internet_policy") == "target_only":
-            source_target = challenge.get("source_remote") or challenge.get("remote")
-            if not source_target or source_target not in (challenge.get("allowed_targets") or []):
-                raise ValueError("target-only challenge remote is not evaluator-allowlisted")
-            runtime_ch["source_remote"] = source_target
-            runtime_ch["remote"] = await manager.prepare_target_relay(source_target)
+            source_targets = challenge.get("source_targets") or challenge.get("targets") or []
+            if not source_targets:
+                single = challenge.get("source_remote") or challenge.get("remote")
+                source_targets = [single] if single else []
+            allowed = set(challenge.get("allowed_targets") or [])
+            if not source_targets or not set(source_targets).issubset(allowed):
+                raise ValueError("target-only challenge endpoints are not evaluator-allowlisted")
+            runtime_targets = [
+                await manager.prepare_target_relay(target) for target in source_targets
+            ]
+            runtime_ch["source_targets"] = source_targets
+            runtime_ch["source_remote"] = source_targets[0]
+            runtime_ch["targets"] = runtime_targets
+            runtime_ch["remote"] = " ".join(runtime_targets)
         category = cast(ChallengeType, challenge.get("category_hint") or "unknown")
         name = manager.container_name(challenge.get("id", "x"))
         await manager.stop(name)
@@ -85,7 +94,7 @@ def build_bare_graph(
                     HumanMessage(
                         f"Challenge: {challenge.get('name')}\n"
                         f"Category: {category}\n"
-                        f"Target: {challenge.get('remote') or 'none'}\n"
+                        f"Targets: {', '.join(challenge.get('targets') or []) or challenge.get('remote') or 'none'}\n"
                         f"Files are in {cfg.settings.workdir}.\n\n"
                         f"{challenge.get('description', '')}"
                     )
@@ -108,16 +117,28 @@ def build_bare_graph(
                 "attempt": 1,
                 "status": "failed",
             }
-        verdict = await submitter.submit(challenge["id"], valid[0])
-        status = "solved" if verdict.accepted else "dry_run" if verdict.status == "dry_run" else "failed"
+        accepted: list[str] = []
+        total_points = 0
+        last_verdict = None
+        for candidate in valid:
+            last_verdict = await submitter.submit(challenge["id"], candidate)
+            if last_verdict.accepted:
+                accepted.append(candidate)
+                total_points += last_verdict.points or 0
+                if len(accepted) >= (challenge.get("flag_count") or 1):
+                    break
+        complete = len(accepted) >= (challenge.get("flag_count") or 1)
+        dry_run = last_verdict is not None and last_verdict.status == "dry_run"
+        status = "solved" if complete else "dry_run" if dry_run else "failed"
         return {
             "messages": result.get("messages", []),
             "candidate_flags": candidates,
-            "flag": valid[0] if verdict.accepted else None,
-            "verified": verdict.accepted,
-            "submitted": verdict.submitted,
-            "submit_result": verdict.message,
-            "points": verdict.points if verdict.accepted else None,
+            "accepted_flags": accepted,
+            "flag": accepted[-1] if complete else None,
+            "verified": complete,
+            "submitted": last_verdict.submitted if last_verdict else False,
+            "submit_result": last_verdict.message if last_verdict else "",
+            "points": total_points,
             "attempt": 1,
             "status": status,
         }

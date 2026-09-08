@@ -140,3 +140,36 @@ def test_scheduler_rejects_unknown_agent_mode(tmp_path):
             submitter=NoopSubmitter(),
             agent_mode="unknown",
         )
+
+
+@pytest.mark.asyncio
+async def test_managed_provider_instance_is_always_stopped(tmp_path):
+    class ManagedProvider(FixtureProvider):
+        def __init__(self, source):
+            super().__init__(source)
+            self.started = False
+            self.stopped = False
+
+        async def start_challenge(self, challenge_id: str):
+            self.started = True
+
+        async def stop_challenge(self, challenge_id: str):
+            self.stopped = True
+
+        async def fetch(self, challenge_id: str):
+            assert self.started
+            return await super().fetch(challenge_id)
+
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"fixture")
+    provider = ManagedProvider(source)
+    scheduler = Scheduler(provider=provider, submitter=NoopSubmitter(), artifacts_root=tmp_path)
+
+    async def fail_after_start(challenge):
+        raise RuntimeError("solver failed")
+
+    scheduler._solve_one = fail_after_start
+    result = (await scheduler.solve_all([{"id": "managed-1"}]))[0]
+    assert result.status == "failed"
+    assert provider.started
+    assert provider.stopped

@@ -19,7 +19,7 @@ from uuid import uuid4
 from midnight.config import get_config
 from midnight.env.container_manager import ContainerManager
 from midnight.events import EventJournal, RunEvent
-from midnight.interfaces.provider import ChallengeProvider
+from midnight.interfaces.provider import ChallengeProvider, ManagedChallengeProvider
 from midnight.interfaces.submitter import FlagSubmitter
 from midnight.persistence import CheckpointStore
 from midnight.state import Challenge, initial_state
@@ -52,6 +52,8 @@ class Result:
     tool_calls: int = 0
     repeated_tool_calls: int = 0
     tool_errors: int = 0
+    flags_solved: int = 0
+    flags_available: int = 1
 
 
 def _transcript_metrics(messages: list) -> dict[str, int]:
@@ -137,7 +139,12 @@ class Scheduler:
                 started = time.monotonic()
                 challenge_id = ch.get("id", "?")
                 self._event("challenge_started", challenge_id)
+                instance_started = False
                 try:
+                    if isinstance(self.provider, ManagedChallengeProvider):
+                        await self.provider.start_challenge(challenge_id)
+                        instance_started = True
+                        self._event("challenge_instance_started", challenge_id)
                     hydrated = await self._hydrate(ch)
                     category = hydrated.get("category_hint") or "unknown"
                     category_sem = self._category_limits.get(category)
@@ -182,6 +189,17 @@ class Scheduler:
                         error=str(exc),
                         duration_seconds=round(time.monotonic() - started, 3),
                     )
+                finally:
+                    if instance_started:
+                        try:
+                            await self.provider.stop_challenge(challenge_id)  # type: ignore[attr-defined]
+                            self._event("challenge_instance_stopped", challenge_id)
+                        except Exception as exc:  # noqa: BLE001
+                            self._event(
+                                "challenge_instance_stop_failed",
+                                challenge_id,
+                                error=str(exc),
+                            )
 
         results = list(await asyncio.gather(*(run_one(c) for c in challenges)))
         self._event(
@@ -218,6 +236,8 @@ class Scheduler:
                     "category_hint",
                     "flag_format",
                     "round_id",
+                    "targets",
+                    "flag_count",
                 )
             }
             source["file_hashes"] = dict(sorted(file_hashes.items()))
@@ -293,6 +313,8 @@ class Scheduler:
                 attempts=final.get("attempt", 0),
                 points=final.get("points"),
                 **_transcript_metrics(final.get("messages") or []),
+                flags_solved=len(final.get("accepted_flags") or []),
+                flags_available=ch.get("flag_count") or 1,
             )
         finally:
             await manager.cleanup_all()
