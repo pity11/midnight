@@ -51,6 +51,7 @@ class Settings(BaseModel):
     workdir: str = "/ctf"
     max_tool_output_chars: int = 8000
     flag_regex: str = r"[A-Za-z0-9_]+\{[^}]+\}"
+    relay_image: str = "alpine/socat:1.8.0.3"
 
 
 class AppConfig(BaseModel):

@@ -31,7 +31,7 @@ from midnight.graph.toolset import build_specialist_tools
 from midnight.interfaces.provider import ChallengeProvider
 from midnight.interfaces.submitter import FlagSubmitter
 from midnight.models import build_llm
-from midnight.state import CTFState
+from midnight.state import Challenge, CTFState
 from midnight.utils.flag import extract_flags
 from midnight.utils.logging import get_logger
 
@@ -76,9 +76,16 @@ def build_main_graph(
     manager = manager or ContainerManager()
     classify_node = make_classify_node()
 
-    async def prepare_container(state: CTFState) -> str:
+    async def prepare_container(state: CTFState) -> tuple[str, Challenge]:
         ctype = state["challenge_type"]
         ch = state["challenge"]
+        runtime_ch = Challenge(**ch)
+        if ch.get("internet_policy") == "target_only":
+            source_target = ch.get("source_remote") or ch.get("remote")
+            if not source_target or source_target not in (ch.get("allowed_targets") or []):
+                raise ValueError("target-only challenge remote is not evaluator-allowlisted")
+            runtime_ch["source_remote"] = source_target
+            runtime_ch["remote"] = await manager.prepare_target_relay(source_target)
         name = manager.container_name(ch.get("id", "x"))
         await manager.stop(name)
         cid = await manager.create(
@@ -93,7 +100,7 @@ def build_main_graph(
         )
         for path in ch.get("files") or []:
             await env.copy_in(path, cfg.settings.workdir)
-        return cid
+        return cid, runtime_ch
 
     # ---- nodes ----------------------------------------------------------
     async def fetch_challenge(state: CTFState) -> dict:
@@ -104,14 +111,14 @@ def build_main_graph(
 
     async def setup_env(state: CTFState) -> dict:
         ch = state["challenge"]
-        cid = await prepare_container(state)
+        cid, runtime_ch = await prepare_container(state)
         log.info(
             "container %s up for %s (%s)",
             cid[:12],
             ch.get("id"),
             state["challenge_type"],
         )
-        return {"container_id": cid}
+        return {"container_id": cid, "challenge": runtime_ch}
 
     def _make_specialist_node(node_name: str):
         expert = _NODE_EXPERT[node_name]
@@ -122,7 +129,7 @@ def build_main_graph(
             container_id = state.get("container_id")
             if not await manager.is_running(container_id):
                 log.warning("challenge container missing; recreating it")
-                container_id = await prepare_container(state)
+                container_id, _ = await prepare_container(state)
             assert container_id is not None
             env = CTFEnvironment(
                 container_id=container_id,

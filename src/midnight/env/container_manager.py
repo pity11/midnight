@@ -8,6 +8,7 @@ guaranteed cleanup.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import platform as _platform
 import re
 from dataclasses import dataclass, field
@@ -74,6 +75,7 @@ class ContainerManager:
     run_id: str = "local"
     _containers: set[str] = field(default_factory=set)
     _networks: set[str] = field(default_factory=set)
+    _owned_networks: set[str] = field(default_factory=set)
 
     def container_name(self, challenge_id: str) -> str:
         safe_run = re.sub(r"[^a-zA-Z0-9_.-]", "-", self.run_id)[:24]
@@ -101,6 +103,82 @@ class ContainerManager:
             await _run("docker", "network", "create", name)
         self._networks.add(name)
         return name
+
+    async def ensure_target_network(self) -> str:
+        safe_run = re.sub(r"[^a-zA-Z0-9_.-]", "-", self.run_id)[:32].lower()
+        name = f"midnight-{safe_run}-targets"
+        result = await _run("docker", "network", "inspect", name)
+        if not result.ok:
+            created = await _run("docker", "network", "create", "--internal", name)
+            if not created.ok:
+                raise RuntimeError(f"could not create target-only network: {created.stderr.strip()}")
+        self._networks.add(name)
+        self._owned_networks.add(name)
+        return name
+
+    async def ensure_relay_image(self) -> str:
+        image = self.config.settings.relay_image
+        inspected = await _run("docker", "image", "inspect", image, timeout=30)
+        if not inspected.ok:
+            pulled = await _run("docker", "pull", image, timeout=600)
+            if not pulled.ok:
+                raise RuntimeError(f"could not pull target relay image {image}: {pulled.stderr.strip()}")
+        return image
+
+    async def relay_image_digest(self) -> str:
+        image = await self.ensure_relay_image()
+        result = await _run("docker", "image", "inspect", "--format", "{{.Id}}", image, timeout=30)
+        if not result.ok or not result.stdout.strip().startswith("sha256:"):
+            raise RuntimeError(f"could not resolve relay image digest: {result.stderr.strip()}")
+        return result.stdout.strip()
+
+    async def prepare_target_relay(self, target: str) -> str:
+        """Expose exactly one external TCP target to the internal solver network."""
+        try:
+            host, raw_port = target.rsplit(":", 1)
+            port = int(raw_port)
+        except ValueError as exc:
+            raise ValueError(f"target must use host:port form: {target!r}") from exc
+        if not host or not (1 <= port <= 65535):
+            raise ValueError(f"invalid target: {target!r}")
+        network = await self.ensure_target_network()
+        image = await self.ensure_relay_image()
+        suffix = hashlib.sha256(target.encode()).hexdigest()[:10]
+        alias = f"target-{suffix}"
+        name = self.container_name(f"relay-{suffix}")
+        await self.stop(name)
+        started = await _run(
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            name,
+            "--network",
+            "bridge",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges:true",
+            "--label",
+            "midnight.managed=true",
+            "--label",
+            f"midnight.run_id={self.run_id}",
+            image,
+            "-dd",
+            f"TCP-LISTEN:{port},fork,reuseaddr",
+            f"TCP:{host}:{port}",
+        )
+        if not started.ok:
+            raise RuntimeError(f"target relay failed to start: {started.stderr.strip()}")
+        relay_id = started.stdout.strip()
+        self._containers.add(relay_id)
+        connected = await _run(
+            "docker", "network", "connect", "--alias", alias, network, relay_id
+        )
+        if not connected.ok:
+            await self.stop(relay_id)
+            raise RuntimeError(f"target relay network attach failed: {connected.stderr.strip()}")
+        return f"{alias}:{port}"
 
     async def ensure_image(self, ctype: ChallengeType) -> str:
         """Ensure the image for ``ctype`` exists locally, building if needed."""
@@ -181,9 +259,7 @@ class ContainerManager:
             args += ["--cap-add", cap]
         effective_network = "none" if network_policy == "disabled" else spec.network
         if network_policy == "target_only":
-            raise NotImplementedError(
-                "target-only egress enforcement is not implemented; refusing an untrusted run"
-            )
+            effective_network = await self.ensure_target_network()
         if effective_network == "none":
             args += ["--network", "none"]
         elif effective_network:
@@ -208,6 +284,9 @@ class ContainerManager:
     async def cleanup_all(self) -> None:
         for cid in list(self._containers):
             await self.stop(cid)
+        for network in list(self._owned_networks):
+            await _run("docker", "network", "rm", network, timeout=30)
+            self._owned_networks.discard(network)
 
     async def cleanup_run(self) -> int:
         """Remove orphaned managed containers belonging to this run ID."""

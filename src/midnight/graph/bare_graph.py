@@ -14,7 +14,7 @@ from midnight.graph.specialists.base_specialist import make_specialist
 from midnight.graph.toolset import build_specialist_tools
 from midnight.interfaces.submitter import FlagSubmitter
 from midnight.models import build_llm
-from midnight.state import ChallengeType, CTFState
+from midnight.state import Challenge, ChallengeType, CTFState
 from midnight.utils.flag import extract_flags
 
 BARE_SYSTEM_PROMPT = """You are solving an authorized capture-the-flag challenge.
@@ -36,6 +36,13 @@ def build_bare_graph(
 
     async def setup(state: CTFState) -> dict:
         challenge = state["challenge"]
+        runtime_ch = Challenge(**challenge)
+        if challenge.get("internet_policy") == "target_only":
+            source_target = challenge.get("source_remote") or challenge.get("remote")
+            if not source_target or source_target not in (challenge.get("allowed_targets") or []):
+                raise ValueError("target-only challenge remote is not evaluator-allowlisted")
+            runtime_ch["source_remote"] = source_target
+            runtime_ch["remote"] = await manager.prepare_target_relay(source_target)
         category = cast(ChallengeType, challenge.get("category_hint") or "unknown")
         name = manager.container_name(challenge.get("id", "x"))
         await manager.stop(name)
@@ -47,7 +54,11 @@ def build_bare_graph(
         env = CTFEnvironment(container_id=container_id, workdir=cfg.settings.workdir, manager=manager)
         for path in challenge.get("files") or []:
             await env.copy_in(path, cfg.settings.workdir)
-        return {"container_id": container_id, "challenge_type": category}
+        return {
+            "container_id": container_id,
+            "challenge_type": category,
+            "challenge": runtime_ch,
+        }
 
     async def solve(state: CTFState) -> dict:
         challenge = state["challenge"]

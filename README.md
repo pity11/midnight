@@ -140,8 +140,10 @@ prompt and configuration hashes, Docker image IDs, budgets, network policy,
 attempt, and seed. Reusing the same identity resumes that attempt; changing the
 attempt creates an independent run.
 
-Target-only egress and hard token-budget enforcement currently fail closed and
-must be implemented before those policies can be claimed in a formal result.
+Target-only tasks place the solver on an internal Docker network and expose each
+allowlisted TCP endpoint through a dedicated fixed-destination relay. The relay
+image ID is included in the Run Manifest. Hard token-budget enforcement still
+fails closed and must be implemented before that policy can be claimed.
 
 ## Safety and testing
 

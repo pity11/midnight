@@ -23,3 +23,6 @@ max_tool_output_chars: 8000  # 单次工具输出超此长度触发摘要器
 
 # flag
 flag_regex: "[A-Za-z0-9_]+\\{[^}]+\\}"   # 默认 flag 格式，可被题目 task.json 覆盖
+
+# target-only 评测使用双网络 TCP relay；实际 image ID 会写入 Run Manifest。
+relay_image: "alpine/socat:1.8.0.3"

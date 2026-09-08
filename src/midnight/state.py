@@ -30,6 +30,7 @@ class Challenge(TypedDict, total=False):
     source_hash: str | None  # deterministic challenge revision hash
     internet_policy: str | None  # evaluation network policy
     allowed_targets: list[str]  # evaluator-declared challenge targets
+    source_remote: str | None  # original target when runtime uses an isolated relay
 
 
 class CTFState(TypedDict, total=False):

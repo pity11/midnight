@@ -48,10 +48,51 @@ async def test_image_digest_resolves_immutable_id(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_target_only_network_fails_closed(monkeypatch):
+async def test_target_only_solver_uses_internal_network(monkeypatch):
+    calls: list[tuple[str, ...]] = []
+
     async def fake_ensure(self, ctype):
         return "midnight/pwn:latest"
 
+    async def fake_run(*args: str, timeout=None):
+        calls.append(args)
+        if args[1:3] == ("network", "inspect"):
+            return ExecResult(1, "", "missing")
+        if args[1] == "run":
+            return ExecResult(0, "solver-id\n", "")
+        return ExecResult(0, "", "")
+
     monkeypatch.setattr(ContainerManager, "ensure_image", fake_ensure)
-    with pytest.raises(NotImplementedError, match="target-only"):
-        await ContainerManager().create("pwn", "test", network_policy="target_only")
+    monkeypatch.setattr(container_module, "_run", fake_run)
+    await ContainerManager(run_id="run-1").create("pwn", "test", network_policy="target_only")
+    assert ("docker", "network", "create", "--internal", "midnight-run-1-targets") in calls
+    docker_run = next(call for call in calls if call[1] == "run")
+    assert docker_run[docker_run.index("--network") + 1] == "midnight-run-1-targets"
+
+
+@pytest.mark.asyncio
+async def test_target_relay_has_fixed_destination_and_dual_network(monkeypatch):
+    calls: list[tuple[str, ...]] = []
+
+    async def fake_target_network(self):
+        return "internal-net"
+
+    async def fake_relay_image(self):
+        return "relay:fixed"
+
+    async def fake_run(*args: str, timeout=None):
+        calls.append(args)
+        if args[1] == "run":
+            return ExecResult(0, "relay-id\n", "")
+        return ExecResult(0, "", "")
+
+    monkeypatch.setattr(ContainerManager, "ensure_target_network", fake_target_network)
+    monkeypatch.setattr(ContainerManager, "ensure_relay_image", fake_relay_image)
+    monkeypatch.setattr(container_module, "_run", fake_run)
+    runtime_target = await ContainerManager(run_id="run-1").prepare_target_relay(
+        "challenge.local:31337"
+    )
+    assert runtime_target.endswith(":31337")
+    docker_run = next(call for call in calls if call[1] == "run")
+    assert "TCP:challenge.local:31337" in docker_run
+    assert any(call[1:3] == ("network", "connect") for call in calls)
