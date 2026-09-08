@@ -1,0 +1,9 @@
+{
+  "id": "retry_reject",
+  "name": "Wrong Flag (retry path)",
+  "description": "The file contains a decoy flag. The real flag is different, so the submitter will reject the decoy — exercising the retry/fallback loop.",
+  "remote": null,
+  "category_hint": "misc",
+  "flag_format": "flag\\{[^}]+\\}",
+  "expected_flag": "flag{the_real_one}"
+}

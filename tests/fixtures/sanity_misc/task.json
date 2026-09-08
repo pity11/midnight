@@ -1,0 +1,9 @@
+{
+  "id": "sanity_misc",
+  "name": "Sanity Check (base64)",
+  "description": "A warm-up. The flag is hidden in flag.txt, base64-encoded. Decode it.",
+  "remote": null,
+  "category_hint": "misc",
+  "flag_format": "flag\\{[^}]+\\}",
+  "expected_flag": "flag{hello_midnight}"
+}

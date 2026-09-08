@@ -1,0 +1,11 @@
+"""midnight.tools package.
+
+Importing this package triggers registration of all built-in tools (their
+``@register_tool`` decorators run at import time).
+"""
+
+from midnight.tools import ask_expert, category, shell  # noqa: F401  (register side-effects)
+from midnight.tools.interactive import connect_tool, gdb_tool  # noqa: F401
+from midnight.tools.registry import REGISTRY, register_tool, tool_names_for
+
+__all__ = ["REGISTRY", "register_tool", "tool_names_for"]

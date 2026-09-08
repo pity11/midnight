@@ -1,0 +1,44 @@
+[project]
+name = "midnight"
+version = "0.1.0"
+description = "Reliable autonomous CTF solver for authorized competitions and benchmarks"
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "langgraph>=0.2",
+    "langchain>=0.3",
+    "langchain-core",
+    "langchain-anthropic",
+    "pydantic>=2",
+    "pydantic-settings",
+    "pyyaml",
+    "pexpect",
+    "tenacity",
+    "rich",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
+docker-sdk = ["docker"]
+# extra model providers (install on demand):
+openai = ["langchain-openai"]
+google = ["langchain-google-genai"]
+ollama = ["langchain-ollama"]
+
+[project.scripts]
+midnight = "midnight.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/midnight"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

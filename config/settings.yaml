@@ -1,0 +1,25 @@
+# 运行时配置（可被 .env 中 MIDNIGHT_* 环境变量覆盖）
+
+# 并发调度
+max_concurrency: 3          # 同时解题数上限（受 x86 模拟性能制约，pwn 题更吃资源）
+pwn_max_concurrency: 1      # pwn/reverse（x86 模拟）单独更低并发
+per_task_timeout: 1800      # 单题超时（秒）
+
+# 图与 ReAct 循环约束
+recursion_limit: 100        # 主图 recursion_limit
+specialist_step_limit: 40   # 单个专家子图内工具调用步数上限
+helper_recursion_limit: 25  # ask_expert 协助专家子图的 recursion_limit
+escalation_max_depth: 2     # 跨专家求助最大深度（防 A->B->A 环）
+max_attempts: 3             # 单题专家重试/回退次数上限（verify 失败或 flag 被拒后重跑）
+
+# 容器资源上限
+container_memory: "2g"
+container_cpus: "1.0"
+container_pids_limit: 256
+workdir: "/ctf"             # 容器内工作目录
+
+# 输出处理
+max_tool_output_chars: 8000  # 单次工具输出超此长度触发摘要器
+
+# flag
+flag_regex: "[A-Za-z0-9_]+\\{[^}]+\\}"   # 默认 flag 格式，可被题目 task.json 覆盖

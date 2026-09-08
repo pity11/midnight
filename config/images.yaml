@@ -1,0 +1,55 @@
+# 题型 -> Docker 镜像映射
+# 部署在远程 x86_64 开发机：所有题型原生 amd64，无需模拟。
+# platform 显式标注以便迁移到 arm 主机时仍正确；容器管理层会在 host 架构
+# 与目标一致时自动省略 --platform。
+# network: none(离线题最大隔离) / ctfnet(需连远程靶机的题走私有网络)。
+# build: 对应 docker/*.Dockerfile（懒构建，首次用到才编译）。
+
+pwn:
+  image: "midnight/pwn:latest"
+  dockerfile: "docker/pwn.Dockerfile"
+  platform: "linux/amd64"
+  network: "ctfnet"
+  cap_add: ["SYS_PTRACE"]      # gdb 调试所需
+
+reverse:
+  image: "midnight/re:latest"
+  dockerfile: "docker/re.Dockerfile"
+  platform: "linux/amd64"
+  network: "none"
+  cap_add: ["SYS_PTRACE"]
+
+web:
+  image: "midnight/web:latest"
+  dockerfile: "docker/web.Dockerfile"
+  platform: "linux/amd64"
+  network: "ctfnet"
+  cap_add: []
+
+crypto:
+  image: "midnight/crypto:latest"
+  dockerfile: "docker/crypto.Dockerfile"
+  platform: "linux/amd64"
+  network: "none"
+  cap_add: []
+
+misc:
+  image: "midnight/misc:latest"
+  dockerfile: "docker/misc.Dockerfile"
+  platform: "linux/amd64"
+  network: "none"
+  cap_add: []
+
+# forensics / unknown 兜底复用 misc 镜像
+forensics:
+  image: "midnight/misc:latest"
+  dockerfile: "docker/misc.Dockerfile"
+  platform: "linux/amd64"
+  network: "none"
+  cap_add: []
+unknown:
+  image: "midnight/misc:latest"
+  dockerfile: "docker/misc.Dockerfile"
+  platform: "linux/amd64"
+  network: "none"
+  cap_add: []

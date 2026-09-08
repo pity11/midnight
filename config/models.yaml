@@ -1,0 +1,43 @@
+# 模型配置 —— 同时保留云端 / 本地两套示例，按需启用。
+# 用法：models/factory.py 读取 role -> {model, temperature, max_tokens}
+# model 字段格式："<provider>:<model_name>"，交给 langchain init_chat_model 解析。
+
+# ===== ① 云端（Anthropic）：解题能力强，需 ANTHROPIC_API_KEY =====
+default:
+  model: "anthropic:claude-3-5-sonnet-latest"
+  temperature: 0.0
+  max_tokens: 4096
+classify:
+  model: "anthropic:claude-3-5-haiku-latest"   # 分类用小模型省钱
+  temperature: 0.0
+  max_tokens: 1024
+pwn:
+  model: "anthropic:claude-3-5-sonnet-latest"
+  temperature: 0.2
+  max_tokens: 4096
+reverse:
+  model: "anthropic:claude-3-5-sonnet-latest"
+  temperature: 0.2
+  max_tokens: 4096
+web:
+  model: "anthropic:claude-3-5-sonnet-latest"
+  temperature: 0.2
+  max_tokens: 4096
+crypto:
+  model: "anthropic:claude-3-5-sonnet-latest"
+  temperature: 0.0
+  max_tokens: 4096
+misc:
+  model: "anthropic:claude-3-5-sonnet-latest"
+  temperature: 0.2
+  max_tokens: 4096
+
+# ===== ② 本地（Ollama）：零 API 费用，能力较弱，先调通流程 =====
+# 把上面整段注释、启用下面整段即可切换。
+# default:  { model: "ollama:qwen2.5",  temperature: 0.0, max_tokens: 4096 }
+# classify: { model: "ollama:qwen2.5",  temperature: 0.0, max_tokens: 1024 }
+# pwn:      { model: "ollama:qwen2.5",  temperature: 0.2, max_tokens: 4096 }
+# reverse:  { model: "ollama:qwen2.5",  temperature: 0.2, max_tokens: 4096 }
+# web:      { model: "ollama:qwen2.5",  temperature: 0.2, max_tokens: 4096 }
+# crypto:   { model: "ollama:qwen2.5",  temperature: 0.0, max_tokens: 4096 }
+# misc:     { model: "ollama:qwen2.5",  temperature: 0.2, max_tokens: 4096 }

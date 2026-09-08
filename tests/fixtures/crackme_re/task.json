@@ -1,0 +1,9 @@
+{
+  "id": "crackme_re",
+  "name": "Crackme (strings)",
+  "description": "A simple crackme binary 'chall'. The flag is embedded in the binary. Find it.",
+  "remote": null,
+  "category_hint": "reverse",
+  "flag_format": "flag\\{[^}]+\\}",
+  "expected_flag": "flag{strings_reveal_secrets}"
+}

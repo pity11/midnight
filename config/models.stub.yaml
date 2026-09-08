@@ -1,0 +1,9 @@
+# Stub model config for closed-loop smoke testing (no network/tokens).
+# Use by pointing the loader at this file, or temporarily copy over models.yaml.
+default:  { model: "stub:react", temperature: 0.0, max_tokens: 1024 }
+classify: { model: "stub:react", temperature: 0.0, max_tokens: 256 }
+pwn:      { model: "stub:react", temperature: 0.0, max_tokens: 1024 }
+reverse:  { model: "stub:react", temperature: 0.0, max_tokens: 1024 }
+web:      { model: "stub:react", temperature: 0.0, max_tokens: 1024 }
+crypto:   { model: "stub:react", temperature: 0.0, max_tokens: 1024 }
+misc:     { model: "stub:react", temperature: 0.0, max_tokens: 1024 }

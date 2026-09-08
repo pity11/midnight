@@ -1,0 +1,43 @@
+# 专家 -> 工具清单映射（扩展入口）
+# 工具名对应 tools/registry.py 中 @register_tool 注册的名字。
+# 加工具：写一个插件文件注册 + 在此把名字加进对应专家清单（无需改图结构）。
+
+# 所有专家共享的通用工具
+common: &common
+  - run_shell
+  - read_file
+  - write_file
+  - list_dir
+  - summarize_output
+  - submit_flag        # 专家认为拿到 flag 时上报候选
+  - ask_expert         # 跨专家求助（同容器内联返回）
+
+pwn:
+  - *common
+  - gdb_tool
+  - connect_tool
+  - checksec
+  - rop_gadget
+
+reverse:
+  - *common
+  - gdb_tool
+  - r2_interact
+  - ghidra_headless
+
+web:
+  - *common
+  - connect_tool
+  - http_request
+
+crypto:
+  - *common
+
+misc:
+  - *common
+
+forensics:
+  - *common
+
+unknown:
+  - *common

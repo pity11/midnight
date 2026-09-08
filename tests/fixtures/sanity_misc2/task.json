@@ -1,0 +1,9 @@
+{
+  "id": "sanity_misc2",
+  "name": "Sanity Check 2 (rot13-ish)",
+  "description": "The flag is in secret.txt. It's just sitting there in plain text.",
+  "remote": null,
+  "category_hint": "misc",
+  "flag_format": "flag\\{[^}]+\\}",
+  "expected_flag": "flag{second_one_works}"
+}
