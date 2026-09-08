@@ -27,7 +27,7 @@ def _manifest(tmp_path):
                     "task-1": {
                         "context": "challenge",
                         "image": "midnight/target-test:abc123",
-                        "target": "target-one:1337",
+                        "target": "target_one:1337",
                     }
                 },
             }
@@ -51,7 +51,7 @@ async def test_service_manager_builds_and_records_digest(tmp_path, monkeypatch):
     digests = await manager.ensure_images()
     assert digests == {"_target/task-1": "sha256:1234"}
     assert any(call[1] == "build" for call in calls)
-    assert manager.targets == {"task-1": "target-one:1337"}
+    assert manager.targets == {"task-1": "target_one:1337"}
 
 
 def test_service_manager_rejects_context_escape(tmp_path):

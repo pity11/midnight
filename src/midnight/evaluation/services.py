@@ -33,7 +33,7 @@ class BenchmarkService(BaseModel):
         if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.:/-]*", self.image):
             raise ValueError("invalid service image name")
         host, separator, raw_port = self.target.rpartition(":")
-        if not separator or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9.-]*", host):
+        if not separator or not re.fullmatch(r"[a-zA-Z0-9_][a-zA-Z0-9_.-]*", host):
             raise ValueError("service target must use hostname:port form")
         if not raw_port.isdigit() or not 1 <= int(raw_port) <= 65535:
             raise ValueError("service target port is invalid")
