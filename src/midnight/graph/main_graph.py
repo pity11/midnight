@@ -206,10 +206,26 @@ def build_main_graph(
                 task_text = base_task
 
             log.info("specialist %s attempt %d/%d", expert, attempt, cfg.settings.max_attempts)
-            result = await agent.ainvoke(
-                {"messages": [HumanMessage(task_text)]},
-                config={"recursion_limit": cfg.settings.specialist_step_limit},
-            )
+            try:
+                result = await agent.ainvoke(
+                    {"messages": [HumanMessage(task_text)]},
+                    config={"recursion_limit": cfg.settings.specialist_step_limit},
+                )
+            except RuntimeError as exc:
+                if not str(exc).startswith("MODEL_"):
+                    raise
+                log.warning(
+                    "specialist %s model protocol failed on attempt %d: %s",
+                    expert,
+                    attempt,
+                    exc,
+                )
+                return {
+                    "candidate_flags": collected,
+                    "attempt": attempt,
+                    "container_id": container_id,
+                    "error": str(exc),
+                }
             # also scan the whole transcript for flags (defense in depth)
             transcript = "\n".join(
                 getattr(m, "content", "") or ""

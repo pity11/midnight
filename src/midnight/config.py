@@ -8,10 +8,11 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+from pydantic import BaseModel, ConfigDict, Field
 
 # A source checkout keeps assets at the repository root. Built wheels include
 # the same directories under ``midnight/_assets`` so installed CLI runs do not
@@ -23,9 +24,31 @@ CONFIG_DIR = PROJECT_ROOT / "config"
 
 
 class ModelSpec(BaseModel):
-    model: str
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str | None = None
+    model: str | None = None
     temperature: float = 0.0
     max_tokens: int = 4096
+
+
+class ProviderSpec(BaseModel):
+    """Connection and tool-protocol policy for one model provider."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    adapter: Literal["openai_compatible", "langchain"]
+    model: str
+    model_env: str | None = None
+    api_key_env: str | None = None
+    base_url: str | None = None
+    base_url_env: str | None = None
+    langchain_provider: str | None = None
+    connect_timeout: float = 10.0
+    timeout: float = 60.0
+    max_retries: int = 0
+    tool_mode: Literal["native", "json_protocol"] = "native"
+    require_https: bool = True
 
 
 class ImageSpec(BaseModel):
@@ -55,6 +78,8 @@ class Settings(BaseModel):
 
 
 class AppConfig(BaseModel):
+    active_provider: str
+    providers: dict[str, ProviderSpec]
     models: dict[str, ModelSpec]
     images: dict[str, ImageSpec]
     tools: dict[str, list[str]]
@@ -107,14 +132,24 @@ def _apply_env_overrides(settings: Settings) -> Settings:
 @lru_cache(maxsize=1)
 def get_config() -> AppConfig:
     """Load and cache the full application config."""
+    env_file = Path(os.environ.get("MIDNIGHT_ENV_FILE", _SOURCE_ROOT / ".env")).resolve()
+    if env_file.is_file():
+        load_dotenv(env_file, override=False)
     # allow overriding the models file (e.g. stub for smoke tests)
     models_file = os.environ.get("MIDNIGHT_MODELS_FILE", "models.yaml")
     models_raw = _load_yaml(models_file) or {}
+    providers_raw = _load_yaml("providers.yaml") or {}
     images_raw = _load_yaml("images.yaml") or {}
     tools_raw = _load_yaml("tools.yaml") or {}
     settings_raw = _load_yaml("settings.yaml") or {}
 
     return AppConfig(
+        active_provider=os.environ.get("MIDNIGHT_MODEL_PROVIDER")
+        or providers_raw.get("active_provider", ""),
+        providers={
+            key: ProviderSpec(**value)
+            for key, value in (providers_raw.get("providers") or {}).items()
+        },
         models={k: ModelSpec(**v) for k, v in models_raw.items()},
         images={k: ImageSpec(**v) for k, v in images_raw.items()},
         tools=_flatten_tools(tools_raw),
@@ -126,3 +161,31 @@ def model_spec_for(role: str, *, config: AppConfig | None = None) -> ModelSpec:
     """Return the ModelSpec for a role, falling back to 'default'."""
     cfg = config or get_config()
     return cfg.models.get(role) or cfg.models["default"]
+
+
+def provider_spec_for(
+    provider_id: str | None, *, config: AppConfig | None = None
+) -> tuple[str, ProviderSpec]:
+    """Resolve an explicit provider or the configured default provider."""
+    cfg = config or get_config()
+    selected = provider_id or cfg.active_provider
+    if not selected:
+        raise RuntimeError("MODEL_PROVIDER_NOT_CONFIGURED")
+    try:
+        return selected, cfg.providers[selected]
+    except KeyError as exc:
+        raise RuntimeError(f"MODEL_PROVIDER_UNKNOWN:{selected}") from exc
+
+
+def effective_model_id(role: str, *, config: AppConfig | None = None) -> str:
+    """Return the non-secret provider/model identifier bound to a role."""
+    cfg = config or get_config()
+    spec = model_spec_for(role, config=cfg)
+    if spec.model and spec.model.startswith("stub:"):
+        return spec.model
+    provider_id, provider = provider_spec_for(spec.provider, config=cfg)
+    env_model = os.environ.get(provider.model_env, "").strip() if provider.model_env else ""
+    model = env_model or (spec.model or provider.model).strip()
+    if not model:
+        raise RuntimeError("MODEL_CONFIGURATION_EMPTY")
+    return f"{provider_id}:{model}"

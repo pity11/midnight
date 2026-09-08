@@ -12,6 +12,8 @@ import shutil
 import subprocess
 
 import pytest
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.outputs import ChatResult
 
 os.environ.setdefault("MIDNIGHT_MODELS_FILE", "models.stub.yaml")
 
@@ -60,3 +62,26 @@ def test_reject_path_retries_then_fails():
     from midnight.config import get_config
 
     assert final.get("attempt") == get_config().settings.max_attempts
+
+
+class ProtocolFailingModel(BaseChatModel):
+    @property
+    def _llm_type(self) -> str:
+        return "protocol-failure"
+
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
+        raise RuntimeError("MODEL_TOOL_ACTION_INVALID")
+
+
+def test_model_protocol_failure_uses_bounded_specialist_retries(monkeypatch):
+    import midnight.graph.main_graph as graph_module
+    from midnight.config import get_config
+
+    monkeypatch.setattr(graph_module, "build_llm", lambda role: ProtocolFailingModel())
+    final = _run_challenge("sanity_misc")
+    assert final.get("status") == "failed"
+    assert final.get("attempt") == get_config().settings.max_attempts
+    assert final.get("error") == "MODEL_TOOL_ACTION_INVALID"

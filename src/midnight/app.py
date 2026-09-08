@@ -21,7 +21,7 @@ from uuid import uuid4
 
 import yaml
 
-from midnight.config import PROJECT_ROOT, get_config
+from midnight.config import PROJECT_ROOT, effective_model_id, get_config
 from midnight.events import EventJournal
 from midnight.interfaces.http_platform import (
     EndpointMap,
@@ -337,7 +337,7 @@ async def _amain(args: argparse.Namespace) -> int:
             run_id,
             results,
             elapsed_seconds=time.monotonic() - started,
-            models={role: spec.model for role, spec in cfg.models.items()},
+            models={role: effective_model_id(role, config=cfg) for role in cfg.models},
             run_manifest_id=run_manifest.run_identity if run_manifest else None,
         )
         report.write(args.report_path)

@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from midnight.config import AppConfig
+from midnight.config import AppConfig, effective_model_id
 from midnight.evaluation.manifest import BundleManifest, RunManifest, canonical_json
 from midnight.graph.specialists import prompts
 
@@ -91,7 +91,7 @@ def build_run_manifest(
         suite_version=spec.suite_version,
         task_bundles={bundle.challenge_id: bundle.bundle_sha256 for bundle in bundles},
         midnight_revision=spec.midnight_revision,
-        models={role: model.model for role, model in config.models.items()},
+        models={role: effective_model_id(role, config=config) for role in config.models},
         prompt_revision=prompt_revision,
         config_revision=config_revision,
         tool_image_digests={category: image_digests[category] for category in sorted(categories)},

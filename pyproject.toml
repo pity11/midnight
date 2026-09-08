@@ -9,7 +9,10 @@ dependencies = [
     "langgraph-checkpoint-sqlite>=3.0",
     "langchain>=0.3",
     "langchain-core",
+    "langchain-openai>=0.3",
     "langchain-anthropic",
+    "python-dotenv",
+    "jsonschema>=4",
     "pydantic>=2",
     "pydantic-settings",
     "pyyaml",
@@ -20,10 +23,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "ruff", "mypy", "types-PyYAML", "types-pexpect"]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "mypy",
+    "types-PyYAML",
+    "types-pexpect",
+    "types-jsonschema",
+]
 docker-sdk = ["docker"]
 # extra model providers (install on demand):
-openai = ["langchain-openai"]
 google = ["langchain-google-genai"]
 ollama = ["langchain-ollama"]
 tsecbench = ["tsec-benchmark"]

@@ -1,0 +1,26 @@
+active_provider: cuc
+
+providers:
+  cuc:
+    adapter: openai_compatible
+    base_url: https://openai.cuc.edu.cn/v1
+    base_url_env: CUC_BASE_URL
+    api_key_env: CUC_API_KEY
+    model: cuc/deepseek
+    model_env: CUC_MODEL
+    connect_timeout: 10
+    timeout: 120
+    max_retries: 0
+    tool_mode: json_protocol
+    require_https: true
+
+  anthropic:
+    adapter: langchain
+    langchain_provider: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+    model: claude-3-5-sonnet-latest
+    connect_timeout: 10
+    timeout: 120
+    max_retries: 0
+    tool_mode: native
+    require_https: true
