@@ -33,6 +33,7 @@ class Challenge(TypedDict, total=False):
     source_remote: str | None  # original target when runtime uses an isolated relay
     targets: list[str]  # all challenge endpoints when a platform exposes more than one
     source_targets: list[str]  # original endpoints when runtime uses isolated relays
+    target_network: str | None  # evaluator-only Docker network for local replay targets
     flag_count: int | None
 
 

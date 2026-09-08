@@ -89,7 +89,10 @@ def build_main_graph(
             if not source_targets or not set(source_targets).issubset(allowed):
                 raise ValueError("target-only challenge endpoints are not evaluator-allowlisted")
             runtime_targets = [
-                await manager.prepare_target_relay(target) for target in source_targets
+                await manager.prepare_target_relay(
+                    target, source_network=ch.get("target_network")
+                )
+                for target in source_targets
             ]
             runtime_ch["source_targets"] = source_targets
             runtime_ch["source_remote"] = source_targets[0]

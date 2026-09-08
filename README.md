@@ -137,6 +137,33 @@ does not contain the CA certificate bundle until that layer installs it. When
 both settings are present, the APT mirror bypasses the proxy while other build
 downloads continue through it.
 
+After independent attempts finish, aggregate their reports in attempt order:
+
+```bash
+uv run midnight-aggregate \
+  runs/attempt-1/report.json \
+  runs/attempt-2/report.json \
+  runs/attempt-3/report.json \
+  --output runs/aggregate.json
+```
+
+The aggregate contains `success_at_1`, `success_in_n`, mean solve probability,
+and its 95% Wilson interval. It never stores submitted flag values.
+
+Replay tasks with local servers use a separate evaluator-only service manifest:
+
+```bash
+MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight \
+  --bundles-dir /evaluator/bundles/core \
+  --evaluator-manifest /evaluator/private/answers.json \
+  --evaluation-spec /evaluator/specs/attempt-1.json \
+  --service-manifest /evaluator/private/services.json
+```
+
+The manifest points to reviewed upstream Docker build contexts. Target images
+run without published host ports on an internal network, and solver containers
+receive access only through one allowlisted TCP relay per declared endpoint.
+
 ## Trusted benchmark bundles
 
 Formal evaluations use allowlist-based clean bundles. The upstream repository

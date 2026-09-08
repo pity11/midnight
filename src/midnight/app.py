@@ -68,6 +68,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="immutable evaluation protocol JSON used with --bundles-dir",
     )
     p.add_argument(
+        "--service-manifest",
+        help="evaluator-only local target service manifest used with --bundles-dir",
+    )
+    p.add_argument(
         "--run-manifest-path",
         default="logs/run-manifest.json",
         help="write the effective immutable evaluation run manifest",
@@ -169,8 +173,8 @@ async def _amain(args: argparse.Namespace) -> int:
     selected_platforms = sum(bool(value) for value in (args.platform_config, args.bundles_dir, args.tsecbench))
     if selected_platforms > 1:
         raise ValueError("--platform-config, --bundles-dir, and --tsecbench are mutually exclusive")
-    if (args.evaluator_manifest or args.evaluation_spec) and not args.bundles_dir:
-        raise ValueError("--evaluator-manifest and --evaluation-spec require --bundles-dir")
+    if (args.evaluator_manifest or args.evaluation_spec or args.service_manifest) and not args.bundles_dir:
+        raise ValueError("evaluator and service manifests require --bundles-dir")
 
     platform: Any = None
     if args.tsecbench:
@@ -185,19 +189,31 @@ async def _amain(args: argparse.Namespace) -> int:
         platform = _load_http_adapter(args.platform_config) if args.platform_config else None
     provider: ChallengeProvider
     delegate: FlagSubmitter
+    service_manager = None
     if args.bundles_dir:
         from midnight.evaluation.provider import (
             EvaluatorManifestSubmitter,
             ValidatedBundleProvider,
         )
 
-        provider = ValidatedBundleProvider(args.bundles_dir)
+        target_networks: dict[str, str] = {}
+        if args.service_manifest:
+            from midnight.evaluation.services import BenchmarkServiceManager
+
+            service_manager = BenchmarkServiceManager(args.service_manifest)
+            target_networks = {
+                challenge_id: service_manager.network
+                for challenge_id in service_manager.challenge_ids
+            }
+        provider = ValidatedBundleProvider(args.bundles_dir, target_networks=target_networks)
         if not args.evaluator_manifest or not args.evaluation_spec:
             raise ValueError("--bundles-dir requires evaluator manifest and evaluation spec")
         bundle_root = Path(args.bundles_dir).resolve()
         evaluator_path = Path(args.evaluator_manifest).resolve()
         if evaluator_path.is_relative_to(bundle_root):
             raise ValueError("evaluator manifest must be outside the clean bundle root")
+        if args.service_manifest and Path(args.service_manifest).resolve().is_relative_to(bundle_root):
+            raise ValueError("service manifest must be outside the clean bundle root")
         delegate = EvaluatorManifestSubmitter(args.evaluator_manifest)
     else:
         provider = platform or LocalDirProvider(args.challenges_dir)
@@ -253,11 +269,26 @@ async def _amain(args: argparse.Namespace) -> int:
             raise ValueError("token budget enforcement is not implemented; omit token_budget")
         apply_random_seed(evaluation_spec.random_seed)
         bundle_manifests = [clean_provider.bundle_manifest(ch["id"]) for ch in challenges]
+        if service_manager is not None:
+            if service_manager.manifest.suite_version != evaluation_spec.suite_version:
+                raise ValueError("service and evaluation suite versions differ")
+            target_manifests = {
+                manifest.challenge_id: manifest
+                for manifest in bundle_manifests
+                if manifest.internet_policy == "target_only"
+            }
+            if service_manager.challenge_ids != set(target_manifests):
+                raise ValueError("service manifest must cover exactly the selected target-only tasks")
+            for challenge_id, target in service_manager.targets.items():
+                if target not in target_manifests[challenge_id].allowed_targets:
+                    raise ValueError(f"service target is not allowlisted for {challenge_id}")
         categories = {cast(ChallengeType, manifest.category) for manifest in bundle_manifests}
         image_manager = ContainerManager(run_id="manifest-preflight")
         image_digests: dict[str, str] = {
             category: await image_manager.image_digest(category) for category in sorted(categories)
         }
+        if service_manager is not None:
+            image_digests.update(await service_manager.ensure_images())
         if any(manifest.internet_policy == "target_only" for manifest in bundle_manifests):
             image_digests["_relay"] = await image_manager.relay_image_digest()
         run_manifest = build_run_manifest(
@@ -288,6 +319,8 @@ async def _amain(args: argparse.Namespace) -> int:
         namespace=run_id,
     )
     try:
+        if service_manager is not None:
+            await service_manager.start_all()
         scheduler = Scheduler(
             provider=provider,
             submitter=submitter,
@@ -310,6 +343,8 @@ async def _amain(args: argparse.Namespace) -> int:
         report.write(args.report_path)
         log.info("report written to %s", Path(args.report_path).resolve())
     finally:
+        if service_manager is not None:
+            await service_manager.stop_all()
         if platform is not None:
             await platform.close()
 

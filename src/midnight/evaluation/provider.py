@@ -26,8 +26,9 @@ def _read_json(path: Path) -> dict:
 class ValidatedBundleProvider:
     """Expose only immutable, stager-produced, agent-visible task bundles."""
 
-    def __init__(self, root: str | Path):
+    def __init__(self, root: str | Path, *, target_networks: dict[str, str] | None = None):
         self.root = Path(root).resolve()
+        self.target_networks = target_networks or {}
 
     def _bundle_root(self, challenge_id: str) -> Path:
         candidate = (self.root / challenge_id).resolve()
@@ -92,6 +93,7 @@ class ValidatedBundleProvider:
             file_hashes={},
             internet_policy=manifest.internet_policy,
             allowed_targets=manifest.allowed_targets,
+            target_network=self.target_networks.get(challenge_id),
         )
 
     def bundle_manifest(self, challenge_id: str) -> BundleManifest:

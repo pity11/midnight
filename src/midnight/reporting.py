@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections import Counter
 from collections.abc import Iterable
@@ -134,3 +135,127 @@ class RunReport:
         )
         temporary.replace(target)
         return target
+
+
+@dataclass(frozen=True)
+class AggregateChallenge:
+    challenge_id: str
+    category: str
+    solved_attempts: int
+    attempts: int
+    success_at_1: bool
+    success_in_n: bool
+
+
+@dataclass(frozen=True)
+class AggregateReport:
+    generated_at: str
+    attempts: int
+    total_challenges: int
+    observations: int
+    success_at_1: float
+    success_in_n: float
+    mean_solve_probability: float
+    mean_solve_probability_ci95: tuple[float, float]
+    run_ids: list[str]
+    run_manifest_ids: list[str | None]
+    challenges: list[AggregateChallenge]
+    category_results: dict[str, dict[str, float | int]]
+
+    @classmethod
+    def from_reports(cls, reports: Iterable[RunReport]) -> AggregateReport:
+        materialized = list(reports)
+        if not materialized:
+            raise ValueError("at least one run report is required")
+        first_ids = [item.challenge_id for item in materialized[0].challenges]
+        if not first_ids or len(first_ids) != len(set(first_ids)):
+            raise ValueError("run reports must contain a non-empty unique challenge inventory")
+        expected = set(first_ids)
+        for report in materialized[1:]:
+            ids = [item.challenge_id for item in report.challenges]
+            if len(ids) != len(set(ids)) or set(ids) != expected:
+                raise ValueError("run reports must contain the same unique challenge inventory")
+
+        indexed = [
+            {item.challenge_id: item for item in report.challenges} for report in materialized
+        ]
+        challenges: list[AggregateChallenge] = []
+        for challenge_id in sorted(expected):
+            entries = [attempt[challenge_id] for attempt in indexed]
+            categories = {entry.category or "unknown" for entry in entries}
+            if len(categories) != 1:
+                raise ValueError(f"category changed between attempts for {challenge_id}")
+            solved = sum(entry.status == "solved" for entry in entries)
+            challenges.append(
+                AggregateChallenge(
+                    challenge_id=challenge_id,
+                    category=categories.pop(),
+                    solved_attempts=solved,
+                    attempts=len(entries),
+                    success_at_1=entries[0].status == "solved",
+                    success_in_n=solved > 0,
+                )
+            )
+
+        observations = len(challenges) * len(materialized)
+        solved_observations = sum(item.solved_attempts for item in challenges)
+        probability = solved_observations / observations
+        category_results: dict[str, dict[str, float | int]] = {}
+        for category in sorted({item.category for item in challenges}):
+            items = [item for item in challenges if item.category == category]
+            category_results[category] = {
+                "total": len(items),
+                "success_at_1": sum(item.success_at_1 for item in items),
+                "success_in_n": sum(item.success_in_n for item in items),
+                "solved_observations": sum(item.solved_attempts for item in items),
+                "observations": len(items) * len(materialized),
+            }
+        return cls(
+            generated_at=datetime.now(UTC).isoformat(timespec="seconds"),
+            attempts=len(materialized),
+            total_challenges=len(challenges),
+            observations=observations,
+            success_at_1=round(sum(item.success_at_1 for item in challenges) / len(challenges), 4),
+            success_in_n=round(sum(item.success_in_n for item in challenges) / len(challenges), 4),
+            mean_solve_probability=round(probability, 4),
+            mean_solve_probability_ci95=_wilson_interval(solved_observations, observations),
+            run_ids=[report.run_id for report in materialized],
+            run_manifest_ids=[report.run_manifest_id for report in materialized],
+            challenges=challenges,
+            category_results=category_results,
+        )
+
+    def write(self, path: str | Path) -> Path:
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_suffix(target.suffix + ".tmp")
+        temporary.write_text(
+            json.dumps(asdict(self), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(target)
+        return target
+
+
+def _wilson_interval(successes: int, observations: int) -> tuple[float, float]:
+    """Two-sided 95% Wilson score interval for Bernoulli observations."""
+    if observations <= 0 or not 0 <= successes <= observations:
+        raise ValueError("invalid Bernoulli counts")
+    z = 1.959963984540054
+    proportion = successes / observations
+    denominator = 1 + z**2 / observations
+    centre = (proportion + z**2 / (2 * observations)) / denominator
+    margin = (
+        z
+        * math.sqrt(
+            proportion * (1 - proportion) / observations + z**2 / (4 * observations**2)
+        )
+        / denominator
+    )
+    return round(max(0.0, centre - margin), 4), round(min(1.0, centre + margin), 4)
+
+
+def load_run_report(path: str | Path) -> RunReport:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    payload["challenges"] = [ChallengeSummary(**item) for item in payload["challenges"]]
+    return RunReport(**payload)

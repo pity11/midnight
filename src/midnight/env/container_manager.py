@@ -170,8 +170,10 @@ class ContainerManager:
             raise RuntimeError(f"could not resolve relay image digest: {result.stderr.strip()}")
         return result.stdout.strip()
 
-    async def prepare_target_relay(self, target: str) -> str:
+    async def prepare_target_relay(self, target: str, *, source_network: str | None = None) -> str:
         """Expose exactly one external TCP target to the internal solver network."""
+        if source_network and not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]*", source_network):
+            raise ValueError(f"invalid target source network: {source_network!r}")
         try:
             host, raw_port = target.rsplit(":", 1)
             port = int(raw_port)
@@ -192,7 +194,7 @@ class ContainerManager:
             "--name",
             name,
             "--network",
-            "bridge",
+            source_network or "bridge",
             "--cap-drop",
             "ALL",
             "--security-opt",
