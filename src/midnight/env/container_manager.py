@@ -253,7 +253,14 @@ class ContainerManager:
             build_args += ["--build-arg", f"HTTPS_PROXY={proxy}"]
         apt_mirror = os.getenv("MIDNIGHT_APT_MIRROR", "").strip()
         if apt_mirror:
-            build_args += ["--build-arg", f"APT_MIRROR={_apt_mirror(apt_mirror)}"]
+            mirror = _apt_mirror(apt_mirror)
+            mirror_host = urlsplit(mirror).hostname
+            build_args += ["--build-arg", f"APT_MIRROR={mirror}"]
+            # Domestic package mirrors are faster and more reliable when they
+            # bypass the local proxy. Other build traffic still uses it.
+            if build_proxy and mirror_host:
+                build_args += ["--build-arg", f"NO_PROXY={mirror_host}"]
+                build_args += ["--build-arg", f"no_proxy={mirror_host}"]
         build_args += ["-f", str(dockerfile)]
         if _host_needs_platform(spec.platform):
             build_args += ["--platform", spec.platform]

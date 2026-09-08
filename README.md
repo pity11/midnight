@@ -129,8 +129,13 @@ If the proxy has unreliable access to Ubuntu's default archive, select a
 compatible mirror for package installation:
 
 ```bash
-export MIDNIGHT_APT_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ubuntu
+export MIDNIGHT_APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ubuntu
 ```
+
+Use an HTTP mirror during the bootstrap layer because the minimal Ubuntu base
+does not contain the CA certificate bundle until that layer installs it. When
+both settings are present, the APT mirror bypasses the proxy while other build
+downloads continue through it.
 
 ## Trusted benchmark bundles
 
