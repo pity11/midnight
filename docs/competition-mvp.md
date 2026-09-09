@@ -4,6 +4,9 @@ This runbook covers the minimum reliable workflow for a live CTF. It assumes the
 competition authorizes automated solving and submissions. Keep platform tokens in
 environment variables or a mode-600 `.env` file; never add them to YAML or Git.
 
+The commands below are also wrapped by `scripts/competition`. Run
+`scripts/competition --help` for the short offline checklist.
+
 ## Scope
 
 The competition build must reliably:
@@ -30,6 +33,13 @@ uv run midnight --check-sandboxes
 uv run pytest -q
 ```
 
+After the local environment has been installed, the equivalent competition-day
+check avoids package resolution and uses the existing virtual environment:
+
+```bash
+scripts/competition local-preflight
+```
+
 `--check-model` makes one structured request and prints only the configured model
 identifier. It does not print credentials or execute a solver tool.
 
@@ -42,20 +52,13 @@ environment variable named by `token_env`.
 First perform a read-only discovery pass. Omit `--submit`:
 
 ```bash
-uv run midnight \
-  --platform-config config/platform.local.yaml \
-  --list-only
+scripts/competition platform-preflight
 ```
 
 Then solve one known test challenge while submissions remain disabled:
 
 ```bash
-uv run midnight \
-  --platform-config config/platform.local.yaml \
-  --id TEST_CHALLENGE_ID \
-  --run-id platform-dry-run-1 \
-  --max-concurrency 1 \
-  --task-timeout 900
+scripts/competition dry-run TEST_CHALLENGE_ID
 ```
 
 Inspect `logs/events.jsonl` and `logs/report.json`. Events and reports redact flag
@@ -66,13 +69,7 @@ values and credential-shaped fields.
 Enable submission only for an organizer-provided test challenge:
 
 ```bash
-uv run midnight \
-  --platform-config config/platform.local.yaml \
-  --id TEST_CHALLENGE_ID \
-  --run-id platform-submit-test-1 \
-  --submit \
-  --max-concurrency 1 \
-  --task-timeout 900
+scripts/competition submit-test TEST_CHALLENGE_ID
 ```
 
 Confirm that the platform accepts the flag and that rerunning the same command
@@ -82,6 +79,13 @@ does not duplicate the submission.
 
 Start conservatively on Apple Silicon because pwn and reverse images use amd64
 emulation:
+
+```bash
+scripts/competition round2
+```
+
+For the third stage use `scripts/competition round3`. The expanded command run by
+the wrapper is:
 
 ```bash
 uv run midnight \

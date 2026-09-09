@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+PYTHON="${MIDNIGHT_PYTHON:-$ROOT/.venv/bin/python}"
+PLATFORM_CONFIG="${MIDNIGHT_PLATFORM_CONFIG:-$ROOT/config/platform.local.yaml}"
+CONCURRENCY="${MIDNIGHT_COMPETITION_CONCURRENCY:-2}"
+RUN_TIMEOUT="${MIDNIGHT_COMPETITION_RUN_TIMEOUT:-1620}"
+TASK_TIMEOUT="${MIDNIGHT_COMPETITION_TASK_TIMEOUT:-1800}"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/competition COMMAND [ARG]
+
+Commands:
+  local-preflight       Check configuration, organizer model, and local sandboxes
+  platform-preflight    Read and normalize the official challenge inventory
+  dry-run ID            Solve one organizer test task without submitting
+  submit-test ID        Solve and submit one organizer-authorized test task
+  round2                Start the unattended 27-minute second-stage run
+  round3                Start the unattended 27-minute final-stage run
+
+Local overrides:
+  MIDNIGHT_PLATFORM_CONFIG
+  MIDNIGHT_COMPETITION_CONCURRENCY
+  MIDNIGHT_COMPETITION_RUN_TIMEOUT
+  MIDNIGHT_COMPETITION_TASK_TIMEOUT
+
+Credentials must remain in the protected .env file. This script never prints them.
+EOF
+}
+
+require_runtime() {
+  if [[ ! -x "$PYTHON" ]]; then
+    echo "Missing local Python environment: $PYTHON" >&2
+    exit 2
+  fi
+}
+
+require_platform_config() {
+  if [[ ! -f "$PLATFORM_CONFIG" ]]; then
+    echo "Missing ignored platform config: $PLATFORM_CONFIG" >&2
+    exit 2
+  fi
+}
+
+run_midnight() {
+  "$PYTHON" -m midnight.app "$@"
+}
+
+run_round() {
+  local stage="$1"
+  local run_id="${MIDNIGHT_RUN_ID:-$stage}"
+  local output_root="$ROOT/logs/$run_id"
+  mkdir -p "$output_root"
+  exec "$PYTHON" -m midnight.app \
+    --platform-config "$PLATFORM_CONFIG" \
+    --run-id "$run_id" \
+    --submit \
+    --max-concurrency "$CONCURRENCY" \
+    --task-timeout "$TASK_TIMEOUT" \
+    --run-timeout "$RUN_TIMEOUT" \
+    --events-path "$output_root/events.jsonl" \
+    --checkpoint-path "$output_root/checkpoints.sqlite" \
+    --submission-ledger-path "$output_root/submissions.sqlite" \
+    --artifacts-root "$output_root/artifacts" \
+    --workspace-root "$output_root/workspaces" \
+    --report-path "$output_root/report.json"
+}
+
+command="${1:-help}"
+case "$command" in
+  help|-h|--help)
+    usage
+    ;;
+  local-preflight)
+    require_runtime
+    docker info >/dev/null
+    run_midnight --check-config
+    run_midnight --check-model
+    run_midnight --check-sandboxes
+    ;;
+  platform-preflight)
+    require_runtime
+    require_platform_config
+    run_midnight --platform-config "$PLATFORM_CONFIG" --list-only
+    ;;
+  dry-run)
+    require_runtime
+    require_platform_config
+    challenge_id="${2:?dry-run requires a test challenge ID}"
+    run_midnight \
+      --platform-config "$PLATFORM_CONFIG" \
+      --id "$challenge_id" \
+      --run-id platform-dry-run \
+      --max-concurrency 1 \
+      --task-timeout 900
+    ;;
+  submit-test)
+    require_runtime
+    require_platform_config
+    challenge_id="${2:?submit-test requires an organizer-authorized challenge ID}"
+    run_midnight \
+      --platform-config "$PLATFORM_CONFIG" \
+      --id "$challenge_id" \
+      --run-id platform-submit-test \
+      --submit \
+      --max-concurrency 1 \
+      --task-timeout 900
+    ;;
+  round2|round3)
+    require_runtime
+    require_platform_config
+    run_round "$command"
+    ;;
+  *)
+    echo "Unknown command: $command" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
