@@ -56,6 +56,8 @@ Keep real credentials in `.env`; the file is excluded from version control.
 
 The short operational procedure used before a live competition is documented in
 [docs/competition-mvp.md](docs/competition-mvp.md).
+The latest frozen-build evidence is recorded in
+[docs/readiness-2026-09-10.md](docs/readiness-2026-09-10.md).
 
 ## Project layout
 
