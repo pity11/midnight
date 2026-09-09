@@ -24,6 +24,34 @@ class EndpointMap:
 
 
 @dataclass(frozen=True)
+class ChallengeFieldMap:
+    """Dotted JSON paths used to normalize a platform challenge payload."""
+
+    id: str = "id"
+    name: str = "name"
+    description: str = "description"
+    category: str = "category"
+    remote: str = "remote"
+    flag_format: str = "flag_format"
+    round_id: str = "round_id"
+    attachments: str = "attachments"
+    attachment_name: str = "name"
+    attachment_url: str = "url"
+
+
+@dataclass(frozen=True)
+class ResponseMap:
+    """JSON envelope paths and submission response fields."""
+
+    challenge_list: str = "challenges"
+    challenge_detail: str = ""
+    submission: str = ""
+    accepted: str = "accepted"
+    message: str = "message"
+    points: str = "points"
+
+
+@dataclass(frozen=True)
 class HTTPPlatformConfig:
     base_url: str
     token_env: str | None = None
@@ -31,6 +59,9 @@ class HTTPPlatformConfig:
     auth_scheme: str = "Bearer"
     timeout_seconds: float = 15.0
     endpoints: EndpointMap = field(default_factory=EndpointMap)
+    fields: ChallengeFieldMap = field(default_factory=ChallengeFieldMap)
+    responses: ResponseMap = field(default_factory=ResponseMap)
+    submit_field: str = "flag"
     allow_external_downloads: bool = False
     max_attachment_bytes: int = 256 * 1024 * 1024
 
@@ -38,6 +69,25 @@ class HTTPPlatformConfig:
         parsed = urlparse(self.base_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("base_url must be an absolute HTTP(S) URL")
+        if not self.submit_field:
+            raise ValueError("submit_field must not be empty")
+
+
+_MISSING = object()
+
+
+def _json_path(value: Any, path: str, default: Any = _MISSING) -> Any:
+    """Resolve a conservative dotted path without expression evaluation."""
+    current = value
+    if not path:
+        return current
+    for part in path.split("."):
+        if not part or not isinstance(current, dict) or part not in current:
+            if default is not _MISSING:
+                return default
+            raise KeyError(path)
+        current = current[part]
+    return current
 
 
 class HTTPPlatformAdapter:
@@ -83,28 +133,42 @@ class HTTPPlatformAdapter:
         response = await self.client.get(self.config.endpoints.health)
         return response.is_success
 
-    @staticmethod
-    def _challenge(payload: dict[str, Any]) -> Challenge:
-        if "id" not in payload:
+    def _challenge(self, payload: dict[str, Any]) -> Challenge:
+        fields = self.config.fields
+        challenge_id = _json_path(payload, fields.id, None)
+        if challenge_id is None:
             raise ValueError("challenge payload is missing id")
+        name = _json_path(payload, fields.name, None)
+        category = _json_path(
+            payload,
+            fields.category,
+            _json_path(payload, "category_hint", None),
+        )
+        remote = _json_path(payload, fields.remote, None)
+        round_id = _json_path(payload, fields.round_id, None)
         return Challenge(
-            id=str(payload["id"]),
-            name=str(payload.get("name") or payload["id"]),
-            description=str(payload.get("description") or ""),
+            id=str(challenge_id),
+            name=str(name or challenge_id),
+            description=str(_json_path(payload, fields.description, "") or ""),
             files=[],
-            remote=payload.get("remote"),
-            category_hint=payload.get("category_hint") or payload.get("category"),
-            flag_format=payload.get("flag_format"),
-            round_id=str(payload.get("round_id")) if payload.get("round_id") is not None else None,
+            remote=str(remote) if remote is not None else None,
+            category_hint=str(category) if category is not None else None,
+            flag_format=_json_path(payload, fields.flag_format, None),
+            round_id=str(round_id) if round_id is not None else None,
         )
 
     async def list_challenges(self) -> list[Challenge]:
         response = await self.client.get(self.config.endpoints.challenges)
         response.raise_for_status()
         payload = response.json()
-        items = payload.get("challenges", []) if isinstance(payload, dict) else payload
+        if isinstance(payload, list):
+            items = payload
+        else:
+            items = _json_path(payload, self.config.responses.challenge_list, [])
         if not isinstance(items, list):
             raise TypeError("challenge list response must be an array")
+        if not all(isinstance(item, dict) for item in items):
+            raise TypeError("every challenge list item must be an object")
         return [self._challenge(item) for item in items]
 
     async def fetch(self, challenge_id: str) -> Challenge:
@@ -112,12 +176,24 @@ class HTTPPlatformAdapter:
         response = await self.client.get(path)
         response.raise_for_status()
         payload = response.json()
+        payload = _json_path(payload, self.config.responses.challenge_detail)
         if not isinstance(payload, dict):
             raise TypeError("challenge response must be an object")
-        attachments = payload.get("attachments") or []
+        fields = self.config.fields
+        attachments = _json_path(payload, fields.attachments, []) or []
         if not isinstance(attachments, list):
             raise TypeError("attachments must be an array")
-        self._attachments[challenge_id] = [dict(item) for item in attachments]
+        normalized: list[dict[str, str]] = []
+        for item in attachments:
+            if not isinstance(item, dict):
+                raise TypeError("every attachment must be an object")
+            normalized.append(
+                {
+                    "name": str(_json_path(item, fields.attachment_name, "") or ""),
+                    "url": str(_json_path(item, fields.attachment_url, "") or ""),
+                }
+            )
+        self._attachments[challenge_id] = normalized
         return self._challenge(payload)
 
     def _download_allowed(self, url: str) -> bool:
@@ -161,16 +237,18 @@ class HTTPPlatformAdapter:
 
     async def submit(self, challenge_id: str, flag: str) -> SubmitResult:
         path = self.config.endpoints.submit.format(challenge_id=challenge_id)
-        response = await self.client.post(path, json={"flag": flag})
+        response = await self.client.post(path, json={self.config.submit_field: flag})
         response.raise_for_status()
         payload = response.json()
+        payload = _json_path(payload, self.config.responses.submission)
         if not isinstance(payload, dict):
             raise TypeError("submission response must be an object")
-        accepted = bool(payload.get("accepted", False))
+        responses = self.config.responses
+        accepted = bool(_json_path(payload, responses.accepted, False))
         return SubmitResult(
             accepted=accepted,
-            message=str(payload.get("message") or ""),
-            points=payload.get("points"),
+            message=str(_json_path(payload, responses.message, "") or ""),
+            points=_json_path(payload, responses.points, None),
             status="accepted" if accepted else "rejected",
         )
 

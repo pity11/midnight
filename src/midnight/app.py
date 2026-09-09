@@ -24,9 +24,11 @@ import yaml
 from midnight.config import PROJECT_ROOT, effective_model_id, get_config
 from midnight.events import EventJournal
 from midnight.interfaces.http_platform import (
+    ChallengeFieldMap,
     EndpointMap,
     HTTPPlatformAdapter,
     HTTPPlatformConfig,
+    ResponseMap,
 )
 from midnight.interfaces.local_mock import LocalDirProvider, ManualSubmitter
 from midnight.interfaces.provider import ChallengeProvider
@@ -168,9 +170,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def _load_http_adapter(path: str) -> HTTPPlatformAdapter:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     endpoint_raw = raw.pop("endpoints", {})
+    field_raw = raw.pop("fields", {})
+    response_raw = raw.pop("responses", {})
     config = HTTPPlatformConfig(
         **raw,
         endpoints=EndpointMap(**endpoint_raw),
+        fields=ChallengeFieldMap(**field_raw),
+        responses=ResponseMap(**response_raw),
     )
     return HTTPPlatformAdapter(config)
 

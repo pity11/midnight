@@ -14,3 +14,29 @@ endpoints:
   challenges: "/api/challenges"
   challenge: "/api/challenges/{challenge_id}"
   submit: "/api/challenges/{challenge_id}/submit"
+
+# Dotted JSON paths allow the platform payload to be normalized without changing
+# Python code. For example, use "task.title" for a nested field.
+fields:
+  id: "id"
+  name: "name"
+  description: "description"
+  category: "category"
+  remote: "remote"
+  flag_format: "flag_format"
+  round_id: "round_id"
+  attachments: "attachments"
+  attachment_name: "name"
+  attachment_url: "url"
+
+# Set these to "data.tasks", "data", etc. when responses use an envelope.
+responses:
+  challenge_list: "challenges"
+  challenge_detail: ""
+  submission: ""
+  accepted: "accepted"
+  message: "message"
+  points: "points"
+
+# JSON field sent to the submission endpoint.
+submit_field: "flag"

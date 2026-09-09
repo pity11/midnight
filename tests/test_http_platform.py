@@ -6,7 +6,12 @@ import json
 import httpx
 import pytest
 
-from midnight.interfaces.http_platform import HTTPPlatformAdapter, HTTPPlatformConfig
+from midnight.interfaces.http_platform import (
+    ChallengeFieldMap,
+    HTTPPlatformAdapter,
+    HTTPPlatformConfig,
+    ResponseMap,
+)
 
 
 def _response(data, status=200):
@@ -112,6 +117,87 @@ def test_http_adapter_enforces_attachment_size_limit(tmp_path):
             await adapter.download_files("1", str(tmp_path))
         assert not (tmp_path / "large.bin").exists()
         assert not (tmp_path / "large.bin.part").exists()
+        await client.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_http_adapter_maps_nested_platform_payloads(tmp_path):
+    async def scenario():
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/api/challenges" and request.method == "GET":
+                return _response(
+                    {"data": {"tasks": [{"taskId": 7, "title": "Mapped", "kind": "web"}]}}
+                )
+            if request.url.path == "/api/challenges/7" and request.method == "GET":
+                return _response(
+                    {
+                        "data": {
+                            "taskId": 7,
+                            "title": "Mapped",
+                            "body": "nested payload",
+                            "kind": "web",
+                            "target": "https://target.invalid",
+                            "files": [{"filename": "source.zip", "download": "/source.zip"}],
+                        }
+                    }
+                )
+            if request.url.path == "/source.zip":
+                return httpx.Response(200, content=b"zip")
+            if request.url.path == "/api/challenges/7/submit":
+                assert json.loads(request.content) == {"answer": "flag{mapped}"}
+                return _response({"data": {"ok": 1, "detail": "accepted", "score": 500}})
+            return httpx.Response(404)
+
+        client = httpx.AsyncClient(
+            base_url="https://ctf.invalid",
+            transport=httpx.MockTransport(handler),
+        )
+        adapter = HTTPPlatformAdapter(
+            HTTPPlatformConfig(
+                base_url="https://ctf.invalid",
+                submit_field="answer",
+                fields=ChallengeFieldMap(
+                    id="taskId",
+                    name="title",
+                    description="body",
+                    category="kind",
+                    remote="target",
+                    attachments="files",
+                    attachment_name="filename",
+                    attachment_url="download",
+                ),
+                responses=ResponseMap(
+                    challenge_list="data.tasks",
+                    challenge_detail="data",
+                    submission="data",
+                    accepted="ok",
+                    message="detail",
+                    points="score",
+                ),
+            ),
+            client=client,
+        )
+        listed = await adapter.list_challenges()
+        assert listed == [
+            {
+                "id": "7",
+                "name": "Mapped",
+                "description": "",
+                "files": [],
+                "remote": None,
+                "category_hint": "web",
+                "flag_format": None,
+                "round_id": None,
+            }
+        ]
+        challenge = await adapter.fetch("7")
+        assert challenge["description"] == "nested payload"
+        assert challenge["remote"] == "https://target.invalid"
+        await adapter.download_files("7", str(tmp_path))
+        assert (tmp_path / "source.zip").read_bytes() == b"zip"
+        result = await adapter.submit("7", "flag{mapped}")
+        assert result.accepted and result.points == 500
         await client.aclose()
 
     asyncio.run(scenario())
