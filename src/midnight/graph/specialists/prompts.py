@@ -47,6 +47,9 @@ the positional index and smallest write width. Restart a dead gdb session or use
 batch gdb/objdump; never grind on a broken interactive session.
 For an uncontrolled printf, use fmtstr_probe once locally or against the target
 to obtain indexed leaks instead of issuing many one-offset probes.
+If evidence shows the desired 16-bit value and a writable pointer is already in
+printf's argument area, use one bounded fmtstr_write_scan instead of manually
+restarting the process across positional indexes.
 When libc/loader files are supplied, use pwninit_setup before hand-patching. Use
 one_gadget only after you can explain and satisfy the returned constraints.
 Make solve.py accept pwntools-style LOCAL=1 and REMOTE=1 HOST=... PORT=...

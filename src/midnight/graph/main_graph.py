@@ -188,12 +188,19 @@ def build_main_graph(
                 # Middleware makes each model+tool cycle consume several graph
                 # transitions. The model-call limit is the semantic bound; the
                 # larger recursion limit only prevents infrastructure cutoffs.
-                ModelCallLimitMiddleware(run_limit=24, exit_behavior="end"),
+                ModelCallLimitMiddleware(run_limit=18, exit_behavior="end"),
             ]
             if expert in {"pwn", "reverse"}:
                 middleware.append(
                     ToolCallLimitMiddleware(tool_name="gdb_tool", run_limit=8)
                 )
+            if expert == "pwn":
+                middleware.extend([
+                    ToolCallLimitMiddleware(tool_name="run_shell", run_limit=12),
+                    ToolCallLimitMiddleware(tool_name="run_exploit", run_limit=5),
+                    ToolCallLimitMiddleware(tool_name="connect_tool", run_limit=5),
+                    ToolCallLimitMiddleware(tool_name="fmtstr_write_scan", run_limit=2),
+                ])
             agent = make_specialist(
                 llm=llm,
                 tools=tools,

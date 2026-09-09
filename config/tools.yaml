@@ -26,6 +26,7 @@ pwn:
   - one_gadget
   - run_exploit
   - fmtstr_probe
+  - fmtstr_write_scan
 
 reverse:
   - *common

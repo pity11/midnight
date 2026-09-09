@@ -10,6 +10,7 @@ from midnight.tools.category import (
     make_disk_image_triage,
     make_fenjing_ssti,
     make_fmtstr_probe,
+    make_fmtstr_write_scan,
     make_memory_analyze,
     make_one_gadget,
     make_pcap_triage,
@@ -202,3 +203,24 @@ async def test_fmtstr_probe_binds_target_and_bounds_indices() -> None:
 
     with pytest.raises(ValueError, match="within 1..100"):
         await action.ainvoke({"mode": "target", "start_index": 1, "end_index": 101})
+
+
+@pytest.mark.asyncio
+async def test_fmtstr_write_scan_is_target_bound_and_bounded() -> None:
+    env = _Env()
+    action = make_fmtstr_write_scan(
+        env=env, state={"challenge": {"remote": "relay:4444"}}
+    )
+    await action.ainvoke(
+        {"value": 0xBEEF, "mode": "remote", "start_index": 5, "end_index": 9}
+    )
+    command, timeout = env.calls[0]
+    encoded = command.split("printf %s ", 1)[1].split(" |", 1)[0]
+    program = base64.b64decode(encoded).decode()
+    assert "remote('relay', 4444)" in program
+    assert "range(5, 10)" in program
+    assert "%{48879}c%{index}$hn" in program
+    assert timeout == 180
+
+    with pytest.raises(ValueError, match="at most 40"):
+        await action.ainvoke({"value": 1, "start_index": 1, "end_index": 41})
