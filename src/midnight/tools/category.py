@@ -8,6 +8,7 @@ session.
 
 from __future__ import annotations
 
+import re
 import shlex
 from urllib.parse import urlsplit
 
@@ -229,6 +230,47 @@ def make_one_gadget(*, env: CTFEnvironment, **_) -> object:
     return one_gadget
 
 
+@register_tool(name="run_exploit", groups=["pwn"])
+def make_run_exploit(*, env: CTFEnvironment, state=None, **_) -> object:
+    from langchain_core.tools import tool
+
+    remote = str(((state or {}).get("challenge") or {}).get("remote") or "")
+
+    @tool
+    async def run_exploit(
+        script: str = "solve.py", mode: str = "local", timeout_seconds: int = 120
+    ) -> str:
+        """Syntax-check and run a pwntools solve script locally or on the target.
+
+        The script should support pwntools-style ``LOCAL=1`` and
+        ``REMOTE=1 HOST=<host> PORT=<port>`` arguments. Target mode is bound to
+        the evaluator-provided endpoint; the model cannot select another host.
+        """
+        if mode not in {"local", "target"}:
+            raise ValueError("mode must be local or target")
+        if timeout_seconds < 1 or timeout_seconds > 600:
+            raise ValueError("timeout_seconds must be between 1 and 600")
+        args = ["python3", script]
+        if mode == "local":
+            args.append("LOCAL=1")
+        else:
+            if not remote or ":" not in remote:
+                raise ValueError("target mode requires an evaluator-provided host:port")
+            host, raw_port = remote.rsplit(":", 1)
+            if not host or not raw_port.isdigit() or not 1 <= int(raw_port) <= 65535:
+                raise ValueError("the evaluator-provided target is not host:port")
+            args += ["REMOTE=1", f"HOST={host}", f"PORT={raw_port}"]
+        quoted_script = shlex.quote(script)
+        command = (
+            f"python3 -m py_compile {quoted_script} && "
+            f"timeout {timeout_seconds}s "
+            + " ".join(shlex.quote(part) for part in args)
+        )
+        return _result_text(await env.exec(command, timeout=timeout_seconds + 15))
+
+    return run_exploit
+
+
 @register_tool(name="r2_interact", groups=["reverse", "pwn"])
 def make_r2_interact(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
@@ -318,6 +360,36 @@ def make_pyinstaller_extract(*, env: CTFEnvironment, **_) -> object:
         return _result_text(await env.exec(command, timeout=180))
 
     return pyinstaller_extract
+
+
+@register_tool(name="android_decompile", groups=["reverse"])
+def make_android_decompile(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def android_decompile(
+        artifact: str, output_dir: str = "jadx_out", resources: bool = True
+    ) -> str:
+        """Decompile an APK or DEX artifact with JADX into a writable directory.
+
+        Returns a compact file inventory and high-value strings after the
+        decompiler finishes. Disable ``resources`` for a faster source-only run.
+        """
+        parts = ["jadx", "--output-dir", output_dir]
+        if not resources:
+            parts.append("--no-res")
+        parts.append(artifact)
+        command = (
+            "command -v jadx >/dev/null || exit 127; "
+            + " ".join(shlex.quote(part) for part in parts)
+            + "; status=$?; "
+            + f"find {shlex.quote(output_dir)} -type f | head -80; "
+            + f"grep -RIE 'flag|secret|password|token|native' {shlex.quote(output_dir)} "
+            + "2>/dev/null | head -100; exit $status"
+        )
+        return _result_text(await env.exec(command, timeout=600))
+
+    return android_decompile
 
 
 @register_tool(name="http_request", groups=["web"])
@@ -471,3 +543,51 @@ def make_stego_scan(*, env: CTFEnvironment, **_) -> object:
         return _result_text(await env.exec(command, timeout=180))
 
     return stego_scan
+
+
+@register_tool(name="memory_analyze", groups=["forensics"])
+def make_memory_analyze(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def memory_analyze(
+        image: str, plugin: str = "windows.info", output_dir: str = "volatility_out"
+    ) -> str:
+        """Run one named Volatility 3 plugin against a memory image.
+
+        Start with an OS information plugin, then use process, network, command
+        line, file, registry, or malware plugins supported by the image profile.
+        Extracted artifacts are written under ``output_dir``.
+        """
+        if not re.fullmatch(r"[A-Za-z0-9_.]+", plugin):
+            raise ValueError("plugin must be a Volatility dotted plugin name")
+        parts = ["vol", "-q", "-f", image, "-o", output_dir, plugin]
+        command = (
+            "command -v vol >/dev/null || exit 127; mkdir -p -- "
+            + shlex.quote(output_dir)
+            + "; "
+            + " ".join(shlex.quote(part) for part in parts)
+        )
+        return _result_text(await env.exec(command, timeout=600))
+
+    return memory_analyze
+
+
+@register_tool(name="disk_image_triage", groups=["forensics"])
+def make_disk_image_triage(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def disk_image_triage(image: str, offset_sectors: int = 0) -> str:
+        """Inspect a disk image partition table and list filesystem entries.
+
+        ``offset_sectors`` selects a partition start reported by mmls. A zero
+        offset performs partition discovery and a best-effort root listing.
+        """
+        if offset_sectors < 0:
+            raise ValueError("offset_sectors must be non-negative")
+        path = shlex.quote(image)
+        command = f"mmls {path}; echo '[filesystem-root]'; fls -r -o {offset_sectors} {path} | head -200"
+        return _result_text(await env.exec(command, timeout=300))
+
+    return disk_image_triage

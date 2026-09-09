@@ -5,9 +5,13 @@ from dataclasses import dataclass
 import pytest
 
 from midnight.tools.category import (
+    make_android_decompile,
+    make_disk_image_triage,
     make_fenjing_ssti,
+    make_memory_analyze,
     make_one_gadget,
     make_pyinstaller_extract,
+    make_run_exploit,
     make_stego_scan,
     make_xor_analyze,
 )
@@ -101,3 +105,61 @@ async def test_extract_and_stego_tools_quote_paths() -> None:
     stego = make_stego_scan(env=stego_env)
     await stego.ainvoke({"path": "image file.png", "extract_channel": "1b,rgb,lsb"})
     assert "--extract 1b,rgb,lsb 'image file.png'" in stego_env.calls[0][0]
+
+
+@pytest.mark.asyncio
+async def test_android_decompile_quotes_artifact_and_output() -> None:
+    env = _Env()
+    action = make_android_decompile(env=env)
+    await action.ainvoke(
+        {"artifact": "sample app.apk", "output_dir": "decoded sources", "resources": False}
+    )
+    command, timeout = env.calls[0]
+    assert "jadx --output-dir 'decoded sources' --no-res 'sample app.apk'" in command
+    assert timeout == 600
+
+
+@pytest.mark.asyncio
+async def test_memory_analyze_accepts_only_named_plugins() -> None:
+    env = _Env()
+    action = make_memory_analyze(env=env)
+    await action.ainvoke(
+        {"image": "memory dump.raw", "plugin": "windows.pslist", "output_dir": "vol out"}
+    )
+    command, timeout = env.calls[0]
+    assert "vol -q -f 'memory dump.raw' -o 'vol out' windows.pslist" in command
+    assert timeout == 600
+
+    with pytest.raises(ValueError, match="plugin"):
+        await action.ainvoke({"image": "memory.raw", "plugin": "windows.pslist;id"})
+    assert len(env.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_disk_triage_validates_offset_and_quotes_image() -> None:
+    env = _Env()
+    action = make_disk_image_triage(env=env)
+    await action.ainvoke({"image": "disk image.dd", "offset_sectors": 2048})
+    command, timeout = env.calls[0]
+    assert "mmls 'disk image.dd'" in command
+    assert "fls -r -o 2048 'disk image.dd'" in command
+    assert timeout == 300
+
+    with pytest.raises(ValueError, match="non-negative"):
+        await action.ainvoke({"image": "disk.dd", "offset_sectors": -1})
+
+
+@pytest.mark.asyncio
+async def test_run_exploit_binds_target_and_checks_script() -> None:
+    env = _Env()
+    action = make_run_exploit(
+        env=env, state={"challenge": {"remote": "target-relay:31337"}}
+    )
+    await action.ainvoke({"script": "solve pwn.py", "mode": "target", "timeout_seconds": 90})
+    command, timeout = env.calls[0]
+    assert "python3 -m py_compile 'solve pwn.py'" in command
+    assert "REMOTE=1 HOST=target-relay PORT=31337" in command
+    assert timeout == 105
+
+    with pytest.raises(ValueError, match="between 1 and 600"):
+        await action.ainvoke({"timeout_seconds": 999})

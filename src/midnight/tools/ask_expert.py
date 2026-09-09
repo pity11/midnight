@@ -40,7 +40,7 @@ def check_escalation(
     return EscalationGuard(True)
 
 
-@register_tool(name="ask_expert", groups=["pwn", "reverse", "web", "crypto", "misc"])
+@register_tool(name="ask_expert", groups=["pwn", "reverse", "web", "crypto", "misc", "forensics"])
 def make_ask_expert(
     *,
     env: CTFEnvironment,

@@ -28,6 +28,12 @@ pwn:
     command: one_gadget
     purpose: Find libc one-gadget offsets together with satisfiability constraints
     pin_note: Newer releases require a newer Ruby than Ubuntu 22.04 provides
+  - name: angr
+    version: 9.2.213
+    source: https://github.com/angr/angr
+    license: BSD-2-Clause
+    command: python3
+    purpose: Symbolic execution and constraint solving for binaries
 
 crypto:
   - name: xortool
@@ -44,8 +50,35 @@ reverse:
     license: GPL-3.0-only
     command: pyinstxtractor-ng
     purpose: Extract PyInstaller-built PE/ELF bundles and their Python bytecode
+  - name: JADX
+    version: 1.5.6
+    source: https://github.com/skylot/jadx
+    license: Apache-2.0
+    command: jadx
+    artifact_sha256: 545ea2be9c242511bc145755cf4bda2485ade42966e096f8b4d3da2a230e8974
+    purpose: Decompile APK and DEX bytecode into Java-like source
+  - name: radare2
+    version: 6.2.2
+    source: https://github.com/radareorg/radare2
+    license: LGPL-3.0-only
+    command: r2
+    artifact_sha256: 09234e4139bf8dfcbb7fc1fdb2519859ad516e63c19d3c27d92aaecdf463b1ad
+    purpose: Stateful static analysis, disassembly, cross-references and pseudocode
+  - name: angr
+    version: 9.2.213
+    source: https://github.com/angr/angr
+    license: BSD-2-Clause
+    command: python3
+    purpose: Symbolic execution and constraint solving for binaries
 
 forensics:
+  - name: Volatility 3
+    version: 2.28.0
+    source: https://github.com/volatilityfoundation/volatility3
+    license: VSL-1.0
+    command: vol
+    purpose: Extract process, registry, network and kernel evidence from memory images
+
   - name: zsteg
     version: 0.2.14
     source: https://github.com/zed-0xff/zsteg
@@ -70,11 +103,3 @@ deferred:
     source: https://github.com/synacktiv/php_filter_chain_generator
     license: unknown
     reason: Do not vendor until the upstream repository exposes an explicit redistribution license
-  - name: angr
-    source: https://github.com/angr/angr
-    license: BSD-2-Clause
-    reason: Keep symbolic execution in a dedicated large reverse image and add it only when benchmark coverage justifies the cost
-  - name: Volatility 3
-    source: https://github.com/volatilityfoundation/volatility3
-    license: VSL-1.0
-    reason: Memory challenges also require matching symbol packs; evaluate it as a versioned forensic image rather than bloating every misc run

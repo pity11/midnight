@@ -12,6 +12,7 @@ import hashlib
 import os
 import platform as _platform
 import re
+import shlex
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit, urlunsplit
 
@@ -296,6 +297,36 @@ class ContainerManager:
             raise RuntimeError(f"could not resolve image digest for {image}: {result.stderr.strip()}")
         return result.stdout.strip()
 
+    def _sandbox_preflight_script(self, ctype: ChallengeType) -> str:
+        profile = self.config.sandbox_profiles.get(ctype)
+        if profile is None:
+            profile = self.config.sandbox_profiles.get("unknown")
+        if profile is None:
+            raise RuntimeError(f"sandbox profile missing for category: {ctype}")
+        commands = " ".join(shlex.quote(item) for item in profile.required_commands)
+        modules = " ".join(shlex.quote(item) for item in profile.required_python_modules)
+        return (
+            "missing=''; "
+            f"for item in {commands}; do command -v \"$item\" >/dev/null 2>&1 || "
+            "missing=\"$missing command:$item\"; done; "
+            f"for item in {modules}; do python3 -c \"import $item\" >/dev/null 2>&1 || "
+            "missing=\"$missing python:$item\"; done; "
+            "test -z \"$missing\" || { echo \"$missing\" >&2; exit 42; }"
+        )
+
+    async def validate_image(self, ctype: ChallengeType) -> None:
+        """Validate a built image offline before an evaluation manifest is signed."""
+        spec = image_for(ctype, config=self.config)
+        image = await self.ensure_image(ctype)
+        args = ["docker", "run", "--rm", "--network", "none"]
+        if _host_needs_platform(spec.platform):
+            args += ["--platform", spec.platform]
+        args += [image, "bash", "-lc", self._sandbox_preflight_script(ctype)]
+        result = await _run(*args, timeout=120)
+        if not result.ok:
+            detail = (result.stderr or result.stdout).strip()
+            raise RuntimeError(f"sandbox image preflight failed for {ctype}: {detail}")
+
     async def create(
         self,
         ctype: ChallengeType,
@@ -356,7 +387,27 @@ class ContainerManager:
         self._containers.add(cid)
         # ensure workdir exists
         await _run("docker", "exec", cid, "mkdir", "-p", s.workdir)
+        try:
+            await self.validate_sandbox(ctype, cid)
+        except Exception:
+            await self.stop(cid)
+            raise
         return cid
+
+    async def validate_sandbox(self, ctype: ChallengeType, container_id: str) -> None:
+        """Fail fast when a category image does not satisfy its tool contract."""
+        result = await _run(
+            "docker",
+            "exec",
+            container_id,
+            "bash",
+            "-lc",
+            self._sandbox_preflight_script(ctype),
+            timeout=60,
+        )
+        if not result.ok:
+            detail = (result.stderr or result.stdout).strip()
+            raise RuntimeError(f"sandbox preflight failed for {ctype}: {detail}")
 
     async def stop(self, container_id: str) -> None:
         await _run("docker", "rm", "-f", container_id)

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 import midnight.env.container_manager as container_module
+from midnight.config import AppConfig, SandboxProfile
 from midnight.env.container_manager import (
     ContainerManager,
     ExecResult,
@@ -127,3 +130,78 @@ async def test_target_relay_has_fixed_destination_and_dual_network(monkeypatch):
     docker_run = next(call for call in calls if call[1] == "run")
     assert "TCP:challenge.local:31337" in docker_run
     assert any(call[1:3] == ("network", "connect") for call in calls)
+
+
+@pytest.mark.asyncio
+async def test_sandbox_preflight_checks_commands_and_python_modules(monkeypatch):
+    calls: list[tuple[str, ...]] = []
+
+    async def fake_run(*args: str, timeout=None):
+        calls.append(args)
+        return ExecResult(0, "", "")
+
+    monkeypatch.setattr(container_module, "_run", fake_run)
+    config = AppConfig.model_construct(
+        sandbox_profiles={
+            "pwn": SandboxProfile(
+                required_commands=["gdb", "checksec"],
+                required_python_modules=["pwn"],
+            )
+        }
+    )
+    await ContainerManager(config=config).validate_sandbox("pwn", "container-1")
+
+    docker_exec = calls[-1]
+    assert docker_exec[:4] == ("docker", "exec", "container-1", "bash")
+    assert "command -v" in docker_exec[-1]
+    assert "python3 -c" in docker_exec[-1]
+
+
+@pytest.mark.asyncio
+async def test_sandbox_preflight_reports_missing_capability(monkeypatch):
+    async def fake_run(*args: str, timeout=None):
+        return ExecResult(42, "", " command:gdb python:pwn\n")
+
+    monkeypatch.setattr(container_module, "_run", fake_run)
+    config = AppConfig.model_construct(
+        sandbox_profiles={"pwn": SandboxProfile(required_commands=["gdb"])}
+    )
+    with pytest.raises(RuntimeError, match=r"sandbox preflight failed.*command:gdb"):
+        await ContainerManager(config=config).validate_sandbox("pwn", "container-1")
+
+
+@pytest.mark.asyncio
+async def test_image_preflight_runs_offline(monkeypatch):
+    calls: list[tuple[str, ...]] = []
+
+    async def fake_ensure(self, ctype):
+        return "midnight/pwn:latest"
+
+    async def fake_run(*args: str, timeout=None):
+        calls.append(args)
+        return ExecResult(0, "", "")
+
+    monkeypatch.setattr(ContainerManager, "ensure_image", fake_ensure)
+    monkeypatch.setattr(container_module, "_run", fake_run)
+    config = AppConfig.model_construct(
+        images={
+            "pwn": SimpleNamespace(
+                image="midnight/pwn:latest",
+                platform="linux/amd64",
+            )
+        },
+        sandbox_profiles={"pwn": SandboxProfile(required_commands=["gdb"])},
+    )
+    await ContainerManager(config=config).validate_image("pwn")
+
+    invocation = calls[-1]
+    assert invocation[:5] == ("docker", "run", "--rm", "--network", "none")
+    assert invocation[5:7] in ((), ("--platform", "linux/amd64"))
+    assert "midnight/pwn:latest" in invocation
+
+
+def test_sandbox_profile_rejects_shell_fragments():
+    with pytest.raises(ValueError, match="plain executable"):
+        SandboxProfile(required_commands=["gdb;id"])
+    with pytest.raises(ValueError, match="importable Python"):
+        SandboxProfile(required_python_modules=["pwn;import os"])

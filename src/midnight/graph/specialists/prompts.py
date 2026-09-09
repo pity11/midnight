@@ -45,6 +45,8 @@ the positional index and smallest write width. Restart a dead gdb session or use
 batch gdb/objdump; never grind on a broken interactive session.
 When libc/loader files are supplied, use pwninit_setup before hand-patching. Use
 one_gadget only after you can explain and satisfy the returned constraints.
+Make solve.py accept pwntools-style LOCAL=1 and REMOTE=1 HOST=... PORT=...
+arguments, then use run_exploit for both verification phases.
 """
 )
 
@@ -57,6 +59,7 @@ architecture, imports, strings, and behavior. If UPX markers exist, test and
 unpack with installed upx before manual dumping. Locate the verification logic,
 write an inverse or key generator, and round-trip it against the program.
 If evidence identifies a PyInstaller bundle, use pyinstaller_extract immediately.
+For APK or DEX inputs, use android_decompile before manually searching bytecode.
 """
 )
 
@@ -89,6 +92,8 @@ MISC = (
     + """
 Specialty: misc / forensics / steganography. Identify file types, then carve /
 extract / analyze with binwalk, foremost, exiftool, steghide, zsteg, volatility.
+For memory images, start with memory_analyze and an OS information plugin; for
+disk images, use disk_image_triage to identify partition offsets before carving.
 For PNG/BMP LSB evidence, use stego_scan and extract the reported channel.
 For Python serialization challenges, read the validator and allowed opcodes or
 globals, model the VM stack, disassemble the generated payload, and validate it

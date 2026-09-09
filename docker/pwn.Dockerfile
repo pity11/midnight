@@ -13,7 +13,8 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         bash coreutils file xxd binutils \
         python3 python3-pip python3-venv \
         python3-capstone \
-        gcc gdb gdbserver make patchelf ruby ruby-dev \
+        gcc g++ gcc-multilib g++-multilib gdb gdbserver make patchelf ruby ruby-dev \
+        libc6-i386 libc6-dev-i386 ltrace strace \
         netcat-openbsd socat curl \
         libc6-dbg libc6-dev \
         ca-certificates git \
@@ -21,8 +22,8 @@ RUN if [ -n "$APT_MIRROR" ]; then \
 
 # Pwntools and ROPGadget are not packaged by Ubuntu 22.04. Keep this isolated
 # from the distro layer and tolerate short-lived package-index interruptions.
-RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 60 \
-        pwntools ROPGadget
+RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 120 \
+        pwntools ROPGadget ropper angr unicorn
 
 # Repetitive libc setup and one-gadget discovery should be deterministic tool
 # calls rather than consume model turns. pwninit's release binary is checksum

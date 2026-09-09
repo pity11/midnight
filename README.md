@@ -13,6 +13,7 @@ The benchmark policy and capability-claim criteria are defined in
 
 - Specialist workflows for pwn, reverse engineering, web, cryptography, and miscellaneous tasks.
 - One isolated Docker container per challenge.
+- Fail-closed capability contracts for every category image.
 - Concurrent challenge scheduling with per-task timeouts.
 - Stateful wrappers for interactive tools such as GDB and network sessions.
 - Bounded retries and rejected-candidate tracking.
@@ -38,6 +39,7 @@ reverse-engineering images.
 uv sync --extra dev
 cp .env.example .env
 MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --check-config
+MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --check-sandboxes
 MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --list-only
 MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --id sanity_misc --run-id smoke-1
 ```
@@ -65,6 +67,7 @@ tests/           Offline tests and local challenge fixtures
 - [x] Single-challenge solve loop
 - [x] Category router and specialist graphs
 - [x] Isolated execution environments
+- [x] Offline sandbox capability preflight
 - [x] Interactive tool sessions
 - [x] Concurrent challenge scheduling
 - [x] Bounded retry and rejected-candidate handling
@@ -141,6 +144,17 @@ Use an HTTP mirror during the bootstrap layer because the minimal Ubuntu base
 does not contain the CA certificate bundle until that layer installs it. When
 both settings are present, OS package repositories bypass the proxy while
 other build downloads continue through it.
+
+Before a competition or formal benchmark, validate every category image without
+running a challenge:
+
+```bash
+uv run midnight --check-sandboxes
+```
+
+This command builds stale images, starts each image with networking disabled,
+and verifies the required executables and Python modules declared in
+`config/sandbox_profiles.yaml`. A missing tool fails the preflight.
 
 After independent attempts finish, aggregate their reports in attempt order:
 

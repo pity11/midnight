@@ -17,7 +17,7 @@ from midnight.tools.summarizer import summarize
 from midnight.utils.flag import extract_flags
 
 
-@register_tool(name="run_shell", groups=["pwn", "reverse", "web", "crypto", "misc"])
+@register_tool(name="run_shell", groups=["pwn", "reverse", "web", "crypto", "misc", "forensics"])
 def make_run_shell(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
 
@@ -53,7 +53,7 @@ def make_run_shell(*, env: CTFEnvironment, **_) -> object:
     return run_shell
 
 
-@register_tool(name="read_file", groups=["pwn", "reverse", "web", "crypto", "misc"])
+@register_tool(name="read_file", groups=["pwn", "reverse", "web", "crypto", "misc", "forensics"])
 def make_read_file(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
 
@@ -66,7 +66,7 @@ def make_read_file(*, env: CTFEnvironment, **_) -> object:
     return read_file
 
 
-@register_tool(name="write_file", groups=["pwn", "reverse", "web", "crypto", "misc"])
+@register_tool(name="write_file", groups=["pwn", "reverse", "web", "crypto", "misc", "forensics"])
 def make_write_file(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
 
@@ -83,7 +83,7 @@ def make_write_file(*, env: CTFEnvironment, **_) -> object:
     return write_file
 
 
-@register_tool(name="list_dir", groups=["pwn", "reverse", "web", "crypto", "misc"])
+@register_tool(name="list_dir", groups=["pwn", "reverse", "web", "crypto", "misc", "forensics"])
 def make_list_dir(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
 
@@ -96,7 +96,7 @@ def make_list_dir(*, env: CTFEnvironment, **_) -> object:
     return list_dir
 
 
-@register_tool(name="summarize_output", groups=["pwn", "reverse", "web", "crypto", "misc"])
+@register_tool(name="summarize_output", groups=["pwn", "reverse", "web", "crypto", "misc", "forensics"])
 def make_summarize_output(**_) -> object:
     from langchain_core.tools import tool
 
@@ -108,7 +108,7 @@ def make_summarize_output(**_) -> object:
     return summarize_output
 
 
-@register_tool(name="submit_flag", groups=["pwn", "reverse", "web", "crypto", "misc"])
+@register_tool(name="submit_flag", groups=["pwn", "reverse", "web", "crypto", "misc", "forensics"])
 def make_submit_flag(
     *,
     record_flag: Callable[[str], None],

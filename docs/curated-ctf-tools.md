@@ -5,7 +5,8 @@ CTF work. The goal is to save model turns after the model has identified a
 technique, while preserving the model's responsibility for interpreting the
 evidence and verifying a flag.
 
-The first integrated pack is deliberately small:
+The integrated pack combines structured actions with a broader shell-accessible
+tool layer:
 
 | Category | Tool | Midnight action | Use when |
 | --- | --- | --- | --- |
@@ -14,7 +15,16 @@ The first integrated pack is deliberately small:
 | Pwn | one_gadget | `one_gadget` | A libc leak/control-flow primitive exists and gadget constraints can be satisfied |
 | Crypto | xortool | `xor_analyze` | Repeating-key XOR is suspected and frequency or known plaintext is available |
 | Reverse | pyinstxtractor-ng | `pyinstaller_extract` | An ELF/PE is a PyInstaller bundle |
+| Reverse | JADX | `android_decompile` | An APK or DEX needs source and resource recovery |
 | Forensics | zsteg | `stego_scan` | PNG/BMP LSB steganography is plausible |
+| Forensics | Volatility 3 | `memory_analyze` | A memory image needs process, network, registry, or kernel analysis |
+| Forensics | Sleuthkit | `disk_image_triage` | A disk image needs partition discovery and filesystem enumeration |
+
+Category images also expose common command-line tools used by strong public CTF
+agents: angr, Unicorn, Capstone, ROPgadget and ropper for Pwn/Reverse; nmap,
+sqlmap, nikto and whatweb for Web; Z3 and fpylll for Crypto; and binwalk,
+foremost, ExifTool, steghide, OCR, audio/video utilities and filesystem tooling
+for Misc/Forensics. Reverse includes radare2, UPX, JADX and apktool.
 
 The tools are installed during image construction and remain available when a
 benchmark run disables general internet access. Each action accepts typed
@@ -22,14 +32,12 @@ parameters and quotes paths/values before executing the upstream CLI. Direct
 shell access remains available for options that a wrapper does not expose.
 
 Build all specialist images as `linux/amd64`, matching `config/images.yaml`.
-For example, when Clash exposes port 7890 on the host:
+The supported entry point verifies the installed capabilities offline:
 
 ```sh
-docker buildx build --load --platform linux/amd64 \
-  --build-arg APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ubuntu \
-  --build-arg HTTP_PROXY=http://host.docker.internal:7890 \
-  --build-arg HTTPS_PROXY=http://host.docker.internal:7890 \
-  -t midnight/web:latest -f docker/web.Dockerfile .
+export MIDNIGHT_BUILD_PROXY=http://127.0.0.1:7890
+export MIDNIGHT_APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ubuntu
+uv run midnight --check-sandboxes
 ```
 
 `config/toolpacks.yaml` records source, version, license, command, and purpose.
@@ -38,10 +46,10 @@ overlap, architecture, or licensing. Third-party programs run as separate
 processes and keep their upstream licenses; the repository does not copy their
 source code.
 
-Larger candidates remain separate on purpose. RsaCtfTool may become a
-crypto-heavy image when RSA coverage justifies its factorization/Sage
-dependencies; angr belongs in a symbolic reverse image; Volatility 3 needs a
-versioned symbol workflow; TInjA adds multi-engine SSTI coverage after the
+RsaCtfTool and Sage remain candidates for a crypto-heavy layer because of their
+factorization and image-size cost. Ghidra remains optional because its current
+distribution and Java runtime add hundreds of megabytes on top of radare2,
+angr, JADX, GDB and objdump. TInjA can add multi-engine SSTI coverage after the
 Jinja2-focused path is measured. Tools without an explicit redistribution
 license are not built into published images.
 

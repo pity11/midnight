@@ -40,10 +40,9 @@ misc:
   network: "none"
   cap_add: []
 
-# forensics / unknown 兜底复用 misc 镜像
 forensics:
-  image: "midnight/misc:latest"
-  dockerfile: "docker/misc.Dockerfile"
+  image: "midnight/forensics:latest"
+  dockerfile: "docker/forensics.Dockerfile"
   platform: "linux/amd64"
   network: "none"
   cap_add: []

@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # A source checkout keeps assets at the repository root. Built wheels include
 # the same directories under ``midnight/_assets`` so installed CLI runs do not
@@ -59,6 +59,34 @@ class ImageSpec(BaseModel):
     cap_add: list[str] = Field(default_factory=list)
 
 
+class SandboxProfile(BaseModel):
+    """Executable and Python-module contract for one specialist sandbox."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    required_commands: list[str] = Field(default_factory=list)
+    required_python_modules: list[str] = Field(default_factory=list)
+    optional_commands: list[str] = Field(default_factory=list)
+
+    @field_validator("required_commands", "optional_commands")
+    @classmethod
+    def validate_commands(cls, values: list[str]) -> list[str]:
+        import re
+
+        if any(not re.fullmatch(r"[A-Za-z0-9_.+-]+", value) for value in values):
+            raise ValueError("sandbox commands must be plain executable names")
+        return values
+
+    @field_validator("required_python_modules")
+    @classmethod
+    def validate_modules(cls, values: list[str]) -> list[str]:
+        import re
+
+        if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", value) for value in values):
+            raise ValueError("sandbox modules must be importable Python names")
+        return values
+
+
 class Settings(BaseModel):
     max_concurrency: int = 3
     pwn_max_concurrency: int = 1
@@ -82,6 +110,7 @@ class AppConfig(BaseModel):
     providers: dict[str, ProviderSpec]
     models: dict[str, ModelSpec]
     images: dict[str, ImageSpec]
+    sandbox_profiles: dict[str, SandboxProfile] = Field(default_factory=dict)
     tools: dict[str, list[str]]
     settings: Settings
 
@@ -141,6 +170,7 @@ def get_config() -> AppConfig:
     models_raw = _load_yaml(models_file) or {}
     providers_raw = _load_yaml("providers.yaml") or {}
     images_raw = _load_yaml("images.yaml") or {}
+    sandbox_profiles_raw = _load_yaml("sandbox_profiles.yaml") or {}
     tools_raw = _load_yaml("tools.yaml") or {}
     settings_raw = _load_yaml("settings.yaml") or {}
 
@@ -153,6 +183,10 @@ def get_config() -> AppConfig:
         },
         models={k: ModelSpec(**v) for k, v in models_raw.items()},
         images={k: ImageSpec(**v) for k, v in images_raw.items()},
+        sandbox_profiles={
+            key: SandboxProfile(**value)
+            for key, value in sandbox_profiles_raw.items()
+        },
         tools=_flatten_tools(tools_raw),
         settings=_apply_env_overrides(Settings(**settings_raw)),
     )

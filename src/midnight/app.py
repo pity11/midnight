@@ -104,6 +104,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="validate configuration and exit",
     )
     p.add_argument(
+        "--check-sandboxes",
+        action="store_true",
+        help="build and validate every specialist image offline, then exit",
+    )
+    p.add_argument(
         "--events-path",
         default="logs/events.jsonl",
         help="append-only JSONL event journal",
@@ -168,6 +173,18 @@ async def _amain(args: argparse.Namespace) -> int:
 
     if args.check_config:
         log.info("configuration OK")
+        return 0
+
+    if args.check_sandboxes:
+        from typing import cast
+
+        from midnight.env.container_manager import ContainerManager
+        from midnight.state import ChallengeType
+
+        manager = ContainerManager(run_id="sandbox-preflight")
+        for category in cfg.images:
+            await manager.validate_image(cast(ChallengeType, category))
+            log.info("sandbox %s satisfies its capability contract", category)
         return 0
 
     selected_platforms = sum(bool(value) for value in (args.platform_config, args.bundles_dir, args.tsecbench))
@@ -287,6 +304,8 @@ async def _amain(args: argparse.Namespace) -> int:
         image_digests: dict[str, str] = {
             category: await image_manager.image_digest(category) for category in sorted(categories)
         }
+        for category in sorted(categories):
+            await image_manager.validate_image(category)
         if service_manager is not None:
             image_digests.update(await service_manager.ensure_images())
         if any(manifest.internet_policy == "target_only" for manifest in bundle_manifests):

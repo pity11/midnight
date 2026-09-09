@@ -10,10 +10,10 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     && sed -i '/backports/d' /etc/apt/sources.list \
     && apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=10 install -y --fix-missing --no-install-recommends \
-        bash coreutils file \
+        bash coreutils file openssl \
         python3 python3-pip python3-venv \
-        python3-pycryptodome python3-sympy python3-gmpy2 \
-        libgmp-dev libmpfr-dev libmpc-dev \
+        python3-pycryptodome python3-sympy python3-gmpy2 python3-z3 python3-fpylll \
+        libgmp-dev libmpfr-dev libmpc-dev libfplll-dev \
         ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 

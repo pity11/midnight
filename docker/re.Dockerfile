@@ -13,9 +13,33 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         bash coreutils file xxd binutils \
         python3 python3-pip python3-venv \
         python3-capstone python3-pyelftools \
-        gdb gcc libc6-dev binwalk curl \
+        gdb gcc libc6-dev binwalk curl ltrace strace \
+        default-jre-headless apktool \
         ca-certificates git unzip xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# Official release package: self-contained apart from glibc.
+ARG RADARE2_VERSION=6.2.2
+ARG RADARE2_SHA256=09234e4139bf8dfcbb7fc1fdb2519859ad516e63c19d3c27d92aaecdf463b1ad
+RUN curl -fsSL --retry 5 \
+        "https://github.com/radareorg/radare2/releases/download/${RADARE2_VERSION}/radare2_${RADARE2_VERSION}_amd64.deb" \
+        -o /tmp/radare2.deb \
+    && echo "${RADARE2_SHA256}  /tmp/radare2.deb" | sha256sum -c - \
+    && dpkg -i /tmp/radare2.deb \
+    && rm /tmp/radare2.deb
+
+# JADX is not packaged by Ubuntu 22.04. Install the official cross-platform CLI
+# bundle with a pinned checksum so Android reverse tasks remain reproducible.
+ARG JADX_VERSION=1.5.6
+ARG JADX_SHA256=545ea2be9c242511bc145755cf4bda2485ade42966e096f8b4d3da2a230e8974
+RUN curl -fsSL --retry 5 \
+        "https://github.com/skylot/jadx/releases/download/v${JADX_VERSION}/jadx-${JADX_VERSION}.zip" \
+        -o /tmp/jadx.zip \
+    && echo "${JADX_SHA256}  /tmp/jadx.zip" | sha256sum -c - \
+    && mkdir -p /opt/jadx \
+    && unzip -q /tmp/jadx.zip -d /opt/jadx \
+    && ln -s /opt/jadx/bin/jadx /usr/local/bin/jadx \
+    && rm /tmp/jadx.zip
 
 # A standard packer should not consume a reverse-engineering budget. Pin and
 # verify the official static UPX binary so offline challenge containers have it.
@@ -32,16 +56,7 @@ RUN curl -fsSL --retry 5 \
 # Extract Python bytecode from PyInstaller-built ELF and PE challenges without
 # requiring the interpreter version used to build the original executable.
 RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 60 \
-        pyinstxtractor-ng==2026.7.3
-
-# radare2 is not in Ubuntu repos and building from source is heavy/fragile in
-# CI. It is OPTIONAL: r2_interact degrades gracefully when r2 is absent. To add
-# it, uncomment below (needs ~5 min and the acr build deps):
-# RUN apt-get update && apt-get install -y --no-install-recommends \
-#         make pkg-config patch gawk \
-#     && git clone --depth 1 https://github.com/radareorg/radare2 /opt/radare2 \
-#     && /opt/radare2/sys/install.sh --install \
-#     && rm -rf /opt/radare2/.git /var/lib/apt/lists/*
+        pyinstxtractor-ng==2026.7.3 angr unicorn
 
 # NOTE: ghidra headless is large; install on demand if a challenge needs it.
 

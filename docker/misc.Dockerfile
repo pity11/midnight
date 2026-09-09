@@ -14,6 +14,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         python3 python3-pip python3-venv \
         python3-pil ruby \
         binwalk foremost exiftool steghide \
+        imagemagick tesseract-ocr ffmpeg sox \
         zlib1g-dev \
         ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
