@@ -46,10 +46,14 @@ class StubReActModel(BaseChatModel):
                 return cand if cand in valid else "misc"
 
             async def ainvoke(self, prompt: str, **_kw):
+                if "status" in schema.model_fields:
+                    return schema(status="PONG")
                 t = self._pick(prompt)
                 return schema(challenge_type=t, reason=f"stub classifier (hint={t})")
 
             def invoke(self, prompt: str, **_kw):
+                if "status" in schema.model_fields:
+                    return schema(status="PONG")
                 t = self._pick(prompt)
                 return schema(challenge_type=t, reason=f"stub classifier (hint={t})")
 

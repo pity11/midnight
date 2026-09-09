@@ -40,6 +40,7 @@ reverse-engineering images.
 uv sync --extra dev
 cp .env.example .env
 MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --check-config
+uv run midnight --check-model
 MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --check-sandboxes
 MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --list-only
 MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --id sanity_misc --run-id smoke-1
@@ -52,6 +53,9 @@ JSON tool-action protocol. Put `CUC_API_KEY` in a mode-600 `.env`; blank
 `config/providers.yaml`. Set `MIDNIGHT_ENV_FILE` to reuse an existing protected
 environment file without copying its credentials.
 Keep real credentials in `.env`; the file is excluded from version control.
+
+The short operational procedure used before a live competition is documented in
+[docs/competition-mvp.md](docs/competition-mvp.md).
 
 ## Project layout
 
