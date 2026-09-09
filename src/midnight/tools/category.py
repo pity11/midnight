@@ -269,7 +269,7 @@ def make_one_gadget(*, env: CTFEnvironment, **_) -> object:
     return one_gadget
 
 
-@register_tool(name="run_exploit", groups=["pwn"])
+@register_tool(name="run_exploit", groups=["pwn", "reverse", "web", "crypto", "misc", "forensics"])
 def make_run_exploit(*, env: CTFEnvironment, state=None, observe_target_output=None, **_) -> object:
     from langchain_core.tools import tool
 
@@ -279,11 +279,12 @@ def make_run_exploit(*, env: CTFEnvironment, state=None, observe_target_output=N
     async def run_exploit(
         script: str = "solve.py", mode: str = "local", timeout_seconds: int = 120
     ) -> str:
-        """Syntax-check and run a pwntools solve script locally or on the target.
+        """Syntax-check and run a Python solve script locally or on the target.
 
-        The script should support pwntools-style ``LOCAL=1`` and
+        The script should accept pwntools-style ``LOCAL=1`` and
         ``REMOTE=1 HOST=<host> PORT=<port>`` arguments. Target mode is bound to
-        the evaluator-provided endpoint; the model cannot select another host.
+        the evaluator-provided endpoint and records output provenance. Scripts
+        may use pwntools, sockets, or HTTP clients.
         """
         mode = {"remote": "target", "local_process": "local"}.get(
             mode.strip().lower(), mode.strip().lower()

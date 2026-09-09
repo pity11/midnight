@@ -9,6 +9,7 @@ common: &common
   - write_file
   - list_dir
   - summarize_output
+  - run_exploit        # target-bound solve.py execution with provenance capture
   - lookup_playbook     # evidence-triggered procedural knowledge; no challenge answers
   - record_evidence     # append-only structured observations/hypotheses/artifacts
   - read_evidence       # durable context across retries and future solver lanes
@@ -24,7 +25,6 @@ pwn:
   - rop_gadget
   - pwninit_setup
   - one_gadget
-  - run_exploit
   - fmtstr_probe
   - fmtstr_write_scan
 

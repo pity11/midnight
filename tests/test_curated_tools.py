@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from midnight.config import get_config
 from midnight.tools.advanced import (
     make_archive_password,
     make_hayabusa_timeline,
@@ -51,6 +52,12 @@ class _Env:
     async def exec(self, command: str, timeout: int = 120) -> _Result:
         self.calls.append((command, timeout))
         return _Result()
+
+
+def test_run_exploit_is_shared_across_specialists() -> None:
+    config = get_config()
+    for expert in ("pwn", "reverse", "web", "crypto", "misc", "forensics"):
+        assert "run_exploit" in config.tools[expert]
 
 
 @pytest.mark.asyncio

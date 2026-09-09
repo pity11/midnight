@@ -19,6 +19,10 @@ print separate Reflection/Plan/Thought prose. After initial triage reveals a
 likely primitive or scheme, call lookup_playbook once with those observed facts
 and apply the matching procedure.
 
+When a target is supplied, make solve.py accept REMOTE=1 HOST=... PORT=..., then
+execute it with run_exploit(mode='target'). Ordinary run_shell output is not
+target provenance and cannot authorize a flag submission.
+
 Hard rules:
 - NEVER invent or hallucinate command output. Only act on real tool results.
 - A flag is ONLY valid if it appears verbatim in real tool output. Do not guess flags.
