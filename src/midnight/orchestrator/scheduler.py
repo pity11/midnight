@@ -54,6 +54,7 @@ class Result:
     tool_errors: int = 0
     flags_solved: int = 0
     flags_available: int = 1
+    protocol_recoveries: int = 0
 
 
 def _transcript_metrics(messages: list) -> dict[str, int]:
@@ -62,8 +63,13 @@ def _transcript_metrics(messages: list) -> dict[str, int]:
     output_tokens = 0
     tool_calls = 0
     tool_errors = 0
+    protocol_recoveries = 0
     call_counts: dict[str, int] = {}
     for message in messages:
+        if (getattr(message, "additional_kwargs", None) or {}).get(
+            "midnight_protocol_error"
+        ):
+            protocol_recoveries += 1
         usage = getattr(message, "usage_metadata", None) or {}
         input_tokens += int(usage.get("input_tokens", 0) or 0)
         output_tokens += int(usage.get("output_tokens", 0) or 0)
@@ -84,6 +90,7 @@ def _transcript_metrics(messages: list) -> dict[str, int]:
         "tool_calls": tool_calls,
         "repeated_tool_calls": sum(max(count - 1, 0) for count in call_counts.values()),
         "tool_errors": tool_errors,
+        "protocol_recoveries": protocol_recoveries,
     }
 
 

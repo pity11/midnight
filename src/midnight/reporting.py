@@ -38,6 +38,7 @@ class ChallengeSummary:
     tool_errors: int = 0
     flags_solved: int = 0
     flags_available: int = 1
+    protocol_recoveries: int = 0
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,7 @@ class RunReport:
     run_manifest_id: str | None = None
     flags_solved: int = 0
     flags_available: int = 0
+    protocol_recoveries: int = 0
 
     @classmethod
     def from_results(
@@ -92,6 +94,7 @@ class RunReport:
                 tool_errors=result.tool_errors,
                 flags_solved=result.flags_solved,
                 flags_available=result.flags_available,
+                protocol_recoveries=result.protocol_recoveries,
             )
             for result in materialized
         ]
@@ -123,6 +126,7 @@ class RunReport:
             run_manifest_id=run_manifest_id,
             flags_solved=sum(result.flags_solved for result in materialized),
             flags_available=sum(result.flags_available for result in materialized),
+            protocol_recoveries=sum(result.protocol_recoveries for result in materialized),
         )
 
     def write(self, path: str | Path) -> Path:

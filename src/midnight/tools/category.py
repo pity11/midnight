@@ -251,6 +251,9 @@ def make_run_exploit(*, env: CTFEnvironment, state=None, **_) -> object:
         ``REMOTE=1 HOST=<host> PORT=<port>`` arguments. Target mode is bound to
         the evaluator-provided endpoint; the model cannot select another host.
         """
+        mode = {"remote": "target", "local_process": "local"}.get(
+            mode.strip().lower(), mode.strip().lower()
+        )
         if mode not in {"local", "target"}:
             raise ValueError("mode must be local or target")
         if timeout_seconds < 1 or timeout_seconds > 600:
@@ -297,6 +300,9 @@ def make_fmtstr_probe(*, env: CTFEnvironment, state=None, **_) -> object:
         pointers to determine the controlled argument index and address classes.
         Target mode is bound to the evaluator-provided endpoint.
         """
+        mode = {"remote": "target", "local_process": "local"}.get(
+            mode.strip().lower(), mode.strip().lower()
+        )
         if mode not in {"local", "target"}:
             raise ValueError("mode must be local or target")
         if start_index < 1 or end_index < start_index or end_index > 100:

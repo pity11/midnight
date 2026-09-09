@@ -244,6 +244,15 @@ class JsonProtocolChatModel(BaseChatModel):
             }
         return parsed.model_copy(update=update)
 
+    @staticmethod
+    def _recovery_message(exc: RuntimeError) -> AIMessage:
+        """Turn a bounded protocol miss into a safe, recoverable agent turn."""
+        code = str(exc).split(":", 1)[0][:80]
+        return AIMessage(
+            content=f"[MODEL_PROTOCOL_RECOVERY:{code}] No executable action was accepted.",
+            additional_kwargs={"midnight_protocol_error": code},
+        )
+
     def _tool_messages(self, messages: list[BaseMessage]) -> list[BaseMessage]:
         # Tool-call message fields themselves are part of the native OpenAI tool
         # protocol. Flatten prior actions/results back into ordinary text so the
@@ -299,16 +308,10 @@ class JsonProtocolChatModel(BaseChatModel):
                 ])
             except RuntimeError as exc:
                 if repair_attempt == 1:
-                    if str(exc).startswith("MODEL_ACTION_JSON_INVALID"):
-                        content = response.content
-                        if isinstance(content, str) and content.strip():
-                            fallback = AIMessage(content=content)
-                            return ChatResult(generations=[
-                                ChatGeneration(
-                                    message=self._attach_metadata(fallback, *responses)
-                                )
-                            ])
-                    raise
+                    fallback = self._recovery_message(exc)
+                    return ChatResult(generations=[
+                        ChatGeneration(message=self._attach_metadata(fallback, *responses))
+                    ])
                 names = ", ".join(
                     item["function"]["name"] for item in self.bound_tools
                 )
@@ -339,16 +342,10 @@ class JsonProtocolChatModel(BaseChatModel):
                 ])
             except RuntimeError as exc:
                 if repair_attempt == 1:
-                    if str(exc).startswith("MODEL_ACTION_JSON_INVALID"):
-                        content = response.content
-                        if isinstance(content, str) and content.strip():
-                            fallback = AIMessage(content=content)
-                            return ChatResult(generations=[
-                                ChatGeneration(
-                                    message=self._attach_metadata(fallback, *responses)
-                                )
-                            ])
-                    raise
+                    fallback = self._recovery_message(exc)
+                    return ChatResult(generations=[
+                        ChatGeneration(message=self._attach_metadata(fallback, *responses))
+                    ])
                 names = ", ".join(
                     item["function"]["name"] for item in self.bound_tools
                 )

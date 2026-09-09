@@ -108,6 +108,7 @@ def test_transcript_metrics_count_usage_repeats_and_errors():
         SimpleNamespace(
             type="ai",
             usage_metadata={"input_tokens": 20, "output_tokens": 5},
+            additional_kwargs={"midnight_protocol_error": "MODEL_EMPTY_CONTENT"},
             tool_calls=[
                 {"name": "run_shell", "args": {"command": "file chall"}},
                 {"name": "run_shell", "args": {"command": "file chall"}},
@@ -117,6 +118,7 @@ def test_transcript_metrics_count_usage_repeats_and_errors():
         SimpleNamespace(
             type="tool",
             usage_metadata={},
+            additional_kwargs={},
             tool_calls=[],
             content="failed\n[exit=1]",
         ),
@@ -128,6 +130,7 @@ def test_transcript_metrics_count_usage_repeats_and_errors():
         "tool_calls": 2,
         "repeated_tool_calls": 1,
         "tool_errors": 1,
+        "protocol_recoveries": 1,
     }
 
 

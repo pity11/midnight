@@ -21,10 +21,18 @@ def make_specialist(
     one construction path; differences come from tools/prompt/model.
     """
     from langchain.agents import create_agent
+    from langchain.agents.middleware import ToolErrorMiddleware
+
+    def tool_error_observation(exc: Exception, _request: Any) -> str:
+        detail = " ".join(str(exc).split())[:240]
+        return (
+            f"[error] Tool execution failed ({type(exc).__name__}): {detail}. "
+            "Correct the arguments or choose a different tool; preserve the current hypothesis."
+        )
 
     return create_agent(
         model=llm,
         tools=tools,
         system_prompt=system_prompt,
-        middleware=middleware or (),
+        middleware=[ToolErrorMiddleware(on_error=tool_error_observation), *(middleware or ())],
     )

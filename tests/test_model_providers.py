@@ -9,6 +9,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
 from pydantic import BaseModel, ConfigDict, Field
 
+from midnight.graph.specialists.base_specialist import make_specialist
 from midnight.models.json_protocol import JsonProtocolChatModel
 
 
@@ -195,7 +196,7 @@ def test_json_protocol_is_the_final_system_instruction():
     assert "exactly one JSON object" in delegate.seen[0][-1].content
 
 
-def test_json_protocol_rejects_unknown_tool_arguments_after_bounded_repairs():
+def test_json_protocol_recovers_from_unknown_tool_arguments_after_bounded_repairs():
     invalid = (
         '{"type":"tool_call","tool":"http_probe",'
         '"arguments":{"path":"/","unexpected":true}}'
@@ -203,17 +204,19 @@ def test_json_protocol_rejects_unknown_tool_arguments_after_bounded_repairs():
     delegate = ScriptedModel(replies=[invalid, invalid])
     model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
 
-    with pytest.raises(RuntimeError, match="MODEL_TOOL_ARGUMENTS_INVALID"):
-        model.invoke("probe")
+    result = model.invoke("probe")
+    assert "MODEL_PROTOCOL_RECOVERY:MODEL_TOOL_ARGUMENTS_INVALID" in result.content
+    assert result.additional_kwargs["midnight_protocol_error"] == "MODEL_TOOL_ARGUMENTS_INVALID"
 
 
-def test_json_protocol_falls_back_to_plain_completion_after_bounded_repairs():
+def test_json_protocol_recovers_without_exposing_invalid_plain_text():
     delegate = ScriptedModel(replies=["working", "final narrative"])
     model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
 
     result = model.invoke("probe")
 
-    assert result.content == "final narrative"
+    assert "MODEL_PROTOCOL_RECOVERY:MODEL_ACTION_JSON_INVALID" in result.content
+    assert "final narrative" not in result.content
     assert result.tool_calls == []
 
 
@@ -237,3 +240,24 @@ def test_cuc_factory_uses_registry_defaults_without_network(monkeypatch):
     assert model.delegate.model_name == "cuc/deepseek"
     assert str(model.delegate.openai_api_base) == "https://openai.cuc.edu.cn/v1"
     assert model.delegate.extra_body == {"max_tokens": 1024}
+
+
+@pytest.mark.asyncio
+async def test_specialist_returns_tool_exceptions_as_observations():
+    @tool
+    def fragile(mode: str) -> str:
+        """Run a fragile test tool."""
+        raise ValueError("mode must be local or target")
+
+    delegate = ScriptedModel(replies=[
+        '{"type":"tool_call","tool":"fragile","arguments":{"mode":"remote"}}',
+        '{"type":"complete","summary":"correct the mode next"}',
+    ])
+    model = JsonProtocolChatModel(delegate=delegate, provider_id="test")
+    agent = make_specialist(llm=model, tools=[fragile], system_prompt="test")
+
+    result = await agent.ainvoke({"messages": [HumanMessage("run it")]})
+
+    tool_messages = [message for message in result["messages"] if isinstance(message, ToolMessage)]
+    assert len(tool_messages) == 1
+    assert "Tool execution failed (ValueError)" in tool_messages[0].content
