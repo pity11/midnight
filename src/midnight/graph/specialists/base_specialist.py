@@ -12,7 +12,9 @@ if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
 
 
-def make_specialist(*, llm: BaseChatModel, tools: list[Any], system_prompt: str):
+def make_specialist(
+    *, llm: BaseChatModel, tools: list[Any], system_prompt: str, middleware: list[Any] | None = None
+):
     """Create a ReAct specialist subgraph.
 
     Thin wrapper over langchain.agents.create_agent so all experts share
@@ -20,4 +22,9 @@ def make_specialist(*, llm: BaseChatModel, tools: list[Any], system_prompt: str)
     """
     from langchain.agents import create_agent
 
-    return create_agent(model=llm, tools=tools, system_prompt=system_prompt)
+    return create_agent(
+        model=llm,
+        tools=tools,
+        system_prompt=system_prompt,
+        middleware=middleware or (),
+    )

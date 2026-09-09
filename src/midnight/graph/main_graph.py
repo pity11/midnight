@@ -173,8 +173,26 @@ def build_main_graph(
                 run_helper=run_helper,
             )
             llm = build_llm(expert)
+            middleware = []
+            if expert == "pwn":
+                from langchain.agents.middleware import (
+                    ModelCallLimitMiddleware,
+                    ToolCallLimitMiddleware,
+                )
+
+                from midnight.graph.middleware import PwnPhaseGateMiddleware
+
+                target = str((state.get("challenge") or {}).get("remote") or "")
+                middleware = [
+                    PwnPhaseGateMiddleware(target=target),
+                    ToolCallLimitMiddleware(tool_name="gdb_tool", run_limit=8),
+                    ModelCallLimitMiddleware(run_limit=36, exit_behavior="end"),
+                ]
             agent = make_specialist(
-                llm=llm, tools=tools, system_prompt=prompts.BY_TYPE.get(expert, prompts.MISC)
+                llm=llm,
+                tools=tools,
+                system_prompt=prompts.BY_TYPE.get(expert, prompts.MISC),
+                middleware=middleware,
             )
 
             ch = state["challenge"]
@@ -236,8 +254,12 @@ def build_main_graph(
                 for m in result.get("messages", [])
                 if isinstance(getattr(m, "content", ""), str)
             )
-            for f in extract_flags(transcript, flag_format=ch.get("flag_format")):
-                record_flag(f)
+            # For a network challenge, transcript-wide extraction could promote
+            # a local placeholder flag. Require an explicit, provenance-checked
+            # submit_flag call instead.
+            if not (ch.get("targets") or ch.get("remote")):
+                for f in extract_flags(transcript, flag_format=ch.get("flag_format")):
+                    record_flag(f)
 
             return {
                 "messages": result.get("messages", []),
