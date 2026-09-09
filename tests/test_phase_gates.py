@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from midnight.graph.middleware import PwnPhaseGateMiddleware
+from midnight.graph.middleware import ArtifactPhaseGateMiddleware, PwnPhaseGateMiddleware
 from midnight.tools.shell import make_submit_flag
 
 
@@ -13,10 +13,11 @@ def _tool_message(index: int, name: str = "gdb_tool", args: dict | None = None):
 
 
 def test_phase_gate_forces_exploit_artifact_after_recon_budget():
-    gate = PwnPhaseGateMiddleware(target="target:1337", artifact_gate=2)
+    gate = ArtifactPhaseGateMiddleware(category="misc", target="target:1337", artifact_gate=2)
     update = gate.before_model({"messages": [_tool_message(1), _tool_message(2)]}, None)
     assert update is not None
     assert "PHASE_GATE:IMPLEMENT" in update["messages"][0].content
+    assert "misc specialist" in update["messages"][0].content
 
 
 def test_phase_gate_does_not_repeat_or_override_existing_artifact():

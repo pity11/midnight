@@ -13,9 +13,10 @@ def _calls(messages: list) -> list[dict]:
 
 
 @dataclass
-class PwnPhaseGateMiddleware(AgentMiddleware):
-    """Interrupt excessive pwn reconnaissance with artifact and target gates."""
+class ArtifactPhaseGateMiddleware(AgentMiddleware):
+    """Interrupt excessive reconnaissance with artifact and target gates."""
 
+    category: str = "ctf"
     target: str = ""
     artifact_gate: int = 8
     target_gate: int = 16
@@ -40,9 +41,10 @@ class PwnPhaseGateMiddleware(AgentMiddleware):
                     "messages": [
                         HumanMessage(
                             "[PHASE_GATE:IMPLEMENT] Reconnaissance budget is exhausted. "
-                            "Your next action must create /ctf/solve.py from the best "
-                            "current hypothesis. Include assertions and local/remote modes. "
-                            "Do not call GDB again before an executable exploit artifact exists."
+                            f"As the {self.category} specialist, your next action must create "
+                            "/ctf/solve.py (or the directly executable payload artifact) from "
+                            "the best current hypothesis. Include assertions or local validation. "
+                            "Do not perform more open-ended analysis before an executable artifact exists."
                         )
                     ]
                 }
@@ -64,3 +66,8 @@ class PwnPhaseGateMiddleware(AgentMiddleware):
                     ]
                 }
         return None
+
+
+# Backward-compatible descriptive alias for callers/tests written during the
+# first pwn-only rollout.
+PwnPhaseGateMiddleware = ArtifactPhaseGateMiddleware

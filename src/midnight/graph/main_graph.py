@@ -173,21 +173,22 @@ def build_main_graph(
                 run_helper=run_helper,
             )
             llm = build_llm(expert)
-            middleware = []
-            if expert == "pwn":
-                from langchain.agents.middleware import (
-                    ModelCallLimitMiddleware,
-                    ToolCallLimitMiddleware,
+            from langchain.agents.middleware import (
+                ModelCallLimitMiddleware,
+                ToolCallLimitMiddleware,
+            )
+
+            from midnight.graph.middleware import ArtifactPhaseGateMiddleware
+
+            target = str((state.get("challenge") or {}).get("remote") or "")
+            middleware = [
+                ArtifactPhaseGateMiddleware(category=expert, target=target),
+                ModelCallLimitMiddleware(run_limit=36, exit_behavior="end"),
+            ]
+            if expert in {"pwn", "reverse"}:
+                middleware.append(
+                    ToolCallLimitMiddleware(tool_name="gdb_tool", run_limit=8)
                 )
-
-                from midnight.graph.middleware import PwnPhaseGateMiddleware
-
-                target = str((state.get("challenge") or {}).get("remote") or "")
-                middleware = [
-                    PwnPhaseGateMiddleware(target=target),
-                    ToolCallLimitMiddleware(tool_name="gdb_tool", run_limit=8),
-                    ModelCallLimitMiddleware(run_limit=36, exit_behavior="end"),
-                ]
             agent = make_specialist(
                 llm=llm,
                 tools=tools,
