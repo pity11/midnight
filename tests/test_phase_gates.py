@@ -22,6 +22,16 @@ def test_phase_gate_forces_exploit_artifact_after_recon_budget():
     assert "misc specialist" in update["messages"][0].content
 
 
+def test_pwn_phase_gate_requires_inventory_then_binary_triage():
+    gate = ArtifactPhaseGateMiddleware(category="pwn")
+    assert gate.constrained_tool_names([]) == {"list_dir"}
+    messages = [_tool_message(1, "list_dir", {"path": "/ctf"})]
+    assert gate.constrained_tool_names(messages) == {"binary_triage"}
+    update = gate.before_model({"messages": []}, None)
+    assert update is not None
+    assert "PHASE_GATE:TRIAGE" in update["messages"][0].content
+
+
 def test_phase_gate_does_not_repeat_or_override_existing_artifact():
     gate = PwnPhaseGateMiddleware(target="", artifact_gate=2)
     messages = [
@@ -66,7 +76,11 @@ def test_target_gate_recognizes_target_bound_structured_tools():
 
 def test_pwn_format_evidence_selects_narrow_specialist_lane():
     gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99, target_gate=99)
-    messages = [HumanMessage("objdump shows printf(buf), then compare target value")]
+    messages = [
+        _tool_message(1, "list_dir"),
+        _tool_message(2, "binary_triage"),
+        HumanMessage("objdump shows printf(buf), then compare target value"),
+    ]
     allowed = gate.constrained_tool_names(messages)
     assert allowed is not None
     assert "fmtstr_probe" in allowed
@@ -86,7 +100,11 @@ def test_pwn_format_lane_can_start_from_static_dataflow():
     1459: mov eax,0x0
     145e: call 10c0 <printf@plt>
     """
-    messages = [HumanMessage(disassembly)]
+    messages = [
+        _tool_message(1, "list_dir"),
+        _tool_message(2, "binary_triage"),
+        HumanMessage(disassembly),
+    ]
     assert gate.constrained_tool_names(messages) is not None
     assert "fmtstr_probe" in gate.constrained_tool_names(messages)
 
@@ -99,7 +117,12 @@ def test_pwn_format_lane_ignores_literal_printf():
     1459: mov rdi,rax
     145e: call 10c0 <printf@plt>
     """
-    assert gate.constrained_tool_names([HumanMessage(disassembly)]) is None
+    messages = [
+        _tool_message(1, "list_dir"),
+        _tool_message(2, "binary_triage"),
+        HumanMessage(disassembly),
+    ]
+    assert gate.constrained_tool_names(messages) is None
 
 
 def test_repeated_exploit_requires_revision_or_different_tool():

@@ -87,6 +87,14 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
     def constrained_tool_names(self, messages: list) -> set[str] | None:
         """Return the deterministic tool lane for the current phase, if any."""
         calls = _calls(messages)
+        if self.category == "pwn" and not calls:
+            return {"list_dir"}
+        if (
+            self.category == "pwn"
+            and any(call.get("name") == "list_dir" for call in calls)
+            and not any(call.get("name") == "binary_triage" for call in calls)
+        ):
+            return {"binary_triage"}
         if len(calls) >= self.artifact_gate and not self._made_artifact(calls):
             return {"write_file"}
         if (
@@ -146,6 +154,14 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         messages = list(state.get("messages") or [])
         calls = _calls(messages)
         text = "\n".join(str(getattr(message, "content", "")) for message in messages)
+
+        if self.category == "pwn" and not calls and "[PHASE_GATE:TRIAGE]" not in text:
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:TRIAGE] List /ctf now. The following turn must run "
+                    "binary_triage on the primary executable before building an exploit."
+                )]
+            }
 
         if len(calls) >= self.artifact_gate and "[PHASE_GATE:IMPLEMENT]" not in text:
             made_artifact = self._made_artifact(calls)
