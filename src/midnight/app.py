@@ -160,6 +160,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="override the configured per-challenge timeout in seconds",
     )
     p.add_argument(
+        "--run-timeout",
+        type=int,
+        help="global solving window shared by all challenges, in seconds",
+    )
+    p.add_argument(
         "--cleanup-run",
         metavar="RUN_ID",
         help="remove orphaned Midnight containers for a run and exit",
@@ -381,12 +386,16 @@ async def _amain(args: argparse.Namespace) -> int:
         task_timeout = args.task_timeout
     if args.bundles_dir and args.task_timeout is not None:
         raise ValueError("--task-timeout cannot override an immutable evaluation spec")
+    if args.bundles_dir and args.run_timeout is not None:
+        raise ValueError("--run-timeout is reserved for live competition runs")
     if args.task_timeout is not None:
         if args.task_timeout <= 0:
             raise ValueError("--task-timeout must be positive")
         task_timeout = args.task_timeout
     if args.max_concurrency is not None and args.max_concurrency <= 0:
         raise ValueError("--max-concurrency must be positive")
+    if args.run_timeout is not None and args.run_timeout <= 0:
+        raise ValueError("--run-timeout must be positive")
     log.info("run id: %s", run_id)
     submitter = SubmissionGate(
         delegate,
@@ -406,6 +415,7 @@ async def _amain(args: argparse.Namespace) -> int:
             artifacts_root=args.artifacts_root,
             workspace_root=args.workspace_root,
             per_task_timeout=task_timeout,
+            run_timeout=args.run_timeout,
             max_concurrency=args.max_concurrency,
             agent_mode=args.agent_mode,
         )

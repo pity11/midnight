@@ -34,6 +34,7 @@ class ChallengeFieldMap:
     remote: str = "remote"
     flag_format: str = "flag_format"
     round_id: str = "round_id"
+    difficulty: str = "difficulty"
     attachments: str = "attachments"
     attachment_name: str = "name"
     attachment_url: str = "url"
@@ -146,6 +147,7 @@ class HTTPPlatformAdapter:
         )
         remote = _json_path(payload, fields.remote, None)
         round_id = _json_path(payload, fields.round_id, None)
+        difficulty = _json_path(payload, fields.difficulty, None)
         return Challenge(
             id=str(challenge_id),
             name=str(name or challenge_id),
@@ -155,6 +157,7 @@ class HTTPPlatformAdapter:
             category_hint=str(category) if category is not None else None,
             flag_format=_json_path(payload, fields.flag_format, None),
             round_id=str(round_id) if round_id is not None else None,
+            difficulty=str(difficulty) if difficulty is not None else None,
         )
 
     async def list_challenges(self) -> list[Challenge]:

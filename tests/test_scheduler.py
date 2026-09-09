@@ -156,6 +156,50 @@ def test_scheduler_rejects_unsafe_run_id(tmp_path):
         )
 
 
+def test_scheduler_prioritizes_easy_tasks_then_category():
+    ordered = sorted(
+        [
+            {"id": "hard-misc", "difficulty": "hard", "category_hint": "misc"},
+            {"id": "easy-pwn", "difficulty": "easy", "category_hint": "pwn"},
+            {"id": "easy-crypto", "difficulty": "easy", "category_hint": "crypto"},
+            {"id": "medium-web", "difficulty": "medium", "category_hint": "web"},
+        ],
+        key=Scheduler._priority_key,
+    )
+    assert [item["id"] for item in ordered] == [
+        "easy-crypto",
+        "easy-pwn",
+        "medium-web",
+        "hard-misc",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_global_run_timeout_is_shared_by_all_tasks(tmp_path):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"fixture")
+    scheduler = Scheduler(
+        provider=FixtureProvider(source),
+        submitter=NoopSubmitter(),
+        artifacts_root=tmp_path / "artifacts",
+        run_id="timed-run",
+        max_concurrency=1,
+        per_task_timeout=10,
+        run_timeout=0.05,
+    )
+
+    async def slow_solve(challenge):
+        await asyncio.sleep(1)
+        return Result(challenge["id"], "failed")
+
+    scheduler._solve_one = slow_solve
+    started = asyncio.get_running_loop().time()
+    results = await scheduler.solve_all([{"id": "pwn-1"}, {"id": "pwn-2"}])
+    elapsed = asyncio.get_running_loop().time() - started
+    assert elapsed < 0.3
+    assert [result.status for result in results] == ["timeout", "timeout"]
+
+
 @pytest.mark.asyncio
 async def test_managed_provider_instance_is_always_stopped(tmp_path):
     class ManagedProvider(FixtureProvider):

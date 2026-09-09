@@ -102,6 +102,7 @@ class Scheduler:
         submitter: FlagSubmitter,
         max_concurrency: int | None = None,
         per_task_timeout: int | None = None,
+        run_timeout: float | None = None,
         journal: EventJournal | None = None,
         run_id: str | None = None,
         checkpoint_store: CheckpointStore | None = None,
@@ -114,6 +115,7 @@ class Scheduler:
         self.submitter = submitter
         self.max_concurrency = max_concurrency or cfg.max_concurrency
         self.per_task_timeout = per_task_timeout or cfg.per_task_timeout
+        self.run_timeout = run_timeout
         self.journal = journal
         self.run_id = run_id or uuid4().hex
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", self.run_id):
@@ -142,13 +144,27 @@ class Scheduler:
             )
 
     async def solve_all(self, challenges: list[Challenge]) -> list[Result]:
-        self._event("run_started", challenge_count=len(challenges))
+        run_deadline = time.time() + self.run_timeout if self.run_timeout else None
+        ordered = sorted(challenges, key=self._priority_key)
+        self._event(
+            "run_started",
+            challenge_count=len(challenges),
+            global_timeout_seconds=self.run_timeout,
+        )
         sem = asyncio.Semaphore(self.max_concurrency)
 
         async def run_one(ch: Challenge) -> Result:
             async with sem:
                 started = time.monotonic()
                 challenge_id = ch.get("id", "?")
+                remaining = run_deadline - time.time() if run_deadline else None
+                if remaining is not None and remaining <= 0:
+                    self._event("challenge_finished", challenge_id, status="timeout")
+                    return Result(
+                        challenge_id,
+                        status="timeout",
+                        category=ch.get("category_hint"),
+                    )
                 hydrated: Challenge | None = None
                 self._event("challenge_started", challenge_id)
                 instance_started = False
@@ -158,7 +174,10 @@ class Scheduler:
                         instance_started = True
                         self._event("challenge_instance_started", challenge_id)
                     hydrated = await self._hydrate(ch)
-                    hydrated["deadline_epoch"] = time.time() + self.per_task_timeout
+                    task_deadline = time.time() + self.per_task_timeout
+                    hydrated["deadline_epoch"] = (
+                        min(task_deadline, run_deadline) if run_deadline else task_deadline
+                    )
                     category = hydrated.get("category_hint") or "unknown"
                     category_sem = self._category_limits.get(category)
                     if category_sem is None:
@@ -170,7 +189,13 @@ class Scheduler:
                                 return await self._solve_one(hydrated)
 
                         operation = category_limited()
-                    result = await asyncio.wait_for(operation, timeout=self.per_task_timeout)
+                    deadline = hydrated.get("deadline_epoch")
+                    if deadline is None:
+                        raise RuntimeError("challenge deadline was not initialized")
+                    remaining = deadline - time.time()
+                    if remaining <= 0:
+                        raise TimeoutError
+                    result = await asyncio.wait_for(operation, timeout=remaining)
                     result = replace(
                         result,
                         duration_seconds=round(time.monotonic() - started, 3),
@@ -220,13 +245,36 @@ class Scheduler:
                                 error=str(exc),
                             )
 
-        results = list(await asyncio.gather(*(run_one(c) for c in challenges)))
+        results = list(await asyncio.gather(*(run_one(c) for c in ordered)))
         self._event(
             "run_finished",
             solved=sum(result.status == "solved" for result in results),
             total=len(results),
         )
         return results
+
+    @staticmethod
+    def _priority_key(challenge: Challenge) -> tuple[int, int, str]:
+        """Prefer organizer-labelled easy tasks while keeping ordering deterministic."""
+        difficulty = str(challenge.get("difficulty") or "").strip().lower()
+        difficulty_rank = {
+            "easy": 0,
+            "简单": 0,
+            "medium": 1,
+            "中等": 1,
+            "hard": 2,
+            "困难": 2,
+        }.get(difficulty, 1)
+        category = str(challenge.get("category_hint") or "unknown").lower()
+        category_rank = {
+            "misc": 0,
+            "forensics": 1,
+            "crypto": 2,
+            "web": 3,
+            "reverse": 4,
+            "pwn": 5,
+        }.get(category, 6)
+        return difficulty_rank, category_rank, str(challenge.get("id") or "")
 
     async def _hydrate(self, challenge: Challenge) -> Challenge:
         """Refresh metadata, materialize attachments, and assign a revision."""

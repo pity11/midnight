@@ -189,6 +189,7 @@ def test_http_adapter_maps_nested_platform_payloads(tmp_path):
                 "category_hint": "web",
                 "flag_format": None,
                 "round_id": None,
+                "difficulty": None,
             }
         ]
         challenge = await adapter.fetch("7")

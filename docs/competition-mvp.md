@@ -90,6 +90,7 @@ uv run midnight \
   --submit \
   --max-concurrency 2 \
   --task-timeout 1800 \
+  --run-timeout 1620 \
   --events-path logs/competition-1/events.jsonl \
   --checkpoint-path logs/competition-1/checkpoints.sqlite \
   --submission-ledger-path logs/competition-1/submissions.sqlite \
@@ -97,6 +98,11 @@ uv run midnight \
   --workspace-root logs/competition-1/workspaces \
   --report-path logs/competition-1/report.json
 ```
+
+`--run-timeout 1620` reserves the final three minutes of a 30-minute challenge
+window for in-flight platform submissions and operational inspection. Every
+challenge receives the same deadline, including tasks waiting for a worker slot.
+Organizer-labelled easy tasks are scheduled first.
 
 Reuse the same run ID and paths after an interruption. Midnight resumes compatible
 challenge revisions from checkpoints. If the platform changes a challenge, its

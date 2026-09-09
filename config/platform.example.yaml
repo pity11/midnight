@@ -25,6 +25,7 @@ fields:
   remote: "remote"
   flag_format: "flag_format"
   round_id: "round_id"
+  difficulty: "difficulty"
   attachments: "attachments"
   attachment_name: "name"
   attachment_url: "url"

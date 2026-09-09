@@ -36,6 +36,7 @@ class Challenge(TypedDict, total=False):
     source_targets: list[str]  # original endpoints when runtime uses isolated relays
     target_network: str | None  # evaluator-only Docker network for local replay targets
     flag_count: int | None
+    difficulty: str | None  # platform-provided easy/medium/hard label
     deadline_epoch: float | None  # runtime-only wall-clock deadline for solver pacing
 
 
