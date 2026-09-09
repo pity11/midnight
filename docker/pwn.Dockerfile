@@ -23,7 +23,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
 # Pwntools and ROPGadget are not packaged by Ubuntu 22.04. Keep this isolated
 # from the distro layer and tolerate short-lived package-index interruptions.
 RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 120 \
-        pwntools ROPGadget ropper angr unicorn
+        pwntools ROPGadget ropper angr unicorn keystone-engine==0.9.2
 
 # Repetitive libc setup and one-gadget discovery should be deterministic tool
 # calls rather than consume model turns. pwninit's release binary is checksum

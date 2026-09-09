@@ -56,7 +56,26 @@ RUN curl -fsSL --retry 5 \
 # Extract Python bytecode from PyInstaller-built ELF and PE challenges without
 # requiring the interpreter version used to build the original executable.
 RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 60 \
-        pyinstxtractor-ng==2026.7.3 angr unicorn
+        pyinstxtractor-ng==2026.7.3 angr unicorn kaitaistruct==0.11 \
+        keystone-engine==0.9.2 lief==1.0.0 pefile==2024.8.26
+
+# pyinstxtractor-ng and decompyle3 require incompatible xdis versions. Keep the
+# decompiler in a tiny dedicated venv and expose only its CLI.
+RUN python3 -m venv /opt/decompyle3-venv \
+    && /opt/decompyle3-venv/bin/pip install --no-cache-dir --retries 10 --timeout 60 \
+        decompyle3==3.9.3 \
+    && ln -s /opt/decompyle3-venv/bin/decompyle3 /usr/local/bin/decompyle3
+
+# Declarative protocol parsing is useful for the final round's reverse + custom
+# protocol lane and costs little compared with a full GUI reverse suite.
+ARG KAITAI_VERSION=0.11
+ARG KAITAI_SHA256=28d6b6ec917e394ed41cb6f62169a8f6b584d9a5242cbe0785b0568d95e032ea
+RUN curl -fsSL --retry 5 \
+        "https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/${KAITAI_VERSION}/kaitai-struct-compiler_${KAITAI_VERSION}_all.deb" \
+        -o /tmp/kaitai.deb \
+    && echo "${KAITAI_SHA256}  /tmp/kaitai.deb" | sha256sum -c - \
+    && dpkg -i /tmp/kaitai.deb \
+    && rm /tmp/kaitai.deb
 
 # NOTE: ghidra headless is large; install on demand if a challenge needs it.
 

@@ -5,6 +5,14 @@ from dataclasses import dataclass
 
 import pytest
 
+from midnight.tools.advanced import (
+    make_archive_password,
+    make_hayabusa_timeline,
+    make_jwt_analyze,
+    make_kaitai_compile,
+    make_rsa_attack,
+    make_tinja_ssti,
+)
 from midnight.tools.category import (
     make_android_decompile,
     make_artifact_triage,
@@ -41,6 +49,106 @@ class _Env:
     async def exec(self, command: str, timeout: int = 120) -> _Result:
         self.calls.append((command, timeout))
         return _Result()
+
+
+@pytest.mark.asyncio
+async def test_archive_password_is_format_and_time_bounded() -> None:
+    env = _Env()
+    action = make_archive_password(env=env)
+    await action.ainvoke({"archive": "evidence file.zip", "timeout_seconds": 45})
+    command, timeout = env.calls[0]
+    assert "timeout 45s fcrackzip" in command
+    assert "'evidence file.zip'" in command
+    assert "7z t" in command
+    assert timeout == 75
+
+    with pytest.raises(ValueError, match="between 10 and 300"):
+        await action.ainvoke({"archive": "x.zip", "timeout_seconds": 301})
+
+
+@pytest.mark.asyncio
+async def test_tinja_is_target_bound_and_rate_limited() -> None:
+    env = _Env()
+    action = make_tinja_ssti(env=env, state={"challenge": {"remote": "web:8080"}})
+    await action.ainvoke(
+        {
+            "url": "/render?name=test",
+            "data": "name=test",
+            "headers": "X-Test: one; Accept: text/html",
+            "requests_per_second": 7,
+        }
+    )
+    command, timeout = env.calls[0]
+    assert "tinja url" in command
+    assert "http://web:8080/render?name=test" in command
+    assert "--ratelimit 7" in command
+    assert timeout == 300
+
+    with pytest.raises(ValueError, match="between 1 and 100"):
+        await action.ainvoke({"requests_per_second": 101})
+
+
+@pytest.mark.asyncio
+async def test_jwt_modes_are_narrow_and_scan_uses_target() -> None:
+    env = _Env()
+    action = make_jwt_analyze(env=env, state={"challenge": {"remote": "api:8000"}})
+    token = "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoidXNlciJ9.signature"
+    await action.ainvoke({"token": token, "mode": "alg-none"})
+    assert "-X a" in env.calls[0][0]
+
+    await action.ainvoke({"token": token, "mode": "scan", "url": "/admin"})
+    command, timeout = env.calls[1]
+    assert "http://api:8000/admin" in command
+    assert "Authorization: Bearer" in command
+    assert "-M pb" in command
+    assert timeout == 300
+
+    with pytest.raises(ValueError, match="requires a local wordlist"):
+        await action.ainvoke({"token": token, "mode": "crack"})
+
+
+@pytest.mark.asyncio
+async def test_rsa_attack_uses_offline_allowlist() -> None:
+    env = _Env()
+    action = make_rsa_attack(env=env)
+    await action.ainvoke({"public_key": "public key.pem", "attack": "quick"})
+    command, timeout = env.calls[0]
+    assert "--attack wiener fermat smallq pollard_rho" in command
+    assert "factordb" not in command
+    assert "'public key.pem'" in command
+    assert timeout == 315
+
+    with pytest.raises(ValueError, match="offline allowlist"):
+        await action.ainvoke({"public_key": "key.pem", "attack": "factordb"})
+
+
+@pytest.mark.asyncio
+async def test_hayabusa_resolves_paths_before_changing_directory() -> None:
+    env = _Env()
+    action = make_hayabusa_timeline(env=env)
+    await action.ainvoke(
+        {"path": "evtx logs", "output": "timeline out.csv", "directory": True}
+    )
+    command, timeout = env.calls[0]
+    assert "src=$(realpath -- 'evtx logs')" in command
+    assert "cd /opt/hayabusa" in command
+    assert "dfir-timeline -d \"$src\"" in command
+    assert timeout == 600
+
+
+@pytest.mark.asyncio
+async def test_kaitai_compile_limits_targets_and_quotes_paths() -> None:
+    env = _Env()
+    action = make_kaitai_compile(env=env)
+    await action.ainvoke(
+        {"specification": "custom protocol.ksy", "target": "python", "output_dir": "parser out"}
+    )
+    command, timeout = env.calls[0]
+    assert "ksc -t python --outdir 'parser out' 'custom protocol.ksy'" in command
+    assert timeout == 180
+
+    with pytest.raises(ValueError, match="supported allowlist"):
+        await action.ainvoke({"specification": "x.ksy", "target": "shell"})
 
 
 @pytest.mark.asyncio

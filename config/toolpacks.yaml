@@ -12,6 +12,20 @@ web:
     license: MPL-2.0
     command: fenjing
     purpose: Jinja2 SSTI discovery and WAF-aware payload generation
+  - name: TInjA
+    version: 1.2.0
+    source: https://github.com/Hackmanit/TInjA
+    license: Apache-2.0
+    command: tinja
+    artifact_sha256: 7775dd9df477e67ae4a82b1f5fa238cdc017463520b5d7cbbebe52289098701b
+    purpose: Detect and fingerprint server-side template injection across multiple engines
+  - name: jwt_tool
+    version: 2.3.0
+    source: https://github.com/ticarpi/jwt_tool
+    license: GPL-3.0-only
+    command: jwt_tool
+    artifact_sha256: 0f8c32aa9f67cea4312e5df81d48f72dc5daf57f3cc0ce09d67db78e23fbe451
+    purpose: Decode, mutate, verify, scan, and dictionary-test JSON Web Tokens
 
 pwn:
   - name: pwninit
@@ -40,6 +54,12 @@ pwn:
     license: MIT
     command: seccomp-tools
     purpose: Dump and disassemble syscall filters before choosing shellcode or ORW
+  - name: Keystone Engine
+    version: 0.9.2
+    source: https://github.com/keystone-engine/keystone
+    license: GPL-2.0-only
+    command: python3
+    purpose: Assemble architecture-specific shellcode and instruction patches from Python
 
 crypto:
   - name: xortool
@@ -48,6 +68,13 @@ crypto:
     license: MIT
     command: xortool
     purpose: Repeating-key XOR length and key recovery
+  - name: RsaCtfTool
+    version: af87bb487666b1bf3070e1bb058d97b78a342808
+    source: https://github.com/RsaCtfTool/RsaCtfTool
+    license: MIT
+    command: RsaCtfTool
+    artifact_sha256: c68e39b50c7b699bbffb54849cb2f67d927fab01da8f22547a887da2c28effd9
+    purpose: Run a catalog of RSA key recovery and decryption attacks from local artifacts
 
 reverse:
   - name: pyinstxtractor-ng
@@ -76,6 +103,31 @@ reverse:
     license: BSD-2-Clause
     command: python3
     purpose: Symbolic execution and constraint solving for binaries
+  - name: Kaitai Struct Compiler
+    version: 0.11
+    source: https://github.com/kaitai-io/kaitai_struct_compiler
+    license: GPL-3.0-or-later
+    command: ksc
+    artifact_sha256: 28d6b6ec917e394ed41cb6f62169a8f6b584d9a5242cbe0785b0568d95e032ea
+    purpose: Compile declarative binary formats and protocol frames into parsers
+  - name: LIEF
+    version: 1.0.0
+    source: https://github.com/lief-project/LIEF
+    license: Apache-2.0
+    command: python3
+    purpose: Parse and modify ELF, PE, Mach-O, DEX, and other executable formats
+  - name: pefile
+    version: 2024.8.26
+    source: https://github.com/erocarrera/pefile
+    license: MIT
+    command: python3
+    purpose: Inspect PE headers, sections, imports, resources, and anomalies
+  - name: decompyle3
+    version: 3.9.3
+    source: https://github.com/rocky/python-decompile3
+    license: GPL-3.0-only
+    command: decompyle3
+    purpose: Recover readable Python from supported CPython bytecode versions
 
 forensics:
   - name: Volatility 3
@@ -97,16 +149,33 @@ forensics:
     license: Apache-2.0
     command: evtx_dump
     purpose: Parse Windows EVTX records into searchable XML without Windows
+  - name: Hayabusa
+    version: 4.0.0
+    source: https://github.com/Yamato-Security/hayabusa
+    license: AGPL-3.0-only
+    command: hayabusa
+    artifact_sha256: 04d4daf91ad0cc576654e985315f15e412a3ad460f2702f2a9dde3fbd1104a8b
+    purpose: Build fast EVTX timelines and apply bundled Sigma detection rules offline
+  - name: John the Ripper
+    version: ubuntu-22.04
+    source: https://www.openwall.com/john/
+    license: GPL-2.0-or-later
+    command: john
+    purpose: Audit local password hashes with challenge-derived wordlists under a time bound
+  - name: fcrackzip
+    version: ubuntu-22.04
+    source: https://oldhome.schmorp.de/marc/fcrackzip.html
+    license: GPL-2.0-or-later
+    command: fcrackzip
+    purpose: Recover ZIP passwords from bounded local candidate lists
+  - name: 7-Zip
+    version: ubuntu-22.04
+    source: https://www.7-zip.org/
+    license: LGPL-2.1-or-later
+    command: 7z
+    purpose: Test bounded local password candidates against 7z and RAR challenge archives
 
 deferred:
-  - name: RsaCtfTool
-    source: https://github.com/RsaCtfTool/RsaCtfTool
-    license: MIT
-    reason: Add as a dedicated crypto-heavy layer after measuring its optional Sage/factorization dependency cost
-  - name: TInjA
-    source: https://github.com/Hackmanit/TInjA
-    license: Apache-2.0
-    reason: Fenjing covers the immediate Jinja2 CTF need; add TInjA when multi-engine SSTI appears in the suite
   - name: stegseek
     source: https://github.com/RickdeJager/stegseek
     license: GPL-2.0-only

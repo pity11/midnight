@@ -13,8 +13,9 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         bash coreutils file xxd \
         python3 python3-pip python3-venv \
         python3-pil ruby \
-        binwalk foremost exiftool steghide \
+        binwalk foremost exiftool steghide yara \
         imagemagick tesseract-ocr ffmpeg sox \
+        p7zip-full unzip john fcrackzip crunch \
         zlib1g-dev \
         ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
@@ -27,6 +28,8 @@ RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 60 pickora==1.0
 # zsteg covers the common PNG/BMP LSB paths and can extract a selected channel
 # directly. Version pinning keeps forensic results comparable across runs.
 RUN gem install zsteg -v 0.2.14 --no-document
+
+COPY resources/wordlists/ctf-small.txt /opt/midnight/wordlists/ctf-small.txt
 
 # NOTE: volatility and large password dictionaries remain opt-in packs.
 

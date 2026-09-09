@@ -152,8 +152,8 @@ export MIDNIGHT_APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ubuntu
 
 Use an HTTP mirror during the bootstrap layer because the minimal Ubuntu base
 does not contain the CA certificate bundle until that layer installs it. When
-both settings are present, OS package repositories bypass the proxy while
-other build downloads continue through it.
+both settings are present, the configured mirror and other external build
+downloads use the proxy; official fallback package hosts remain in `NO_PROXY`.
 
 Before a competition or formal benchmark, validate every category image without
 running a challenge:

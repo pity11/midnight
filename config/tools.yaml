@@ -38,6 +38,7 @@ reverse:
   - ghidra_headless
   - pyinstaller_extract
   - android_decompile
+  - kaitai_compile
 
 web:
   - *common
@@ -45,17 +46,21 @@ web:
   - http_request
   - source_audit
   - fenjing_ssti
+  - tinja_ssti
+  - jwt_analyze
 
 crypto:
   - *common
   - xor_analyze
   - rsa_quickcheck
+  - rsa_attack
 
 misc:
   - *common
   - pickle_disassemble
   - artifact_triage
   - stego_scan
+  - archive_password
 
 forensics:
   - *common
@@ -65,10 +70,12 @@ forensics:
   - stego_scan
   - memory_analyze
   - evtx_triage
+  - hayabusa_timeline
   - disk_image_triage
   - filesystem_recover
   - pcap_triage
   - pcap_export_objects
+  - archive_password
 
 unknown:
   - *common

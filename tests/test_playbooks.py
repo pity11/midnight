@@ -25,6 +25,13 @@ def test_playbook_selection_uses_observable_signals():
     assert find_playbooks("forensics", "Windows Security.evtx Sysmon")[0].key == (
         "forensics-windows-evtx"
     )
+    assert find_playbooks("web", "JWT bearer token alg HS256")[0].key == "web-jwt"
+    assert find_playbooks("reverse", "binary protocol TLV length field")[0].key == (
+        "reverse-kaitai-protocol"
+    )
+    assert find_playbooks("forensics", "many EVTX directory Sigma timeline")[0].key == (
+        "forensics-hayabusa-timeline"
+    )
 
 
 def test_catalog_has_no_benchmark_specific_material():

@@ -17,7 +17,7 @@ pwn:
     - seccomp-tools
     - qemu-x86_64
     - python3
-  required_python_modules: [pwn, capstone, angr, unicorn]
+  required_python_modules: [pwn, capstone, angr, unicorn, keystone]
   optional_commands: [r2]
 
 reverse:
@@ -33,19 +33,21 @@ reverse:
     - pyinstxtractor-ng
     - jadx
     - apktool
+    - ksc
+    - decompyle3
     - python3
-  required_python_modules: [capstone, elftools, angr, unicorn]
+  required_python_modules: [capstone, elftools, angr, unicorn, kaitaistruct, keystone, lief, pefile]
   optional_commands: [analyzeHeadless]
 
 web:
-  required_commands: [bash, curl, wget, nc, nmap, sqlmap, nikto, whatweb, ffuf, fenjing, python3]
+  required_commands: [bash, curl, wget, nc, nmap, sqlmap, nikto, whatweb, ffuf, fenjing, tinja, jwt_tool, python3]
   required_python_modules: [requests, httpx, bs4]
   optional_commands: []
 
 crypto:
-  required_commands: [bash, openssl, xortool, python3]
+  required_commands: [bash, openssl, xortool, RsaCtfTool, python3]
   required_python_modules: [Crypto, sympy, gmpy2, z3, fpylll]
-  optional_commands: [sage, RsaCtfTool]
+  optional_commands: [sage]
 
 misc:
   required_commands:
@@ -62,6 +64,11 @@ misc:
     - ffmpeg
     - sox
     - pickora
+    - john
+    - fcrackzip
+    - 7z
+    - crunch
+    - yara
     - python3
   required_python_modules: [PIL, src.compiler]
   optional_commands: [stegseek]
@@ -78,6 +85,7 @@ forensics:
     - zsteg
     - vol
     - evtx_dump
+    - hayabusa
     - mmls
     - fls
     - icat
@@ -85,6 +93,11 @@ forensics:
     - tshark
     - capinfos
     - tesseract
+    - john
+    - fcrackzip
+    - 7z
+    - crunch
+    - yara
     - python3
   required_python_modules: [PIL, volatility3, Evtx]
   optional_commands: []
