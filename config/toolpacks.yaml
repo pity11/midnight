@@ -91,6 +91,12 @@ forensics:
     license: MIT
     command: zsteg
     purpose: Detect and extract PNG/BMP LSB steganography
+  - name: python-evtx
+    version: 0.8.1
+    source: https://github.com/williballenthin/python-evtx
+    license: Apache-2.0
+    command: evtx_dump
+    purpose: Parse Windows EVTX records into searchable XML without Windows
 
 deferred:
   - name: RsaCtfTool

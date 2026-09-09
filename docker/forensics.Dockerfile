@@ -19,7 +19,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 120 \
-        volatility3==2.28.0
+        volatility3==2.28.0 python-evtx==0.8.1
 RUN gem install zsteg -v 0.2.14 --no-document
 
 WORKDIR /ctf

@@ -390,6 +390,74 @@ PLAYBOOKS: tuple[Playbook, ...] = (
         ),
         "A reproducible timeline cites the exact records that establish the requested incident fact.",
     ),
+    Playbook(
+        "forensics-windows-evtx",
+        "forensics",
+        ("evtx", "windows event", "event id", "sysmon", "powershell", "security.evtx"),
+        "Reduce Windows event logs to the process, authentication, persistence, and cleanup events relevant to the incident.",
+        (
+            "Parse each EVTX with evtx_triage and preserve the generated XML beside the source log.",
+            "Correlate logon IDs, process IDs, parent processes, users, hosts, and timestamps across Security, System, PowerShell, and Sysmon.",
+            "Decode command lines and recover referenced scripts or payloads from companion artifacts.",
+            "Build a chronological timeline and cite the exact event IDs and record values supporting the answer.",
+        ),
+        (
+            "An event ID has different meaning across providers; retain provider/channel context.",
+            "Process creation telemetry may be absent, so combine authentication, service, task, and script-block evidence.",
+        ),
+        "The timeline connects an initiating identity to a concrete process or persistence action and its artifacts.",
+    ),
+    Playbook(
+        "forensics-deleted-files",
+        "forensics",
+        ("deleted", "filesystem", "disk image", "inode", "fls", "icat", "unallocated"),
+        "Recover deleted or orphaned data from a known partition without modifying the source image.",
+        (
+            "Use disk_image_triage to record partition offsets and filesystem type.",
+            "List deleted entries with filesystem_recover and copy the exact inode identifier from fls output.",
+            "Recover one candidate at a time with icat, then identify and hash the output.",
+            "Inspect filesystem timestamps and directory context before accepting recovered content as relevant.",
+        ),
+        (
+            "An inode number without the correct partition offset can recover unrelated bytes.",
+            "Never run repair tools against the only copy of a challenge image.",
+        ),
+        "A hashed recovered artifact is tied to a partition offset and exact TSK inode.",
+    ),
+    Playbook(
+        "forensics-memory-incident",
+        "forensics",
+        ("memory dump", "ram", "volatility", "process", "malfind", "cmdline", "netscan"),
+        "Use memory evidence to connect suspicious processes, commands, network activity, and recovered files.",
+        (
+            "Identify the operating system and kernel profile before running process-specific plugins.",
+            "Enumerate process trees, command lines, consoles, network endpoints, loaded modules, and suspicious memory regions.",
+            "Dump only evidence-supported processes or files and hash every recovered artifact.",
+            "Correlate process IDs and timestamps with disk, network, and log evidence when provided.",
+        ),
+        (
+            "Plugin failure often means the wrong OS symbol/profile, not absence of evidence.",
+            "Large blind dumps waste time; pivot from named processes, paths, handles, or connections.",
+        ),
+        "A named memory object or process produces reproducible evidence answering the challenge question.",
+    ),
+    Playbook(
+        "forensics-network-objects",
+        "forensics",
+        ("export objects", "file transfer", "http object", "smb", "ftp", "pcap"),
+        "Recover transferred files from reassembled application streams and preserve their network provenance.",
+        (
+            "Use pcap_triage to identify protocols, endpoints, and stream indices before extraction.",
+            "Call pcap_export_objects for the observed application protocol and inventory recovered files.",
+            "Hash and identify each object, then recurse with artifact_triage only on relevant outputs.",
+            "Tie the recovered value to protocol, endpoints, stream, and exported filename.",
+        ),
+        (
+            "Packet-level strings may miss segmented or compressed application objects.",
+            "Encrypted sessions require key material or a different evidence source.",
+        ),
+        "A recovered object and its flag-bearing content are reproducible from the original capture.",
+    ),
 )
 
 

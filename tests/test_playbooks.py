@@ -22,6 +22,9 @@ def test_playbook_selection_uses_observable_signals():
     assert find_playbooks("forensics", "incident auth.log powershell")[0].key == (
         "forensics-incident-logs"
     )
+    assert find_playbooks("forensics", "Windows Security.evtx Sysmon")[0].key == (
+        "forensics-windows-evtx"
+    )
 
 
 def test_catalog_has_no_benchmark_specific_material():

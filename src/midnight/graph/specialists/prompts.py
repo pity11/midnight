@@ -112,7 +112,11 @@ For incident-response bundles, call log_triage to identify high-value events,
 then build a timestamped timeline from the cited source records.
 For memory images, start with memory_analyze and an OS information plugin; for
 disk images, use disk_image_triage to identify partition offsets before carving.
-For PCAP/PCAPNG inputs, call pcap_triage before manually extracting streams.
+For EVTX inputs, use evtx_triage and correlate event IDs, providers, logon IDs,
+process IDs, and timestamps. For deleted files, use filesystem_recover only with
+the partition offset and inode observed in disk_image_triage/fls output.
+For PCAP/PCAPNG inputs, call pcap_triage before manually extracting streams; use
+pcap_export_objects when HTTP, SMB, TFTP, FTP data, DICOM, or IMF transfers exist.
 For PNG/BMP LSB evidence, use stego_scan and extract the reported channel.
 For Python serialization challenges, read the validator and allowed opcodes or
 globals, model the VM stack, disassemble the generated payload, and validate it

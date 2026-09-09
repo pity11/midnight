@@ -889,6 +889,49 @@ def make_memory_analyze(*, env: CTFEnvironment, **_) -> object:
     return memory_analyze
 
 
+@register_tool(name="evtx_triage", groups=["forensics"])
+def make_evtx_triage(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def evtx_triage(
+        path: str, output: str = "evtx_events.xml", event_ids: str = ""
+    ) -> str:
+        """Convert Windows EVTX to XML and show high-value security events.
+
+        ``event_ids`` may be a comma-separated numeric allowlist. With no
+        allowlist, the tool focuses on logon, process, service, PowerShell,
+        scheduled-task, account, and log-clearing events.
+        """
+        if event_ids:
+            ids = [item.strip() for item in event_ids.split(",") if item.strip()]
+            if not ids or any(not item.isdigit() for item in ids) or len(ids) > 40:
+                raise ValueError("event_ids must contain at most 40 comma-separated integers")
+        else:
+            ids = [
+                "1102", "4103", "4104", "4624", "4625", "4648", "4672",
+                "4688", "4697", "4698", "4720", "4728", "4732", "4768",
+                "4769", "4776", "7045",
+            ]
+        event_pattern = "|".join(ids)
+        source = shlex.quote(path)
+        destination = shlex.quote(output)
+        pattern = shlex.quote(
+            rf">({event_pattern})<|powershell|encodedcommand|cmd\.exe|rundll32|"
+            r"certutil|bitsadmin|mshta|wscript|cscript|\\temp\\|\\users\\public\\"
+        )
+        command = (
+            "command -v evtx_dump >/dev/null || exit 127; "
+            f"evtx_dump {source} > {destination}; "
+            f"echo '[events-file]'; wc -c {destination}; "
+            f"echo '[high-value-records]'; grep -Eina -B4 -A14 {pattern} {destination} "
+            "2>/dev/null | head -320"
+        )
+        return _result_text(await env.exec(command, timeout=600))
+
+    return evtx_triage
+
+
 @register_tool(name="disk_image_triage", groups=["forensics"])
 def make_disk_image_triage(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
@@ -907,6 +950,42 @@ def make_disk_image_triage(*, env: CTFEnvironment, **_) -> object:
         return _result_text(await env.exec(command, timeout=300))
 
     return disk_image_triage
+
+
+@register_tool(name="filesystem_recover", groups=["forensics"])
+def make_filesystem_recover(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def filesystem_recover(
+        image: str,
+        offset_sectors: int = 0,
+        inode: str = "",
+        output: str = "recovered.bin",
+    ) -> str:
+        """List deleted filesystem entries or recover one observed TSK inode.
+
+        Call without ``inode`` to list deleted entries. Pass an inode exactly as
+        reported by ``fls`` to extract it with ``icat`` into ``output``.
+        """
+        if offset_sectors < 0:
+            raise ValueError("offset_sectors must be non-negative")
+        source = shlex.quote(image)
+        if not inode:
+            command = f"fls -r -d -o {offset_sectors} {source} | head -260"
+        else:
+            if not re.fullmatch(r"[0-9-]{1,80}", inode):
+                raise ValueError("inode must be copied from fls output")
+            destination = shlex.quote(output)
+            command = (
+                f"icat -o {offset_sectors} {source} {shlex.quote(inode)} > {destination}; "
+                f"file {destination}; sha256sum {destination}; "
+                f"strings -a -n 6 {destination} | "
+                "grep -Ei 'flag|ctf|password|secret|token' | head -100"
+            )
+        return _result_text(await env.exec(command, timeout=300))
+
+    return filesystem_recover
 
 
 @register_tool(name="pcap_triage", groups=["forensics"])
@@ -945,3 +1024,31 @@ def make_pcap_triage(*, env: CTFEnvironment, **_) -> object:
         return _result_text(await env.exec(command, timeout=300))
 
     return pcap_triage
+
+
+@register_tool(name="pcap_export_objects", groups=["forensics"])
+def make_pcap_export_objects(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def pcap_export_objects(
+        capture: str, protocol: str = "http", output_dir: str = "pcap_objects"
+    ) -> str:
+        """Export transferred objects from a PCAP using a supported protocol."""
+        allowed = {"http", "smb", "tftp", "ftp-data", "dicom", "imf"}
+        if protocol not in allowed:
+            raise ValueError(f"protocol must be one of {sorted(allowed)}")
+        source = shlex.quote(capture)
+        destination = shlex.quote(output_dir)
+        export = shlex.quote(f"{protocol},{output_dir}")
+        command = (
+            f"rm -rf -- {destination}; mkdir -p -- {destination}; "
+            f"tshark -r {source} --export-objects {export} >/dev/null 2>&1; "
+            f"echo '[objects]'; find {destination} -maxdepth 2 -type f -exec file {{}} \\; "
+            "2>/dev/null | head -200; "
+            f"echo '[high-value-strings]'; grep -RInaE --binary-files=without-match "
+            f"'flag|ctf|password|secret|token' {destination} 2>/dev/null | head -160"
+        )
+        return _result_text(await env.exec(command, timeout=300))
+
+    return pcap_export_objects

@@ -77,6 +77,7 @@ forensics:
     - steghide
     - zsteg
     - vol
+    - evtx_dump
     - mmls
     - fls
     - icat
@@ -85,7 +86,7 @@ forensics:
     - capinfos
     - tesseract
     - python3
-  required_python_modules: [PIL, volatility3]
+  required_python_modules: [PIL, volatility3, Evtx]
   optional_commands: []
 
 unknown:

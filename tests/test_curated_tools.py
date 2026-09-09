@@ -9,11 +9,14 @@ from midnight.tools.category import (
     make_android_decompile,
     make_artifact_triage,
     make_disk_image_triage,
+    make_evtx_triage,
     make_fenjing_ssti,
+    make_filesystem_recover,
     make_fmtstr_probe,
     make_fmtstr_write_scan,
     make_memory_analyze,
     make_one_gadget,
+    make_pcap_export_objects,
     make_pcap_triage,
     make_pyinstaller_extract,
     make_rsa_quickcheck,
@@ -193,6 +196,42 @@ async def test_disk_triage_validates_offset_and_quotes_image() -> None:
 
 
 @pytest.mark.asyncio
+async def test_evtx_triage_validates_event_ids() -> None:
+    env = _Env()
+    action = make_evtx_triage(env=env)
+    await action.ainvoke(
+        {"path": "Security log.evtx", "output": "events out.xml", "event_ids": "4624,4688"}
+    )
+    command, timeout = env.calls[0]
+    assert "evtx_dump 'Security log.evtx' > 'events out.xml'" in command
+    assert "4624|4688" in command
+    assert timeout == 600
+
+    with pytest.raises(ValueError, match="comma-separated integers"):
+        await action.ainvoke({"path": "x.evtx", "event_ids": "4624;id"})
+
+
+@pytest.mark.asyncio
+async def test_filesystem_recovery_requires_observed_inode() -> None:
+    env = _Env()
+    action = make_filesystem_recover(env=env)
+    await action.ainvoke({"image": "disk image.dd", "offset_sectors": 2048})
+    assert "fls -r -d -o 2048 'disk image.dd'" in env.calls[0][0]
+
+    await action.ainvoke(
+        {
+            "image": "disk image.dd",
+            "offset_sectors": 2048,
+            "inode": "42-128-3",
+            "output": "deleted file.bin",
+        }
+    )
+    assert "icat -o 2048 'disk image.dd' 42-128-3 > 'deleted file.bin'" in env.calls[1][0]
+    with pytest.raises(ValueError, match="copied from fls"):
+        await action.ainvoke({"image": "disk.dd", "inode": "42;id"})
+
+
+@pytest.mark.asyncio
 async def test_run_exploit_binds_target_and_checks_script() -> None:
     env = _Env()
     action = make_run_exploit(
@@ -223,6 +262,20 @@ async def test_pcap_triage_and_follow_stream_quote_inputs() -> None:
 
     with pytest.raises(ValueError, match="non-negative"):
         await action.ainvoke({"capture": "x.pcap", "follow_tcp_stream": -2})
+
+
+@pytest.mark.asyncio
+async def test_pcap_object_export_is_protocol_bounded() -> None:
+    env = _Env()
+    action = make_pcap_export_objects(env=env)
+    await action.ainvoke(
+        {"capture": "traffic sample.pcap", "protocol": "http", "output_dir": "objects out"}
+    )
+    command, timeout = env.calls[0]
+    assert "--export-objects 'http,objects out'" in command
+    assert timeout == 300
+    with pytest.raises(ValueError, match="protocol must be"):
+        await action.ainvoke({"capture": "x.pcap", "protocol": "tls;id"})
 
 
 @pytest.mark.asyncio

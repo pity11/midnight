@@ -64,8 +64,11 @@ forensics:
   - log_triage
   - stego_scan
   - memory_analyze
+  - evtx_triage
   - disk_image_triage
+  - filesystem_recover
   - pcap_triage
+  - pcap_export_objects
 
 unknown:
   - *common
