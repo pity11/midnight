@@ -47,6 +47,18 @@ def test_json_protocol_converts_validated_action_to_tool_call():
     assert "Available tool schemas" in delegate.seen[0][0].content
 
 
+def test_json_protocol_projects_tools_to_compact_schemas():
+    delegate = ScriptedModel(replies=[
+        '{"type":"complete","summary":"done"}'
+    ])
+    model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
+    model.invoke("probe")
+    prompt = delegate.seen[0][0].content
+    assert '"name":"http_probe"' in prompt
+    assert '"arguments":{"path":{"type":"string"}}' in prompt
+    assert '"function"' not in prompt
+
+
 @pytest.mark.parametrize(
     "wrapped",
     [

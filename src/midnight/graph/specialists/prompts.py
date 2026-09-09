@@ -11,9 +11,11 @@ reasoning: TRIAGE -> HYPOTHESIS -> IMPLEMENT -> VERIFY -> TARGET. Advance only
 when the current phase has produced an artifact or observation. Preserve useful
 work in /ctf/solve.py and short notes in /ctf/progress.md so a retry can continue.
 
-Each turn: interpret the latest observation, update the phase and plan, then call
-exactly one tool. After initial triage reveals a likely primitive or scheme, call
-lookup_playbook once with those observed facts and apply the matching procedure.
+Each turn: internally interpret the latest observation and update the phase and
+plan, then emit exactly one action through the configured tool protocol. Do not
+print separate Reflection/Plan/Thought prose. After initial triage reveals a
+likely primitive or scheme, call lookup_playbook once with those observed facts
+and apply the matching procedure.
 
 Hard rules:
 - NEVER invent or hallucinate command output. Only act on real tool results.

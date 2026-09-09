@@ -267,8 +267,9 @@ def build_main_graph(
                     HumanMessage(
                         "[CONTINUE] No verified flag has been produced. Your previous "
                         "text was not a solution. Continue from the latest real observation: "
-                        "state the current phase briefly and call exactly one concrete tool now. "
-                        "Use existing artifacts and do not repeat a completed probe."
+                        "internally identify the current phase and emit exactly one concrete "
+                        "tool action now, with no separate prose. Use existing artifacts and "
+                        "do not repeat a completed probe."
                     ),
                 ]
 

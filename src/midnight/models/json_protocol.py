@@ -121,13 +121,39 @@ class JsonProtocolChatModel(BaseChatModel):
         return _StructuredRunnable(self, schema)
 
     def _tool_prompt(self) -> str:
-        definitions = json.dumps(self.bound_tools, ensure_ascii=False, separators=(",", ":"))
+        # Full OpenAI schemas repeat wrapper metadata and long descriptions on
+        # every ReAct turn. A compact projection retains the locally enforced
+        # argument contract while reducing cost and improving adherence for
+        # text-only models.
+        compact = []
+        for item in self.bound_tools:
+            function = item["function"]
+            parameters = function.get("parameters", {})
+            properties = {}
+            for name, schema in (parameters.get("properties") or {}).items():
+                projected = {"type": schema.get("type", "value")}
+                if "default" in schema:
+                    projected["default"] = schema["default"]
+                if "enum" in schema:
+                    projected["enum"] = schema["enum"]
+                properties[name] = projected
+            compact.append(
+                {
+                    "name": function["name"],
+                    "description": str(function.get("description", ""))[:180],
+                    "arguments": properties,
+                    "required": parameters.get("required", []),
+                }
+            )
+        definitions = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
         return (
             "You control tools through strict JSON text. Return exactly one JSON object and no "
             "Markdown. To call a tool use "
             '{"type":"tool_call","tool":"<name>","arguments":{...}}. '
             "To finish use "
             '{"type":"complete","summary":"<final answer>"}. '
+            "Use type=complete only when the requested result is finished; an unfinished plan "
+            "must call a tool. "
             f"Available tool schemas: {definitions}"
         )
 
