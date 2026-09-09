@@ -45,7 +45,8 @@ def test_phase_gate_constrains_target_lane_after_artifact():
         _tool_message(3, "run_shell", {"command": "python -m py_compile solve.py"}),
     ]
     assert gate.constrained_tool_names(messages) == {
-        "run_exploit", "connect_tool", "http_request", "fenjing_ssti"
+        "run_exploit", "connect_tool", "http_request", "fenjing_ssti",
+        "fmtstr_write_scan",
     }
     update = gate.before_model({"messages": messages}, None)
     assert update is not None
@@ -59,6 +60,32 @@ def test_target_gate_recognizes_target_bound_structured_tools():
         _tool_message(2, "run_exploit", {"script": "solve.py", "mode": "target"}),
     ]
     assert gate.before_model({"messages": messages}, None) is None
+
+
+def test_pwn_format_evidence_selects_narrow_specialist_lane():
+    gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99, target_gate=99)
+    messages = [HumanMessage("objdump shows printf(buf), then compare target value")]
+    allowed = gate.constrained_tool_names(messages)
+    assert allowed is not None
+    assert "fmtstr_probe" in allowed
+    assert "fmtstr_write_scan" in allowed
+    assert "connect_tool" not in allowed
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "SPECIALIST_LANE:FORMAT_STRING" in update["messages"][0].content
+
+
+def test_repeated_exploit_requires_revision_or_different_tool():
+    gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99, target_gate=99)
+    messages = [
+        _tool_message(1, "write_file", {"path": "/ctf/solve.py", "content": "x"}),
+        _tool_message(2, "run_exploit", {"mode": "target"}),
+        _tool_message(3, "run_exploit", {"mode": "target"}),
+    ]
+    allowed = gate.constrained_tool_names(messages)
+    assert allowed is not None
+    assert "write_file" in allowed
+    assert "run_exploit" not in allowed
 
 
 def test_network_candidate_requires_target_provenance():

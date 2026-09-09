@@ -48,6 +48,27 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             for call in calls
         )
 
+    def _format_string_indicated(self, messages: list) -> bool:
+        if self.category != "pwn":
+            return False
+        text = "\n".join(str(getattr(message, "content", "")) for message in messages).lower()
+        has_printf = "printf" in text
+        has_format_evidence = any(
+            marker in text
+            for marker in ("format string", "%p", "%n", "%hn", "printf(buf", "printf((char")
+        )
+        return has_printf and has_format_evidence
+
+    @staticmethod
+    def _calls_after_last_write(calls: list[dict], tool_name: str) -> int:
+        last_write = max(
+            (index for index, call in enumerate(calls) if call.get("name") == "write_file"),
+            default=-1,
+        )
+        return sum(
+            call.get("name") == tool_name for call in calls[last_write + 1 :]
+        )
+
     def constrained_tool_names(self, messages: list) -> set[str] | None:
         """Return the deterministic tool lane for the current phase, if any."""
         calls = _calls(messages)
@@ -59,7 +80,34 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             and self._made_artifact(calls)
             and not self._reached_target(calls)
         ):
-            return {"run_exploit", "connect_tool", "http_request", "fenjing_ssti"}
+            return {
+                "run_exploit",
+                "connect_tool",
+                "http_request",
+                "fenjing_ssti",
+                "fmtstr_write_scan",
+            }
+        if self.category == "pwn" and self._calls_after_last_write(calls, "run_exploit") >= 2:
+            return {
+                "read_file",
+                "write_file",
+                "run_shell",
+                "record_evidence",
+                "lookup_playbook",
+                "fmtstr_probe",
+                "fmtstr_write_scan",
+            }
+        if self._format_string_indicated(messages):
+            return {
+                "read_file",
+                "write_file",
+                "record_evidence",
+                "lookup_playbook",
+                "fmtstr_probe",
+                "fmtstr_write_scan",
+                "run_exploit",
+                "submit_flag",
+            }
         return None
 
     @staticmethod
@@ -111,6 +159,21 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                         )
                     ]
                 }
+        if (
+            self._format_string_indicated(messages)
+            and "[SPECIALIST_LANE:FORMAT_STRING]" not in text
+        ):
+            return {
+                "messages": [
+                    HumanMessage(
+                        "[SPECIALIST_LANE:FORMAT_STRING] Evidence indicates an uncontrolled "
+                        "printf. Stop generic probing. Use fmtstr_probe once to identify "
+                        "positional arguments. If a desired halfword and stack-resident "
+                        "pointer are known, use fmtstr_write_scan. Put the confirmed payload "
+                        "in solve.py, verify it, then submit only a flag observed in target output."
+                    )
+                ]
+            }
         return None
 
 
