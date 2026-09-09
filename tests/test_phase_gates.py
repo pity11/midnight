@@ -31,6 +31,15 @@ def test_phase_gate_does_not_repeat_or_override_existing_artifact():
     assert gate.before_model({"messages": messages}, None) is None
 
 
+def test_target_gate_recognizes_target_bound_structured_tools():
+    gate = ArtifactPhaseGateMiddleware(target="target:1337", artifact_gate=99, target_gate=2)
+    messages = [
+        _tool_message(1),
+        _tool_message(2, "run_exploit", {"script": "solve.py", "mode": "target"}),
+    ]
+    assert gate.before_model({"messages": messages}, None) is None
+
+
 def test_network_candidate_requires_target_provenance():
     found: list[str] = []
     tool = make_submit_flag(

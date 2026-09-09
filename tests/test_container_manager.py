@@ -105,6 +105,31 @@ async def test_target_only_solver_uses_internal_network(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_challenge_workspace_is_created_and_bind_mounted(monkeypatch, tmp_path):
+    calls: list[tuple[str, ...]] = []
+
+    async def fake_ensure(self, ctype):
+        return "midnight/misc:latest"
+
+    async def fake_run(*args: str, timeout=None):
+        calls.append(args)
+        if args[1] == "run":
+            return ExecResult(0, "solver-id\n", "")
+        return ExecResult(0, "", "")
+
+    monkeypatch.setattr(ContainerManager, "ensure_image", fake_ensure)
+    monkeypatch.setattr(container_module, "_run", fake_run)
+    workspace = tmp_path / "run-1" / "misc-1"
+    manager = ContainerManager(run_id="run-1", workspace_host_dir=workspace)
+    await manager.create("misc", "test", network_policy="disabled")
+
+    docker_run = next(call for call in calls if call[1] == "run")
+    mount = docker_run[docker_run.index("--mount") + 1]
+    assert mount == f"type=bind,source={workspace.resolve()},target=/ctf"
+    assert workspace.is_dir()
+
+
+@pytest.mark.asyncio
 async def test_target_relay_has_fixed_destination_and_dual_network(monkeypatch):
     calls: list[tuple[str, ...]] = []
 

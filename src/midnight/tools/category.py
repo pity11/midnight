@@ -591,3 +591,41 @@ def make_disk_image_triage(*, env: CTFEnvironment, **_) -> object:
         return _result_text(await env.exec(command, timeout=300))
 
     return disk_image_triage
+
+
+@register_tool(name="pcap_triage", groups=["forensics"])
+def make_pcap_triage(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def pcap_triage(
+        capture: str, display_filter: str = "", follow_tcp_stream: int = -1
+    ) -> str:
+        """Summarize a PCAP/PCAPNG or follow one TCP stream with tshark.
+
+        With no stream selected, reports capture metadata, protocol hierarchy,
+        conversations, DNS names and common plaintext request fields. Set
+        ``follow_tcp_stream`` to an observed index for its ASCII transcript.
+        ``display_filter`` narrows packet-derived fields.
+        """
+        if follow_tcp_stream < -1:
+            raise ValueError("follow_tcp_stream must be -1 or a non-negative index")
+        path = shlex.quote(capture)
+        if follow_tcp_stream >= 0:
+            command = (
+                f"tshark -r {path} -q -z "
+                + shlex.quote(f"follow,tcp,ascii,{follow_tcp_stream}")
+            )
+        else:
+            filter_part = f" -Y {shlex.quote(display_filter)}" if display_filter else ""
+            command = (
+                f"capinfos {path}; echo '[protocols]'; tshark -r {path} -q -z io,phs; "
+                f"echo '[conversations]'; tshark -r {path} -q -z conv,tcp; "
+                f"echo '[high-value-fields]'; tshark -r {path}{filter_part} -T fields "
+                "-e tcp.stream -e ip.src -e ip.dst -e dns.qry.name -e http.request.method "
+                "-e http.host -e http.request.uri -e ftp.request.command -e ftp.request.arg "
+                "2>/dev/null | head -240"
+            )
+        return _result_text(await env.exec(command, timeout=300))
+
+    return pcap_triage

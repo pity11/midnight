@@ -18,6 +18,8 @@ CTFEnvironment, runs it on the shared ``messages``, then returns control.
 
 from __future__ import annotations
 
+import time
+
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
 
@@ -200,11 +202,21 @@ def build_main_graph(
             )
 
             ch = state["challenge"]
+            deadline = ch.get("deadline_epoch")
+            remaining = max(0, int(deadline - time.time())) if deadline else None
+            evidence_tail = ""
+            if attempt > 1:
+                evidence_result = await env.exec(
+                    "test -f evidence.jsonl && tail -n 8 evidence.jsonl || true",
+                    timeout=15,
+                )
+                evidence_tail = evidence_result.stdout.strip()
             base_task = (
                 f"Challenge: {ch.get('name')}\n"
                 f"Type: {expert}\n"
                 f"Targets: {', '.join(ch.get('targets') or []) or ch.get('remote') or 'none'}\n"
                 f"Files are in {cfg.settings.workdir}.\n\n"
+                f"Wall-clock budget remaining: {remaining if remaining is not None else 'unknown'} seconds.\n\n"
                 f"{ch.get('description', '')}\n\n"
                 f"Find the flag. When found, call submit_flag with the exact string."
             )
@@ -225,6 +237,8 @@ def build_main_graph(
                     "phase reached, record the failed assumption, then choose a materially "
                     "different next experiment. Do not repeat prior probes or payloads."
                 )
+                if evidence_tail:
+                    feedback += f"\n\n[DURABLE EVIDENCE]\n{evidence_tail}"
                 if state.get("error"):
                     feedback += f" Previous runtime/model error: {state['error']}."
                 task_text = base_task + feedback

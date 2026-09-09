@@ -14,6 +14,7 @@ import platform as _platform
 import re
 import shlex
 from dataclasses import dataclass, field
+from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from midnight.config import AppConfig, get_config
@@ -122,6 +123,7 @@ class ContainerManager:
     config: AppConfig = field(default_factory=get_config)
     run_id: str = "local"
     scope_id: str | None = None
+    workspace_host_dir: Path | None = None
     _containers: set[str] = field(default_factory=set)
     _networks: set[str] = field(default_factory=set)
     _owned_networks: set[str] = field(default_factory=set)
@@ -362,6 +364,15 @@ class ContainerManager:
             "--label",
             f"midnight.run_id={self.run_id}",
         ]
+        if self.workspace_host_dir is not None:
+            workspace = self.workspace_host_dir.resolve()
+            workspace.mkdir(parents=True, exist_ok=True, mode=0o700)
+            if not workspace.is_dir():
+                raise RuntimeError(f"challenge workspace is not a directory: {workspace}")
+            args += [
+                "--mount",
+                f"type=bind,source={workspace},target={s.workdir}",
+            ]
         # Only pin platform when it differs from the host (e.g. amd64 image on
         # an arm host). On a native-arch host, passing --platform can make
         # docker try to pull a non-existent multi-arch local image.

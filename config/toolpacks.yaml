@@ -34,6 +34,12 @@ pwn:
     license: BSD-2-Clause
     command: python3
     purpose: Symbolic execution and constraint solving for binaries
+  - name: seccomp-tools
+    version: 1.6.0
+    source: https://github.com/david942j/seccomp-tools
+    license: MIT
+    command: seccomp-tools
+    purpose: Dump and disassemble syscall filters before choosing shellcode or ORW
 
 crypto:
   - name: xortool

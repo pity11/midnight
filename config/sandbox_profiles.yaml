@@ -14,6 +14,8 @@ pwn:
     - ropper
     - pwninit
     - one_gadget
+    - seccomp-tools
+    - qemu-x86_64
     - python3
   required_python_modules: [pwn, capstone, angr, unicorn]
   optional_commands: [r2]
@@ -36,9 +38,9 @@ reverse:
   optional_commands: [analyzeHeadless]
 
 web:
-  required_commands: [bash, curl, wget, nc, nmap, sqlmap, nikto, whatweb, fenjing, python3]
+  required_commands: [bash, curl, wget, nc, nmap, sqlmap, nikto, whatweb, ffuf, fenjing, python3]
   required_python_modules: [requests, httpx, bs4]
-  optional_commands: [ffuf]
+  optional_commands: []
 
 crypto:
   required_commands: [bash, openssl, xortool, python3]
@@ -79,6 +81,8 @@ forensics:
     - fls
     - icat
     - testdisk
+    - tshark
+    - capinfos
     - tesseract
     - python3
   required_python_modules: [PIL, volatility3]

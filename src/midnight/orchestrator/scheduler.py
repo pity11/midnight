@@ -99,6 +99,7 @@ class Scheduler:
         run_id: str | None = None,
         checkpoint_store: CheckpointStore | None = None,
         artifacts_root: str | Path = "logs/artifacts",
+        workspace_root: str | Path = "logs/workspaces",
         agent_mode: str = "midnight",
     ):
         cfg = get_config().settings
@@ -108,8 +109,11 @@ class Scheduler:
         self.per_task_timeout = per_task_timeout or cfg.per_task_timeout
         self.journal = journal
         self.run_id = run_id or uuid4().hex
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", self.run_id):
+            raise ValueError(f"unsafe run id: {self.run_id!r}")
         self.checkpoint_store = checkpoint_store
         self.artifacts_root = Path(artifacts_root)
+        self.workspace_root = Path(workspace_root)
         if agent_mode not in {"midnight", "bare"}:
             raise ValueError(f"unknown agent mode: {agent_mode}")
         self.agent_mode = agent_mode
@@ -147,6 +151,7 @@ class Scheduler:
                         instance_started = True
                         self._event("challenge_instance_started", challenge_id)
                     hydrated = await self._hydrate(ch)
+                    hydrated["deadline_epoch"] = time.time() + self.per_task_timeout
                     category = hydrated.get("category_hint") or "unknown"
                     category_sem = self._category_limits.get(category)
                     if category_sem is None:
@@ -279,9 +284,14 @@ class Scheduler:
 
         cfg = get_config()
         challenge_scope = hashlib.sha256(ch.get("id", "?").encode()).hexdigest()[:12]
+        revision = str(ch.get("source_hash") or ch.get("round_id") or "unversioned")
+        revision_scope = hashlib.sha256(revision.encode()).hexdigest()[:16]
         manager = ContainerManager(
             run_id=self.run_id,
             scope_id=f"{self.run_id[:16]}-{challenge_scope}",
+            workspace_host_dir=(
+                self.workspace_root / self.run_id / ch.get("id", "unknown") / revision_scope
+            ),
         )
 
         async def invoke(checkpointer=None):

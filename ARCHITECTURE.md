@@ -24,7 +24,7 @@ PlatformAdapter
 ```
 
 Each challenge has a separate container, graph state, timeout, artifact
-directory, and checkpoint thread. Pwn and reverse engineering share a lower
+directory, durable workspace, and checkpoint thread. Pwn and reverse engineering share a lower
 concurrency pool because native binary tooling and x86 emulation consume more
 resources.
 
@@ -34,8 +34,15 @@ The graph checkpoint key contains the run ID, challenge ID, and content-derived
 revision. A changed statement or attachment therefore cannot inherit stale
 solver state. Completed checkpoints return their previous result without
 launching a container or calling the submitter again. In-progress checkpoints
-resume at the next LangGraph node; a missing container is recreated and the
-attachments are copied back into it.
+resume at the next LangGraph node. A revision-scoped host workspace is mounted
+at `/ctf`, so a missing container can be recreated without losing solve.py,
+progress notes, or structured evidence. Changed challenge content receives a
+different workspace as well as a different checkpoint namespace.
+
+Specialists append decisive observations, hypotheses, disproved assumptions,
+artifacts, and next steps to `evidence.jsonl`. The record is source-attributed
+and survives context trimming and outer retries. It is also the durable exchange
+format for the planned optional solver-racing layer.
 
 The submission ledger reserves a candidate before a platform call. It stores a
 SHA-256 digest instead of the flag value. A crash after sending a candidate but
@@ -51,7 +58,7 @@ reservation and suppresses automatic duplicate submission.
 | `graph/` | Classification, specialist routing, bounded retries, state transitions |
 | `env/` | Container lifecycle, file transfer, command and interactive sessions |
 | `models/` | Role-based LangChain model construction and deterministic test model |
-| `tools/` | Shell, file, debugger, socket, web, binary, and expert-help tools |
+| `tools/` | Shell, file, debugger, socket, web, binary, evidence, and expert-help tools |
 | `events.py` | Append-only, credential-redacted run event journal |
 | `reporting.py` | Flag-free benchmark summaries and model metadata |
 | `persistence.py` | SQLite-backed LangGraph checkpoints |
@@ -85,15 +92,17 @@ with a fixed maximum attempt count.
 - **BoxPwnr** informs provider adapters, benchmark reports, and trace analysis.
 - **Veria ctf-agent** informs challenge-level concurrency and future optional
   model racing.
-- **OpenSage** informs future structured memory and dynamic specialist research.
+- **OpenSage** informs structured memory and future dynamic specialist research.
 
 The current procedural layer combines these ideas without importing benchmark
 solutions. Specialists follow explicit triage, hypothesis, implementation,
 verification, and target phases. Observable evidence selects a small curated
 playbook on demand; repeated identical observations produce a stagnation signal;
-retries continue from saved artifacts; and stateful GDB/network sessions recover
-once before directing the solver to a batch or scripted fallback. Tool images
-include pinned capabilities needed offline, such as UPX and Pickora.
+retries continue from saved artifacts and structured evidence; and stateful
+GDB/network sessions recover once before directing the solver to a batch or
+scripted fallback. Tool images declare fail-closed capability contracts and
+include pinned capabilities needed offline, such as radare2, angr, UPX,
+Volatility 3, JADX, Fenjing, pwninit, and Pickora.
 - **LangGraph** provides bounded state transitions and durable checkpoints.
 
 Midnight uses these projects as design references. Their platform assumptions,
@@ -105,6 +114,7 @@ prompts, benchmark claims, and licensing are not copied into this repository.
 - Attachments are hashed and challenge revisions isolate stale checkpoints.
 - Interrupted and completed runs resume without duplicate work or submission.
 - Containers have CPU, memory, PID, capability, and network policies.
+- Every category image passes its executable/module contract with networking disabled.
 - Per-task timeouts and bounded retries always produce a terminal status.
 - Events, reports, and the submission ledger do not persist raw flag values.
 - Unit tests never load production credentials or contact a competition service.

@@ -10,6 +10,7 @@ from midnight.tools.category import (
     make_fenjing_ssti,
     make_memory_analyze,
     make_one_gadget,
+    make_pcap_triage,
     make_pyinstaller_extract,
     make_run_exploit,
     make_stego_scan,
@@ -163,3 +164,20 @@ async def test_run_exploit_binds_target_and_checks_script() -> None:
 
     with pytest.raises(ValueError, match="between 1 and 600"):
         await action.ainvoke({"timeout_seconds": 999})
+
+
+@pytest.mark.asyncio
+async def test_pcap_triage_and_follow_stream_quote_inputs() -> None:
+    env = _Env()
+    action = make_pcap_triage(env=env)
+    await action.ainvoke({"capture": "traffic sample.pcap", "display_filter": "http.request"})
+    command, timeout = env.calls[0]
+    assert "capinfos 'traffic sample.pcap'" in command
+    assert "-Y http.request" in command
+    assert timeout == 300
+
+    await action.ainvoke({"capture": "traffic sample.pcap", "follow_tcp_stream": 3})
+    assert "follow,tcp,ascii,3" in env.calls[1][0]
+
+    with pytest.raises(ValueError, match="non-negative"):
+        await action.ainvoke({"capture": "x.pcap", "follow_tcp_stream": -2})

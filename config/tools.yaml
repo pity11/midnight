@@ -10,6 +10,8 @@ common: &common
   - list_dir
   - summarize_output
   - lookup_playbook     # evidence-triggered procedural knowledge; no challenge answers
+  - record_evidence     # append-only structured observations/hypotheses/artifacts
+  - read_evidence       # durable context across retries and future solver lanes
   - submit_flag        # 专家认为拿到 flag 时上报候选
   - ask_expert         # 跨专家求助（同容器内联返回）
 
@@ -55,6 +57,7 @@ forensics:
   - stego_scan
   - memory_analyze
   - disk_image_triage
+  - pcap_triage
 
 unknown:
   - *common

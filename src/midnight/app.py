@@ -138,6 +138,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="downloaded challenge attachment directory",
     )
     p.add_argument(
+        "--workspace-root",
+        default="logs/workspaces",
+        help="durable per-run challenge workspaces used for container recovery",
+    )
+    p.add_argument(
         "--cleanup-run",
         metavar="RUN_ID",
         help="remove orphaned Midnight containers for a run and exit",
@@ -347,6 +352,7 @@ async def _amain(args: argparse.Namespace) -> int:
             run_id=run_id,
             checkpoint_store=CheckpointStore(args.checkpoint_path),
             artifacts_root=args.artifacts_root,
+            workspace_root=args.workspace_root,
             per_task_timeout=task_timeout,
             agent_mode=args.agent_mode,
         )

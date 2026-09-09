@@ -54,7 +54,11 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
 
         if self.target and len(calls) >= self.target_gate and "[PHASE_GATE:TARGET]" not in text:
             reached_target = any(
-                call.get("name") == "connect_tool"
+                call.get("name") in {"connect_tool", "http_request", "fenjing_ssti"}
+                or (
+                    call.get("name") == "run_exploit"
+                    and (call.get("args") or {}).get("mode") == "target"
+                )
                 or self.target in str(call.get("args") or {})
                 for call in calls
             )

@@ -219,6 +219,24 @@ PLAYBOOKS: tuple[Playbook, ...] = (
         ("Do not manually base64-decode already decoded parser output.",),
         "A flag is tied to an exact MIME part and reproducible decode chain.",
     ),
+    Playbook(
+        "forensics-pcap-streams",
+        "forensics",
+        ("pcap", "pcapng", "tshark", "tcp stream", "http", "dns", "ftp"),
+        "Reduce a packet capture to relevant conversations and reproducible extracted content.",
+        (
+            "Run pcap_triage to record capture metadata, protocol hierarchy, conversations, and stream indices.",
+            "Filter high-value protocols and endpoints; identify plaintext credentials, requests, transfers, and anomalies.",
+            "Follow only evidence-supported TCP streams and preserve the stream index with each extracted transcript.",
+            "Export transferred objects or decode application payloads, then identify and hash recovered files.",
+            "Tie any flag to a packet, stream, object, and deterministic extraction command.",
+        ),
+        (
+            "A strings scan loses packet direction and reassembly context.",
+            "TLS payloads require key material, a protocol-side leak, or analysis of unencrypted metadata.",
+        ),
+        "The recovered value is reproducible from a named stream or object in the original capture.",
+    ),
 )
 
 

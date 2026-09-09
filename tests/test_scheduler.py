@@ -142,6 +142,17 @@ def test_scheduler_rejects_unknown_agent_mode(tmp_path):
         )
 
 
+def test_scheduler_rejects_unsafe_run_id(tmp_path):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"fixture")
+    with pytest.raises(ValueError, match="unsafe run id"):
+        Scheduler(
+            provider=FixtureProvider(source),
+            submitter=NoopSubmitter(),
+            run_id="../other-run",
+        )
+
+
 @pytest.mark.asyncio
 async def test_managed_provider_instance_is_always_stopped(tmp_path):
     class ManagedProvider(FixtureProvider):

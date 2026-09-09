@@ -13,7 +13,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         bash coreutils file xxd binutils \
         python3 python3-pip python3-venv \
         python3-capstone \
-        gcc g++ gcc-multilib g++-multilib gdb gdbserver make patchelf ruby ruby-dev \
+        gcc g++ gcc-multilib g++-multilib gdb gdbserver make patchelf nasm qemu-user ruby ruby-dev \
         libc6-i386 libc6-dev-i386 ltrace strace \
         netcat-openbsd socat curl \
         libc6-dbg libc6-dev \
@@ -37,7 +37,8 @@ RUN curl -fsSL --retry 5 \
     && echo "${PWNINIT_SHA256}  /tmp/pwninit" | sha256sum -c - \
     && install -m 0755 /tmp/pwninit /usr/local/bin/pwninit \
     && rm /tmp/pwninit \
-    && gem install one_gadget -v 1.9.0 --no-document
+    && gem install one_gadget -v 1.9.0 --no-document \
+    && gem install seccomp-tools -v 1.6.0 --no-document
 
 # GEF for a friendlier gdb (used by gdb_tool / IAT)
 RUN bash -c "$(curl -fsSL https://gef.blah.cat/sh)" || true

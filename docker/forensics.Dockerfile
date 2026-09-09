@@ -12,7 +12,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         bash coreutils file xxd binutils \
         python3 python3-pip python3-venv python3-pil \
         ruby binwalk foremost exiftool steghide \
-        sleuthkit testdisk xfsprogs \
+        sleuthkit testdisk xfsprogs tshark tcpdump \
         imagemagick tesseract-ocr ffmpeg sox \
         p7zip-full unzip tar gzip bzip2 xz-utils \
         ca-certificates git \

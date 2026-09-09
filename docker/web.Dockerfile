@@ -13,7 +13,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         bash coreutils file \
         python3 python3-pip python3-venv \
         python3-requests python3-httpx python3-bs4 \
-        curl wget netcat-openbsd nmap jq \
+        curl wget netcat-openbsd nmap jq ffuf \
         sqlmap nikto whatweb \
         ca-certificates git \
     && rm -rf /var/lib/apt/lists/*

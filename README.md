@@ -20,6 +20,7 @@ The benchmark policy and capability-claim criteria are defined in
 - Platform-neutral provider and submission interfaces.
 - A configurable JSON-over-HTTP competition adapter.
 - SQLite graph checkpoints and a durable, flag-redacted submission ledger.
+- Durable per-run challenge workspaces for container restart recovery.
 - Append-only JSONL run events with credential-field redaction.
 - Deterministic benchmark reports that do not persist flag values.
 - Local fixtures and stub models for offline development.
@@ -88,6 +89,11 @@ MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight \
   --run-id benchmark-001 \
   --checkpoint-path logs/checkpoints.sqlite
 ```
+
+Each challenge also receives a revision-scoped directory below
+`logs/workspaces/`, mounted at `/ctf`. Solver artifacts and `evidence.jsonl`
+survive container recreation while remaining isolated from changed task content
+and independent evaluation attempts.
 
 ## HTTP platform adapter
 
