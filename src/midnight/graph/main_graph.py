@@ -228,25 +228,56 @@ def build_main_graph(
                 task_text = base_task
 
             log.info("specialist %s attempt %d/%d", expert, attempt, cfg.settings.max_attempts)
-            try:
-                result = await agent.ainvoke(
-                    {"messages": [HumanMessage(task_text)]},
-                    config={"recursion_limit": cfg.settings.specialist_step_limit},
+            # A weak model often emits a plain-text conclusion after one useful
+            # tool call, which LangChain correctly treats as a terminal answer.
+            # Retain a bounded tail from the previous lane and continue a
+            # prematurely terminated lane twice before spending an outer retry.
+            prior = list(state.get("messages") or [])[-16:] if attempt > 1 else []
+            invocation_messages = [*prior, HumanMessage(task_text)]
+            result: dict = {"messages": invocation_messages}
+            protocol_error: str | None = None
+            for continuation in range(3):
+                try:
+                    result = await agent.ainvoke(
+                        {"messages": invocation_messages},
+                        config={"recursion_limit": cfg.settings.specialist_step_limit},
+                    )
+                except RuntimeError as exc:
+                    if not str(exc).startswith("MODEL_"):
+                        raise
+                    protocol_error = str(exc)
+                    log.warning(
+                        "specialist %s model protocol failed on attempt %d: %s",
+                        expert,
+                        attempt,
+                        exc,
+                    )
+                    break
+
+                current_messages = list(result.get("messages", []))
+                tool_calls = sum(
+                    len(getattr(message, "tool_calls", None) or [])
+                    for message in current_messages
                 )
-            except RuntimeError as exc:
-                if not str(exc).startswith("MODEL_"):
-                    raise
-                log.warning(
-                    "specialist %s model protocol failed on attempt %d: %s",
-                    expert,
-                    attempt,
-                    exc,
-                )
+                if collected or tool_calls >= 12 or continuation == 2:
+                    break
+                invocation_messages = [
+                    *current_messages[-24:],
+                    HumanMessage(
+                        "[CONTINUE] No verified flag has been produced. Your previous "
+                        "text was not a solution. Continue from the latest real observation: "
+                        "state the current phase briefly and call exactly one concrete tool now. "
+                        "Use existing artifacts and do not repeat a completed probe."
+                    ),
+                ]
+
+            if protocol_error:
                 return {
+                    "messages": result.get("messages", []),
                     "candidate_flags": collected,
                     "attempt": attempt,
                     "container_id": container_id,
-                    "error": str(exc),
+                    "error": protocol_error,
                 }
             # also scan the whole transcript for flags (defense in depth)
             transcript = "\n".join(
