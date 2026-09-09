@@ -18,6 +18,10 @@ def test_playbook_selection_uses_observable_signals():
     rendered = render_playbooks("crypto", "RSA with alternating decimal digits of p and q")
     assert "crypto-rsa-decimal-digit-leak" in rendered
     assert "p*q == n" in rendered
+    assert find_playbooks("web", "Flask render_template_string Jinja SSTI")[0].key == "web-ssti"
+    assert find_playbooks("forensics", "incident auth.log powershell")[0].key == (
+        "forensics-incident-logs"
+    )
 
 
 def test_catalog_has_no_benchmark_specific_material():

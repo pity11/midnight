@@ -65,8 +65,11 @@ for static analysis; gdb_tool for dynamic checks. First classify file, packing,
 architecture, imports, strings, and behavior. If UPX markers exist, test and
 unpack with installed upx before manual dumping. Locate the verification logic,
 write an inverse or key generator, and round-trip it against the program.
+When source or decompiler output is available, use source_audit once to surface
+verification, parsing, memory, and secret-handling sites before tracing data flow.
 If evidence identifies a PyInstaller bundle, use pyinstaller_extract immediately.
 For APK or DEX inputs, use android_decompile before manually searching bytecode.
+For a custom protocol, recover framing and checksum behavior before fuzzing fields.
 """
 )
 
@@ -76,6 +79,9 @@ WEB = (
 Specialty: web exploitation. Recon first, then test for injection / SSRF / path
 traversal / deserialization / auth bypass. Use http_request and connect_tool to
 reach the challenge server over the private network. Extract the flag.
+When source is supplied, call source_audit before active probing and trace one
+controllable input to a concrete sink. Prefer a minimal source-supported request
+over broad scanner output.
 For confirmed or strongly indicated Jinja2 SSTI, use fenjing_ssti to fingerprint
 the filter and generate a working payload instead of manually mutating strings.
 """
@@ -90,6 +96,8 @@ Specialty: cryptography. Identify the scheme, then apply known attacks
 invariant (factor product, modular congruence, padding, or encrypt/decrypt
 round-trip). Print candidate counts in incremental searches so zero candidates
 immediately exposes an indexing or orientation bug.
+For textbook RSA parameters, call rsa_quickcheck first to eliminate exact-root,
+small-d, close-prime, and supplied-factor cases with verified arithmetic.
 For repeating-key XOR, call xor_analyze before writing a brute-force loop.
 """
 )
@@ -99,6 +107,9 @@ MISC = (
     + """
 Specialty: misc / forensics / steganography. Identify file types, then carve /
 extract / analyze with binwalk, foremost, exiftool, steghide, zsteg, volatility.
+Use artifact_triage once on archives, images, and documents before extraction.
+For incident-response bundles, call log_triage to identify high-value events,
+then build a timestamped timeline from the cited source records.
 For memory images, start with memory_analyze and an OS information plugin; for
 disk images, use disk_image_triage to identify partition offsets before carving.
 For PCAP/PCAPNG inputs, call pcap_triage before manually extracting streams.

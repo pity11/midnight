@@ -88,6 +88,40 @@ def make_binary_triage(*, env: CTFEnvironment, **_) -> object:
     return binary_triage
 
 
+@register_tool(name="source_audit", groups=["web", "reverse"])
+def make_source_audit(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def source_audit(path: str = ".") -> str:
+        """Find high-value CTF data flows and dangerous sinks in supplied source.
+
+        This is a bounded, read-only first pass over common source and deployment
+        files. Use its file:line evidence to select a focused playbook instead of
+        launching broad scanners.
+        """
+        root = shlex.quote(path)
+        pattern = (
+            r"eval\(|exec\(|system\(|popen\(|subprocess|render_template_string|"
+            r"pickle\.loads|yaml\.load|unserialize|include\(|require\(|open\(|"
+            r"send_file|SELECT |INSERT |UPDATE |jwt|secret|password|flag|"
+            r"strcpy|strcat|gets\(|scanf\(|printf\(|memcpy\(|malloc\(|free\("
+        )
+        command = (
+            f"echo '[files]'; find {root} -maxdepth 5 -type f "
+            "\\( -name '*.py' -o -name '*.php' -o -name '*.js' -o -name '*.ts' "
+            "-o -name '*.java' -o -name '*.c' -o -name '*.cc' -o -name '*.cpp' "
+            "-o -name '*.go' -o -name '*.rs' -o -name 'Dockerfile*' "
+            "-o -name '*.yml' -o -name '*.yaml' \\) | head -160; "
+            f"echo '[high-value-lines]'; grep -RInE --binary-files=without-match "
+            f"--exclude-dir=.git --exclude-dir=node_modules {shlex.quote(pattern)} {root} "
+            "2>/dev/null | head -240"
+        )
+        return _result_text(await env.exec(command, timeout=90))
+
+    return source_audit
+
+
 @register_tool(name="upx_unpack", groups=["reverse"])
 def make_upx_unpack(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
@@ -677,6 +711,85 @@ def make_xor_analyze(*, env: CTFEnvironment, **_) -> object:
     return xor_analyze
 
 
+@register_tool(name="rsa_quickcheck", groups=["crypto"])
+def make_rsa_quickcheck(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def rsa_quickcheck(
+        n: str,
+        e: str,
+        c: str,
+        p: str = "",
+        q: str = "",
+        fermat_iterations: int = 50000,
+    ) -> str:
+        """Run bounded, offline checks for common textbook RSA weaknesses.
+
+        Integers accept decimal or ``0x`` notation. Checks supplied factors,
+        exact low-exponent plaintext roots, Wiener's small-d attack, and bounded
+        Fermat close-prime factorization. Every recovered factor is multiplied
+        back to ``n`` before plaintext bytes are emitted.
+        """
+        if fermat_iterations < 0 or fermat_iterations > 500000:
+            raise ValueError("fermat_iterations must be between 0 and 500000")
+        values = {"n": n, "e": e, "c": c, "p": p, "q": q}
+        encoded_values = base64.b64encode(repr(values).encode()).decode()
+        program = f"""import ast, base64, math
+from sympy import integer_nthroot
+v=ast.literal_eval(base64.b64decode({encoded_values!r}).decode())
+def num(x): return int(x, 0) if isinstance(x, str) else int(x)
+n,e,c=num(v['n']),num(v['e']),num(v['c'])
+def show(tag, factors=None, message=None):
+    print('[attack='+tag+']')
+    if factors:
+        p,q=factors
+        assert p*q==n
+        phi=(p-1)*(q-1)
+        if math.gcd(e,phi)!=1:
+            print('factors_verified=true gcd_e_phi='+str(math.gcd(e,phi)))
+            return True
+        d=pow(e,-1,phi); m=pow(c,d,n)
+    else: m=message
+    raw=m.to_bytes(max(1,(m.bit_length()+7)//8),'big')
+    print('plaintext_hex='+raw.hex())
+    print('plaintext_repr='+repr(raw))
+    return True
+if v['p'] or v['q']:
+    known=num(v['p'] or v['q'])
+    if known>1 and n%known==0: show('supplied-factor',(known,n//known)); raise SystemExit
+root,exact=integer_nthroot(c,e)
+if exact: show('exact-small-exponent-root',message=int(root)); raise SystemExit
+def convergents(a,b):
+    cf=[]
+    while b: cf.append(a//b); a,b=b,a%b
+    p0,p1,q0,q1=0,1,1,0
+    for x in cf:
+        p0,p1=p1,x*p1+p0; q0,q1=q1,x*q1+q0
+        yield p1,q1
+for k,d in convergents(e,n):
+    if k and (e*d-1)%k==0:
+        phi=(e*d-1)//k; s=n-phi+1; disc=s*s-4*n
+        if disc>=0:
+            t=math.isqrt(disc)
+            if t*t==disc and (s+t)%2==0:
+                fp,fq=(s+t)//2,(s-t)//2
+                if fp>1 and fp*fq==n: show('wiener',(fp,fq)); raise SystemExit
+a=math.isqrt(n)
+if a*a<n: a+=1
+for _ in range({fermat_iterations}):
+    b2=a*a-n; b=math.isqrt(b2)
+    if b*b==b2 and a-b>1: show('fermat',(a-b,a+b)); raise SystemExit
+    a+=1
+print('[no-quick-attack] exact_root=false wiener=false fermat_iterations={fermat_iterations}')
+"""
+        encoded = base64.b64encode(program.encode()).decode()
+        command = f"printf %s {encoded} | base64 -d | python3 -"
+        return _result_text(await env.exec(command, timeout=180))
+
+    return rsa_quickcheck
+
+
 @register_tool(name="stego_scan", groups=["misc", "forensics"])
 def make_stego_scan(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
@@ -703,6 +816,49 @@ def make_stego_scan(*, env: CTFEnvironment, **_) -> object:
         return _result_text(await env.exec(command, timeout=180))
 
     return stego_scan
+
+
+@register_tool(name="artifact_triage", groups=["misc", "forensics"])
+def make_artifact_triage(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def artifact_triage(path: str) -> str:
+        """Read-only triage for archives, images, documents, and nested files."""
+        target = shlex.quote(path)
+        command = (
+            f"file {target}; echo '[metadata]'; exiftool {target} 2>/dev/null | head -100; "
+            f"echo '[archive-members]'; 7z l -slt {target} 2>/dev/null | head -180; "
+            f"echo '[embedded-signatures]'; binwalk {target} 2>/dev/null | head -100; "
+            f"echo '[high-value-strings]'; strings -a -n 6 {target} 2>/dev/null | "
+            "grep -Ei 'flag|ctf|password|secret|token|user|http|BEGIN ' | head -160"
+        )
+        return _result_text(await env.exec(command, timeout=120))
+
+    return artifact_triage
+
+
+@register_tool(name="log_triage", groups=["forensics"])
+def make_log_triage(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def log_triage(path: str = ".") -> str:
+        """Build a bounded first-pass inventory of incident and application logs."""
+        root = shlex.quote(path)
+        pattern = (
+            r"failed|failure|invalid|error|denied|unauthorized|login|sudo|ssh|"
+            r"powershell|cmd\.exe|/bin/sh|base64|curl|wget|upload|webshell|"
+            r"union[ +]select|\.\./|%2e|flag|secret"
+        )
+        command = (
+            f"echo '[log-files]'; find {root} -maxdepth 5 -type f -print | head -160; "
+            f"echo '[high-value-events]'; grep -RInaE --binary-files=without-match "
+            f"--exclude-dir=.git {shlex.quote(pattern)} {root} 2>/dev/null | head -260"
+        )
+        return _result_text(await env.exec(command, timeout=120))
+
+    return log_triage
 
 
 @register_tool(name="memory_analyze", groups=["forensics"])

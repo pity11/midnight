@@ -31,6 +31,7 @@ pwn:
 reverse:
   - *common
   - binary_triage
+  - source_audit
   - upx_unpack
   - gdb_tool
   - r2_interact
@@ -42,20 +43,25 @@ web:
   - *common
   - connect_tool
   - http_request
+  - source_audit
   - fenjing_ssti
 
 crypto:
   - *common
   - xor_analyze
+  - rsa_quickcheck
 
 misc:
   - *common
   - pickle_disassemble
+  - artifact_triage
   - stego_scan
 
 forensics:
   - *common
   - pickle_disassemble
+  - artifact_triage
+  - log_triage
   - stego_scan
   - memory_analyze
   - disk_image_triage

@@ -135,6 +135,57 @@ PLAYBOOKS: tuple[Playbook, ...] = (
         "The exploit recreates the same allocation state from a fresh process and reaches the target effect.",
     ),
     Playbook(
+        "web-ssti",
+        "web",
+        ("ssti", "jinja", "template", "render_template_string", "flask"),
+        "Confirm server-side template evaluation and turn the identified engine into a minimal flag-read request.",
+        (
+            "Locate the exact parameter and rendering sink from source or a harmless arithmetic probe.",
+            "Fingerprint the template engine and record which characters, attributes, and delimiters survive filtering.",
+            "Use fenjing_ssti for Jinja2 filters; otherwise construct the shortest engine-specific read primitive.",
+            "Preserve the final HTTP request and the target response containing the flag.",
+        ),
+        (
+            "Do not treat reflected input as template execution without an evaluated expression.",
+            "Use the challenge target only; broad crawling wastes the short competition window.",
+        ),
+        "One reproducible target request evaluates server-side and returns the flag-bearing response.",
+    ),
+    Playbook(
+        "web-sqli",
+        "web",
+        ("sql", "sqlite", "mysql", "select", "query", "login", "injection"),
+        "Convert a source-supported SQL injection into the smallest query that reaches challenge data.",
+        (
+            "Identify the query, database engine, controllable clause, quoting context, and response oracle.",
+            "Prove boolean or error influence with two contrasting requests.",
+            "Prefer a direct UNION/error extraction when columns and output are known; use bounded automation only after proof.",
+            "Save the exact request sequence and response containing the recovered value.",
+        ),
+        (
+            "Do not launch an unbounded sqlmap scan before identifying the parameter and request shape.",
+            "Account for JSON bodies, cookies, prepared statements, and second-order storage paths.",
+        ),
+        "A minimal scripted request recovers the target value from the real challenge service.",
+    ),
+    Playbook(
+        "web-file-read",
+        "web",
+        ("lfi", "path traversal", "include", "file", "download", "php filter", "open("),
+        "Turn path control into a reproducible source or flag read while respecting the application parser.",
+        (
+            "Trace path construction, normalization, extension appending, and allowlist checks from input to filesystem access.",
+            "Prove traversal with a stable non-secret file or supplied source path.",
+            "Apply encoding, wrapper, archive, or double-decoding behavior only when supported by the implementation.",
+            "Use the resulting source disclosure to locate the flag path or a stronger application primitive.",
+        ),
+        (
+            "A 200 response can be a custom error page; compare content and length against a negative control.",
+            "Do not guess flag paths repeatedly when source or environment files can disclose them.",
+        ),
+        "The target returns a named file through a request reproducible from a clean session.",
+    ),
+    Playbook(
         "reverse-upx",
         "reverse",
         ("upx", "upx0", "upx1", "packed", "packer", "high entropy"),
@@ -169,6 +220,40 @@ PLAYBOOKS: tuple[Playbook, ...] = (
         "The original program reaches its success branch on the generated input.",
     ),
     Playbook(
+        "reverse-symbolic-path",
+        "reverse",
+        ("angr", "symbolic", "many branches", "find", "avoid", "success string"),
+        "Use bounded symbolic execution when the success and failure branches are identifiable but manual inversion is costly.",
+        (
+            "Locate input ingestion and exact success/failure basic blocks with strings and cross-references.",
+            "Constrain input length and alphabet before exploration; hook unsupported library calls only when required.",
+            "Run angr with explicit find and avoid addresses and a bounded state count.",
+            "Replay the concrete solution through the original binary and save the solver script.",
+        ),
+        (
+            "Unconstrained stdin and path explosion will consume the entire competition window.",
+            "A symbolic candidate is incomplete until the original executable reaches success.",
+        ),
+        "A saved solver produces an input that the original program accepts from a fresh process.",
+    ),
+    Playbook(
+        "reverse-protocol-state-machine",
+        "reverse",
+        ("protocol", "packet", "opcode", "state machine", "crc", "checksum", "frame"),
+        "Recover a compact protocol grammar and implement a client or decoder that reproduces the accepted state transition.",
+        (
+            "Identify framing, byte order, length fields, message types, state variables, and integrity checks.",
+            "Record one valid or partially valid exchange and map each response difference to a parser stage.",
+            "Implement encode/decode and checksum functions with round-trip assertions in solve.py.",
+            "Drive the minimal valid state sequence against the supplied target and preserve the transcript.",
+        ),
+        (
+            "Do not fuzz every byte before identifying framing and checksum boundaries.",
+            "Keep binary data as bytes; accidental text encoding commonly corrupts length and checksum fields.",
+        ),
+        "The client creates valid frames and reaches the target state without manual interaction.",
+    ),
+    Playbook(
         "crypto-rsa-decimal-digit-leak",
         "crypto",
         ("rsa", "decimal digits", "alternating digits", "partial p", "partial q", "digit leak"),
@@ -186,6 +271,40 @@ PLAYBOOKS: tuple[Playbook, ...] = (
             "A zero-candidate depth is an orientation/constraint bug, not evidence that RSA arithmetic failed.",
         ),
         "Recovered integers multiply exactly to n and RSA decryption round-trips under the public exponent.",
+    ),
+    Playbook(
+        "crypto-rsa-quick-attacks",
+        "crypto",
+        ("rsa", "modulus", "public exponent", "ciphertext", "fermat", "wiener", "small e"),
+        "Eliminate common RSA construction failures before attempting expensive algebra.",
+        (
+            "Parse n, e, c and all auxiliary values exactly; check gcd relationships and modulus reuse.",
+            "Test exact low-exponent roots when padding is absent, then Wiener for unusually small d.",
+            "Try bounded Fermat only when p and q appear close; stop at the configured iteration cap.",
+            "When factors are recovered, assert p*q == n, compute d, decrypt, and validate the byte encoding.",
+        ),
+        (
+            "Do not call a factorization success without multiplying factors back to n.",
+            "Readable bytes alone are not proof if padding or block ordering remains unresolved.",
+        ),
+        "A mathematically verified relation recovers plaintext bytes or rules out each quick attack.",
+    ),
+    Playbook(
+        "crypto-prng-lcg",
+        "crypto",
+        ("lcg", "prng", "random", "seed", "consecutive output", "modulus", "nonce"),
+        "Recover generator state or parameters from observed outputs and predict only after replay validation.",
+        (
+            "Write the exact recurrence and identify which state bits or transformed outputs are exposed.",
+            "Use consecutive-output differences and gcd relations to recover an unknown modulus when applicable.",
+            "Solve multiplier and increment modulo the verified modulus, accounting for non-invertible differences.",
+            "Replay every known output before predicting the next value or reconstructing a key/nonce.",
+        ),
+        (
+            "Python's random, libc rand, LCGs, and xorshift families require different state recovery methods.",
+            "One matching output is insufficient; validate the complete observed sequence.",
+        ),
+        "Recovered parameters reproduce all observations and deterministically predict a withheld output.",
     ),
     Playbook(
         "misc-restricted-pickle",
@@ -236,6 +355,40 @@ PLAYBOOKS: tuple[Playbook, ...] = (
             "TLS payloads require key material, a protocol-side leak, or analysis of unencrypted metadata.",
         ),
         "The recovered value is reproducible from a named stream or object in the original capture.",
+    ),
+    Playbook(
+        "forensics-archive-image",
+        "forensics",
+        ("zip", "archive", "image", "png", "jpeg", "metadata", "binwalk", "stego"),
+        "Enumerate containers and image channels before applying format-specific recovery.",
+        (
+            "Identify the real file type, metadata, archive members, trailing bytes, and embedded signatures.",
+            "Extract into a separate directory and hash recovered children to preserve provenance.",
+            "For images, inspect dimensions, channels, palette, alpha, OCR, and bounded LSB scans based on format.",
+            "Recurse only into evidence-bearing files and record the exact extraction chain.",
+        ),
+        (
+            "File extensions are untrusted and recursive extraction may create loops or path traversal entries.",
+            "A random-looking zsteg candidate needs structure or a flag-format match before acceptance.",
+        ),
+        "A deterministic command chain connects the original artifact to the recovered value.",
+    ),
+    Playbook(
+        "forensics-incident-logs",
+        "forensics",
+        ("log", "incident", "access.log", "auth.log", "event", "powershell", "webshell"),
+        "Build a short incident timeline that connects entry point, execution, persistence, and flag-bearing evidence.",
+        (
+            "Inventory timestamps, hosts, users, source addresses, event types, and available time zones.",
+            "Find rare errors, authentication anomalies, encoded commands, uploads, process launches, and outbound connections.",
+            "Normalize high-value events into chronological order and correlate identifiers across log sources.",
+            "Decode or recover referenced payloads, then tie the answer to exact source lines and timestamps.",
+        ),
+        (
+            "Keyword counts without a timeline do not establish causality.",
+            "Normalize time zones before comparing events from different systems.",
+        ),
+        "A reproducible timeline cites the exact records that establish the requested incident fact.",
     ),
 )
 

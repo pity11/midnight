@@ -7,6 +7,7 @@ import pytest
 
 from midnight.tools.category import (
     make_android_decompile,
+    make_artifact_triage,
     make_disk_image_triage,
     make_fenjing_ssti,
     make_fmtstr_probe,
@@ -15,7 +16,9 @@ from midnight.tools.category import (
     make_one_gadget,
     make_pcap_triage,
     make_pyinstaller_extract,
+    make_rsa_quickcheck,
     make_run_exploit,
+    make_source_audit,
     make_stego_scan,
     make_xor_analyze,
 )
@@ -96,6 +99,42 @@ async def test_xor_analyze_builds_a_narrow_command() -> None:
     assert "--known-plaintext 'flag{'" in command
     assert "'cipher data.bin'" in command
     assert timeout == 180
+
+
+@pytest.mark.asyncio
+async def test_rsa_quickcheck_is_offline_and_bounded() -> None:
+    env = _Env()
+    action = make_rsa_quickcheck(env=env)
+    await action.ainvoke(
+        {"n": "3233", "e": "17", "c": "2790", "p": "61", "fermat_iterations": 10}
+    )
+    command, timeout = env.calls[0]
+    assert command.startswith("printf %s ")
+    assert command.endswith(" | base64 -d | python3 -")
+    assert timeout == 180
+
+    with pytest.raises(ValueError, match="between 0 and 500000"):
+        await action.ainvoke({"n": "1", "e": "3", "c": "1", "fermat_iterations": 500001})
+    assert len(env.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_source_and_artifact_triage_quote_paths() -> None:
+    source_env = _Env()
+    source = make_source_audit(env=source_env)
+    await source.ainvoke({"path": "source tree"})
+    command, timeout = source_env.calls[0]
+    assert "find 'source tree'" in command
+    assert "grep -RInE" in command
+    assert timeout == 90
+
+    artifact_env = _Env()
+    artifact = make_artifact_triage(env=artifact_env)
+    await artifact.ainvoke({"path": "evidence file.zip"})
+    command, timeout = artifact_env.calls[0]
+    assert "7z l -slt 'evidence file.zip'" in command
+    assert "binwalk 'evidence file.zip'" in command
+    assert timeout == 120
 
 
 @pytest.mark.asyncio
