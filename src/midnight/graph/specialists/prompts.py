@@ -43,6 +43,8 @@ the supplied endpoint and capture its complete response. For PIE+BOF, validate
 the leaked address and compute the base before ROP. For format strings, determine
 the positional index and smallest write width. Restart a dead gdb session or use
 batch gdb/objdump; never grind on a broken interactive session.
+When libc/loader files are supplied, use pwninit_setup before hand-patching. Use
+one_gadget only after you can explain and satisfy the returned constraints.
 """
 )
 
@@ -54,6 +56,7 @@ for static analysis; gdb_tool for dynamic checks. First classify file, packing,
 architecture, imports, strings, and behavior. If UPX markers exist, test and
 unpack with installed upx before manual dumping. Locate the verification logic,
 write an inverse or key generator, and round-trip it against the program.
+If evidence identifies a PyInstaller bundle, use pyinstaller_extract immediately.
 """
 )
 
@@ -63,6 +66,8 @@ WEB = (
 Specialty: web exploitation. Recon first, then test for injection / SSRF / path
 traversal / deserialization / auth bypass. Use http_request and connect_tool to
 reach the challenge server over the private network. Extract the flag.
+For confirmed or strongly indicated Jinja2 SSTI, use fenjing_ssti to fingerprint
+the filter and generate a working payload instead of manually mutating strings.
 """
 )
 
@@ -75,6 +80,7 @@ Specialty: cryptography. Identify the scheme, then apply known attacks
 invariant (factor product, modular congruence, padding, or encrypt/decrypt
 round-trip). Print candidate counts in incremental searches so zero candidates
 immediately exposes an indexing or orientation bug.
+For repeating-key XOR, call xor_analyze before writing a brute-force loop.
 """
 )
 
@@ -83,6 +89,7 @@ MISC = (
     + """
 Specialty: misc / forensics / steganography. Identify file types, then carve /
 extract / analyze with binwalk, foremost, exiftool, steghide, zsteg, volatility.
+For PNG/BMP LSB evidence, use stego_scan and extract the reported channel.
 For Python serialization challenges, read the validator and allowed opcodes or
 globals, model the VM stack, disassemble the generated payload, and validate it
 locally. For MIME/archive layers, preserve the exact decode provenance. Recover

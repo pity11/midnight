@@ -20,6 +20,8 @@ pwn:
   - connect_tool
   - checksec
   - rop_gadget
+  - pwninit_setup
+  - one_gadget
 
 reverse:
   - *common
@@ -28,22 +30,27 @@ reverse:
   - gdb_tool
   - r2_interact
   - ghidra_headless
+  - pyinstaller_extract
 
 web:
   - *common
   - connect_tool
   - http_request
+  - fenjing_ssti
 
 crypto:
   - *common
+  - xor_analyze
 
 misc:
   - *common
   - pickle_disassemble
+  - stego_scan
 
 forensics:
   - *common
   - pickle_disassemble
+  - stego_scan
 
 unknown:
   - *common

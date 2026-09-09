@@ -1,4 +1,4 @@
-# web specialist image (native arm64 is fine).
+# web specialist image (linux/amd64 for the uniform benchmark runtime).
 # Build: docker build -t midnight/web:latest -f docker/web.Dockerfile .
 FROM ubuntu:22.04
 
@@ -17,6 +17,12 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         sqlmap \
         ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
+
+# Fenjing is purpose-built for Jinja2 SSTI challenges and can generate WAF
+# bypass payloads or drive a challenge endpoint. Keep it inside the web image so
+# benchmark runs remain self-contained after the image has been built.
+RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 60 \
+        fenjing==0.9.1
 
 WORKDIR /ctf
 CMD ["sleep", "infinity"]

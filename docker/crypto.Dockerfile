@@ -1,4 +1,4 @@
-# crypto specialist image (native arm64 is fine).
+# crypto specialist image (linux/amd64 for the uniform benchmark runtime).
 # Build: docker build -t midnight/crypto:latest -f docker/crypto.Dockerfile .
 FROM ubuntu:22.04
 
@@ -21,6 +21,11 @@ RUN if [ -n "$APT_MIRROR" ]; then \
 # use PyCryptodome's Crypto namespace, so expose the same packaged modules there.
 RUN ln -s /usr/lib/python3/dist-packages/Cryptodome \
         /usr/lib/python3/dist-packages/Crypto
+
+# Fast repeating-key XOR analysis. More specialized suites (RsaCtfTool/Sage)
+# remain separate because their full dependency closure is substantially larger.
+RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 60 \
+        xortool==1.1.0
 
 # NOTE: SageMath is heavy; add a dedicated sage image if a challenge needs it.
 

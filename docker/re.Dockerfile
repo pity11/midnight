@@ -29,6 +29,11 @@ RUN curl -fsSL --retry 5 \
     && install -m 0755 "/tmp/upx-${UPX_VERSION}-amd64_linux/upx" /usr/local/bin/upx \
     && rm -rf /tmp/upx*
 
+# Extract Python bytecode from PyInstaller-built ELF and PE challenges without
+# requiring the interpreter version used to build the original executable.
+RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 60 \
+        pyinstxtractor-ng==2026.7.3
+
 # radare2 is not in Ubuntu repos and building from source is heavy/fragile in
 # CI. It is OPTIONAL: r2_interact degrades gracefully when r2 is absent. To add
 # it, uncomment below (needs ~5 min and the acr build deps):

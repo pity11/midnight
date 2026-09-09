@@ -1,4 +1,4 @@
-# misc / forensics / stego specialist image (native arm64 is fine).
+# misc / forensics / stego image (linux/amd64 for the benchmark runtime).
 # Build: docker build -t midnight/misc:latest -f docker/misc.Dockerfile .
 FROM ubuntu:22.04
 
@@ -12,7 +12,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     && apt-get -o Acquire::Retries=10 install -y --fix-missing --no-install-recommends \
         bash coreutils file xxd \
         python3 python3-pip python3-venv \
-        python3-pil \
+        python3-pil ruby \
         binwalk foremost exiftool steghide \
         zlib1g-dev \
         ca-certificates git \
@@ -23,7 +23,11 @@ RUN if [ -n "$APT_MIRROR" ]; then \
 # offline runs; pickletools itself remains the validation/disassembly oracle.
 RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 60 pickora==1.0.0
 
-# NOTE: volatility / zsteg add on demand for specific forensics challenges.
+# zsteg covers the common PNG/BMP LSB paths and can extract a selected channel
+# directly. Version pinning keeps forensic results comparable across runs.
+RUN gem install zsteg -v 0.2.14 --no-document
+
+# NOTE: volatility and large password dictionaries remain opt-in packs.
 
 WORKDIR /ctf
 CMD ["sleep", "infinity"]

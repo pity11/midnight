@@ -1,0 +1,80 @@
+# Curated third-party CTF tools built into specialist images.
+#
+# This is provenance metadata, not runtime configuration. Every entry is pinned
+# in its Dockerfile and invoked as an independent process; no upstream source is
+# copied into Midnight. Re-check the upstream license before redistributing an
+# image outside the team.
+
+web:
+  - name: Fenjing
+    version: 0.9.1
+    source: https://github.com/Marven11/Fenjing
+    license: MPL-2.0
+    command: fenjing
+    purpose: Jinja2 SSTI discovery and WAF-aware payload generation
+
+pwn:
+  - name: pwninit
+    version: 3.3.3
+    source: https://github.com/io12/pwninit
+    license: MIT
+    command: pwninit
+    artifact_sha256: f124b6645b01b0fc4adacabe61438fe73eef517dc3e4696a08e1250a8f47eec3
+    purpose: Patch a challenge binary for its supplied libc/loader and create a pwntools stub
+  - name: one_gadget
+    version: 1.9.0
+    source: https://github.com/david942j/one_gadget
+    license: MIT
+    command: one_gadget
+    purpose: Find libc one-gadget offsets together with satisfiability constraints
+    pin_note: Newer releases require a newer Ruby than Ubuntu 22.04 provides
+
+crypto:
+  - name: xortool
+    version: 1.1.0
+    source: https://github.com/hellman/xortool
+    license: MIT
+    command: xortool
+    purpose: Repeating-key XOR length and key recovery
+
+reverse:
+  - name: pyinstxtractor-ng
+    version: 2026.7.3
+    source: https://github.com/pyinstxtractor/pyinstxtractor-ng
+    license: GPL-3.0-only
+    command: pyinstxtractor-ng
+    purpose: Extract PyInstaller-built PE/ELF bundles and their Python bytecode
+
+forensics:
+  - name: zsteg
+    version: 0.2.14
+    source: https://github.com/zed-0xff/zsteg
+    license: MIT
+    command: zsteg
+    purpose: Detect and extract PNG/BMP LSB steganography
+
+deferred:
+  - name: RsaCtfTool
+    source: https://github.com/RsaCtfTool/RsaCtfTool
+    license: MIT
+    reason: Add as a dedicated crypto-heavy layer after measuring its optional Sage/factorization dependency cost
+  - name: TInjA
+    source: https://github.com/Hackmanit/TInjA
+    license: Apache-2.0
+    reason: Fenjing covers the immediate Jinja2 CTF need; add TInjA when multi-engine SSTI appears in the suite
+  - name: stegseek
+    source: https://github.com/RickdeJager/stegseek
+    license: GPL-2.0-only
+    reason: Its published Debian artifact is old and architecture-specific; evaluate a source-built optional pack with a controlled wordlist
+  - name: php_filter_chain_generator
+    source: https://github.com/synacktiv/php_filter_chain_generator
+    license: unknown
+    reason: Do not vendor until the upstream repository exposes an explicit redistribution license
+  - name: angr
+    source: https://github.com/angr/angr
+    license: BSD-2-Clause
+    reason: Keep symbolic execution in a dedicated large reverse image and add it only when benchmark coverage justifies the cost
+  - name: Volatility 3
+    source: https://github.com/volatilityfoundation/volatility3
+    license: VSL-1.0
+    reason: Memory challenges also require matching symbol packs; evaluate it as a versioned forensic image rather than bloating every misc run

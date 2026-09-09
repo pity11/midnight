@@ -13,7 +13,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         bash coreutils file xxd binutils \
         python3 python3-pip python3-venv \
         python3-capstone \
-        gcc gdb gdbserver \
+        gcc gdb gdbserver make patchelf ruby ruby-dev \
         netcat-openbsd socat curl \
         libc6-dbg libc6-dev \
         ca-certificates git \
@@ -23,6 +23,20 @@ RUN if [ -n "$APT_MIRROR" ]; then \
 # from the distro layer and tolerate short-lived package-index interruptions.
 RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 60 \
         pwntools ROPGadget
+
+# Repetitive libc setup and one-gadget discovery should be deterministic tool
+# calls rather than consume model turns. pwninit's release binary is checksum
+# pinned; one_gadget 1.9.0 is the newest release compatible with Ubuntu 22.04's
+# Ruby 3.0 (later releases require Ruby 3.1 or 3.3).
+ARG PWNINIT_VERSION=3.3.3
+ARG PWNINIT_SHA256=f124b6645b01b0fc4adacabe61438fe73eef517dc3e4696a08e1250a8f47eec3
+RUN curl -fsSL --retry 5 \
+        "https://github.com/io12/pwninit/releases/download/${PWNINIT_VERSION}/pwninit" \
+        -o /tmp/pwninit \
+    && echo "${PWNINIT_SHA256}  /tmp/pwninit" | sha256sum -c - \
+    && install -m 0755 /tmp/pwninit /usr/local/bin/pwninit \
+    && rm /tmp/pwninit \
+    && gem install one_gadget -v 1.9.0 --no-document
 
 # GEF for a friendlier gdb (used by gdb_tool / IAT)
 RUN bash -c "$(curl -fsSL https://gef.blah.cat/sh)" || true
