@@ -36,7 +36,11 @@ def build_specialist_tools(
     observed_target_flags: set[str] = set()
 
     def observe_target_output(output: str) -> None:
-        observed_target_flags.update(extract_flags(output, flag_format=flag_format))
+        for candidate in extract_flags(output, flag_format=flag_format):
+            observed_target_flags.add(candidate)
+            # This path is stronger than a model-authored submit_flag call: the
+            # candidate came directly from a target-bound tool's raw output.
+            record_flag(candidate)
 
     factory_kwargs = {
         "env": env,

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage
 
+from midnight.config import get_config
 from midnight.graph.middleware import ArtifactPhaseGateMiddleware, PwnPhaseGateMiddleware
+from midnight.graph.toolset import build_specialist_tools
 from midnight.tools.shell import make_submit_flag
 
 
@@ -101,3 +103,27 @@ def test_network_candidate_requires_target_provenance():
     assert rejected.startswith("rejected:")
     assert accepted.startswith("recorded")
     assert found == ["flag{remote}"]
+
+
+def test_target_tool_output_records_candidate_without_model_retyping(monkeypatch):
+    found: list[str] = []
+    captured: dict = {}
+
+    class Entry:
+        def factory(self, **kwargs):
+            captured.update(kwargs)
+            return object()
+
+    monkeypatch.setattr("midnight.graph.toolset.REGISTRY.get", lambda name: Entry())
+    config = get_config().model_copy(update={"tools": {"pwn": ["fake"]}})
+    monkeypatch.setattr("midnight.graph.toolset.get_config", lambda: config)
+    build_specialist_tools(
+        expert="pwn",
+        env=object(),
+        state={"challenge": {"flag_format": r"flag\{[^}]+\}"}},
+        record_flag=found.append,
+    )
+
+    captured["observe_target_output"]("server says flag{verified}")
+    assert captured["observed_target_flags"] == {"flag{verified}"}
+    assert found == ["flag{verified}"]
