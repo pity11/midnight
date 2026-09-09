@@ -7,7 +7,7 @@ per_task_timeout: 1800      # 单题超时（秒）
 
 # 图与 ReAct 循环约束
 recursion_limit: 100        # 主图 recursion_limit
-specialist_step_limit: 80   # 单个专家子图步数上限（约 40 次 ReAct 工具循环）
+specialist_step_limit: 320  # middleware transitions make each bounded model/tool cycle multi-step
 helper_recursion_limit: 25  # ask_expert 协助专家子图的 recursion_limit
 escalation_max_depth: 2     # 跨专家求助最大深度（防 A->B->A 环）
 max_attempts: 3             # 单题专家重试/回退次数上限（verify 失败或 flag 被拒后重跑）

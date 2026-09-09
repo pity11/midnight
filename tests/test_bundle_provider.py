@@ -38,6 +38,8 @@ def test_validated_provider_exposes_clean_bundle(tmp_path):
     assert challenges[0]["category_hint"] == "reverse"
     assert challenges[0]["source_hash"]
     assert [path.rsplit("/", 1)[-1] for path in challenges[0]["files"]] == ["chall.bin"]
+    source = challenges[0]["files"][0]
+    assert challenges[0]["file_destinations"] == {source: "chall.bin"}
 
 
 def test_validated_provider_rejects_bundle_tampering(tmp_path):

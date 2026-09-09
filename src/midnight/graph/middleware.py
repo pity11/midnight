@@ -22,8 +22,8 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
     # Weak text-only models often spend three useful actions on list/read/
     # playbook, then drift into prose. Force an executable first draft early;
     # the artifact can still be refined with later evidence.
-    artifact_gate: int = 3
-    target_gate: int = 6
+    artifact_gate: int = 5
+    target_gate: int = 10
 
     @staticmethod
     def _made_artifact(calls: list[dict]) -> bool:

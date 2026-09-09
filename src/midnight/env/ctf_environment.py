@@ -7,12 +7,15 @@ Provides exec / copy / interactive-session primitives used by tools:
 
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from midnight.env.container_manager import ContainerManager, ExecResult, _run
 
 if TYPE_CHECKING:
+    from midnight.state import Challenge
     from midnight.tools.interactive.session import InteractiveSession
 
 
@@ -43,6 +46,25 @@ class CTFEnvironment:
 
     async def copy_out(self, src: str, dst: str) -> ExecResult:
         return await _run("docker", "cp", f"{self.container_id}:{src}", dst)
+
+    async def copy_challenge_files(self, challenge: Challenge) -> None:
+        """Copy attachments while preserving evaluator-declared directories."""
+        destinations = challenge.get("file_destinations") or {}
+        for source in challenge.get("files") or []:
+            relative = PurePosixPath(destinations.get(source, Path(source).name))
+            if relative.is_absolute() or not relative.parts or any(
+                part in {"", ".", ".."} for part in relative.parts
+            ):
+                raise ValueError(f"unsafe challenge attachment destination: {relative}")
+            destination = PurePosixPath(self.workdir) / relative
+            created = await self.exec(
+                f"mkdir -p -- {shlex.quote(str(destination.parent))}", timeout=15
+            )
+            if not created.ok:
+                raise RuntimeError(f"could not create attachment directory: {created.stderr.strip()}")
+            copied = await self.copy_in(source, str(destination))
+            if not copied.ok:
+                raise RuntimeError(f"could not copy challenge attachment: {copied.stderr.strip()}")
 
     async def open_session(self, cmd: str, *, prompt: str = "") -> InteractiveSession:
         """Open a non-blocking interactive session running ``cmd`` in this container.

@@ -80,11 +80,17 @@ class ValidatedBundleProvider:
             for relative in manifest.agent_visible
             if relative.startswith("files/")
         ]
+        file_destinations = {
+            str(root / relative): Path(relative).relative_to("files").as_posix()
+            for relative in manifest.agent_visible
+            if relative.startswith("files/")
+        }
         return Challenge(
             id=challenge_id,
             name=str(task.get("name") or challenge_id),
             description=str(task.get("description") or ""),
             files=files,
+            file_destinations=file_destinations,
             remote=task.get("remote"),
             category_hint=manifest.category,
             flag_format=task.get("flag_format"),

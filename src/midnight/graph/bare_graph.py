@@ -64,8 +64,7 @@ def build_bare_graph(
             network_policy=challenge.get("internet_policy"),
         )
         env = CTFEnvironment(container_id=container_id, workdir=cfg.settings.workdir, manager=manager)
-        for path in challenge.get("files") or []:
-            await env.copy_in(path, cfg.settings.workdir)
+        await env.copy_challenge_files(challenge)
         return {
             "container_id": container_id,
             "challenge_type": category,

@@ -22,6 +22,7 @@ class Challenge(TypedDict, total=False):
     name: str
     description: str  # 题面
     files: list[str]  # starter files (host paths)
+    file_destinations: dict[str, str]  # host path -> relative in-sandbox path
     remote: str | None  # "host:port" for pwn/web, if any
     category_hint: str | None  # platform-provided category hint (optional)
     flag_format: str | None  # per-challenge flag regex override (optional)

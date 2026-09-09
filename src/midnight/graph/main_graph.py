@@ -113,8 +113,7 @@ def build_main_graph(
             workdir=cfg.settings.workdir,
             manager=manager,
         )
-        for path in ch.get("files") or []:
-            await env.copy_in(path, cfg.settings.workdir)
+        await env.copy_challenge_files(ch)
         return cid, runtime_ch
 
     # ---- nodes ----------------------------------------------------------
@@ -186,9 +185,9 @@ def build_main_graph(
             target = str((state.get("challenge") or {}).get("remote") or "")
             middleware = [
                 ArtifactPhaseGateMiddleware(category=expert, target=target),
-                # A model+tool cycle consumes at least two graph transitions.
-                # End well before specialist_step_limit=80 so partial evidence
-                # and artifacts reach the outer continuation/retry loop.
+                # Middleware makes each model+tool cycle consume several graph
+                # transitions. The model-call limit is the semantic bound; the
+                # larger recursion limit only prevents infrastructure cutoffs.
                 ModelCallLimitMiddleware(run_limit=24, exit_behavior="end"),
             ]
             if expert in {"pwn", "reverse"}:

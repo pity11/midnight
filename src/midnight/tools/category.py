@@ -57,8 +57,9 @@ def make_binary_triage(*, env: CTFEnvironment, **_) -> object:
     async def binary_triage(binary: str) -> str:
         """Collect compact first-pass evidence for an ELF or packed binary.
 
-        Reports type, protections, sections, imports/symbols, high-value strings,
-        and packer markers in one deterministic call. It does not modify input.
+        Reports type, protections, imports/symbols, high-value strings, compact
+        section names, and main disassembly in one deterministic call. It does
+        not modify input.
         """
         path = shlex.quote(binary)
         pwntools_probe = shlex.quote(
@@ -68,12 +69,15 @@ def make_binary_triage(*, env: CTFEnvironment, **_) -> object:
             f"file {path}; "
             f"python3 -c {pwntools_probe} "
             f"2>/dev/null || true; "
-            f"readelf -SW {path} 2>/dev/null | head -45; "
             f"echo '[imports-symbols]'; "
             f"(nm -an {path} 2>/dev/null; objdump -T {path} 2>/dev/null) | "
             "grep -Ei ' main$|win|flag|system|exec|read|write|gets|scanf|printf|puts|malloc|free' | head -80; "
             f"echo '[strings]'; strings -a -n 5 {path} | "
-            "grep -Ei 'flag|correct|wrong|password|usage|/bin/sh|UPX|packed' | head -80"
+            "grep -Ei 'flag|correct|wrong|password|usage|/bin/sh|UPX|packed|alert|check' | head -80; "
+            f"echo '[sections]'; readelf -SW {path} 2>/dev/null | "
+            "awk '/\\[[[:space:]]*[0-9]+\\]/{print $2}' | tr '\\n' ' '; echo; "
+            f"echo '[main-disassembly]'; objdump -d -M intel --disassemble=main {path} "
+            "2>/dev/null | head -180"
         )
         res = await env.exec(command, timeout=120)
         body = res.stdout
