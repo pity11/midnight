@@ -18,6 +18,11 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 
+# Pickora compiles small Python-like expressions to pickle bytecode and is
+# useful for restricted-unpickler CTFs. Pin the published package for repeatable
+# offline runs; pickletools itself remains the validation/disassembly oracle.
+RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 60 pickora==1.0.0
+
 # NOTE: volatility / zsteg add on demand for specific forensics challenges.
 
 WORKDIR /ctf

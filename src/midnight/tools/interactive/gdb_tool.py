@@ -36,7 +36,7 @@ def make_gdb_tool(*, env: CTFEnvironment, **_) -> object:
         return session
 
     @tool
-    async def gdb_tool(command: str, binary: str = "") -> str:
+    async def gdb_tool(command: str, binary: str = "", reset: bool = False) -> str:
         """Drive an interactive gdb session inside the container.
 
         On the first call, pass ``binary`` to load it (e.g. binary="./chall").
@@ -44,8 +44,26 @@ def make_gdb_tool(*, env: CTFEnvironment, **_) -> object:
         "info registers", "x/20gx $rsp", "disassemble main", "continue".
         Returns gdb's output for that command. Returns real output only.
         """
+        if reset and state["session"] is not None:
+            await state["session"].close()
+            state["session"] = None
         sess = await _ensure(binary or None)
-        out = await sess.send(command, timeout=20.0)
+        try:
+            out = await sess.send(command, timeout=20.0)
+        except (EOFError, OSError):
+            # PTYs occasionally disappear under emulation. A single automatic
+            # restart is cheaper and more reliable than letting the model grind
+            # on a poisoned session.
+            await sess.close()
+            state["session"] = None
+            sess = await _ensure(binary or None)
+            try:
+                out = await sess.send(command, timeout=20.0)
+            except (EOFError, OSError) as retry_exc:
+                return (
+                    f"[gdb session failed after one restart: {retry_exc}] "
+                    "Use reset=true, batch gdb through run_shell, or static objdump."
+                )
         return summarize(out) if out.strip() else "(no output)"
 
     return gdb_tool

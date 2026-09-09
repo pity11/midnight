@@ -40,7 +40,7 @@ def make_connect_tool(*, env: CTFEnvironment, state: CTFState | None = None, **_
         return sessions[target]
 
     @tool
-    async def connect_tool(data: str = "", remote: str = "") -> str:
+    async def connect_tool(data: str = "", remote: str = "", reset: bool = False) -> str:
         """Interact with the challenge server over a persistent netcat connection.
 
         ``remote`` is "host:port" (defaults to the challenge's remote). ``data``
@@ -50,11 +50,21 @@ def make_connect_tool(*, env: CTFEnvironment, state: CTFState | None = None, **_
         target = remote or default_remote
         if not target:
             return "[no remote target: pass remote='host:port']"
+        if reset and target in sessions:
+            await sessions.pop(target).close()
         sess = await _ensure(target)
-        if data:
-            out = await sess.send(data, timeout=15.0)
-        else:
-            out = await sess.read(timeout=10.0)
+        try:
+            if data:
+                out = await sess.send(data, timeout=15.0)
+            else:
+                out = await sess.read(timeout=10.0)
+        except (EOFError, OSError):
+            await sess.close()
+            sessions.pop(target, None)
+            return (
+                "[connection session ended; it has been reset] Retry once with "
+                "the complete protocol or use a pwntools script for binary payloads."
+            )
         return summarize(out) if out.strip() else "(no output)"
 
     return connect_tool

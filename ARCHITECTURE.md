@@ -86,6 +86,14 @@ with a fixed maximum attempt count.
 - **Veria ctf-agent** informs challenge-level concurrency and future optional
   model racing.
 - **OpenSage** informs future structured memory and dynamic specialist research.
+
+The current procedural layer combines these ideas without importing benchmark
+solutions. Specialists follow explicit triage, hypothesis, implementation,
+verification, and target phases. Observable evidence selects a small curated
+playbook on demand; repeated identical observations produce a stagnation signal;
+retries continue from saved artifacts; and stateful GDB/network sessions recover
+once before directing the solver to a batch or scripted fallback. Tool images
+include pinned capabilities needed offline, such as UPX and Pickora.
 - **LangGraph** provides bounded state transitions and durable checkpoints.
 
 Midnight uses these projects as design references. Their platform assumptions,

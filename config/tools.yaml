@@ -9,11 +9,13 @@ common: &common
   - write_file
   - list_dir
   - summarize_output
+  - lookup_playbook     # evidence-triggered procedural knowledge; no challenge answers
   - submit_flag        # 专家认为拿到 flag 时上报候选
   - ask_expert         # 跨专家求助（同容器内联返回）
 
 pwn:
   - *common
+  - binary_triage
   - gdb_tool
   - connect_tool
   - checksec
@@ -21,6 +23,8 @@ pwn:
 
 reverse:
   - *common
+  - binary_triage
+  - upx_unpack
   - gdb_tool
   - r2_interact
   - ghidra_headless
@@ -35,9 +39,11 @@ crypto:
 
 misc:
   - *common
+  - pickle_disassemble
 
 forensics:
   - *common
+  - pickle_disassemble
 
 unknown:
   - *common

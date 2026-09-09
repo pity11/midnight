@@ -198,9 +198,13 @@ def build_main_graph(
                         f"{', '.join(rejected)}. Do NOT submit them again."
                     )
                 feedback += (
-                    " Re-examine the challenge from a different angle, use other tools, "
-                    "and dig deeper."
+                    " Continue from existing artifacts in /ctf instead of restarting. "
+                    "First inspect solve.py and progress.md if present. Identify the last "
+                    "phase reached, record the failed assumption, then choose a materially "
+                    "different next experiment. Do not repeat prior probes or payloads."
                 )
+                if state.get("error"):
+                    feedback += f" Previous runtime/model error: {state['error']}."
                 task_text = base_task + feedback
             else:
                 task_text = base_task

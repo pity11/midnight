@@ -7,6 +7,8 @@ like recording candidate flags).
 
 from __future__ import annotations
 
+import hashlib
+import re
 from collections.abc import Callable
 
 from midnight.env.ctf_environment import CTFEnvironment
@@ -18,6 +20,8 @@ from midnight.utils.flag import extract_flags
 @register_tool(name="run_shell", groups=["pwn", "reverse", "web", "crypto", "misc"])
 def make_run_shell(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
+
+    observations: dict[str, tuple[str, int]] = {}
 
     @tool
     async def run_shell(command: str) -> str:
@@ -32,7 +36,19 @@ def make_run_shell(*, env: CTFEnvironment, **_) -> object:
         if res.stderr:
             body += f"\n[stderr]\n{res.stderr}"
         body += f"\n[exit={res.exit_code}]"
-        return summarize(body)
+        rendered = summarize(body)
+        signature = re.sub(r"\s+", " ", command.strip())
+        output_hash = hashlib.sha256(rendered.encode()).hexdigest()
+        old_hash, old_count = observations.get(signature, ("", 0))
+        count = old_count + 1 if old_hash == output_hash else 1
+        observations[signature] = (output_hash, count)
+        if count >= 2:
+            rendered += (
+                "\n[MIDNIGHT_STAGNATION] This exact command produced the same "
+                f"observation {count} times. Do not run it again. Record the failed "
+                "assumption and change phase, hypothesis, input, or tool."
+            )
+        return rendered
 
     return run_shell
 

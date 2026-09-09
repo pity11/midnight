@@ -8,10 +8,99 @@ session.
 
 from __future__ import annotations
 
+import shlex
+
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.tools.interactive.session import DockerInteractiveSession
 from midnight.tools.registry import register_tool
 from midnight.tools.summarizer import summarize
+
+
+@register_tool(name="binary_triage", groups=["pwn", "reverse"])
+def make_binary_triage(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def binary_triage(binary: str) -> str:
+        """Collect compact first-pass evidence for an ELF or packed binary.
+
+        Reports type, protections, sections, imports/symbols, high-value strings,
+        and packer markers in one deterministic call. It does not modify input.
+        """
+        path = shlex.quote(binary)
+        pwntools_probe = shlex.quote(
+            f"from pwn import ELF; print(ELF({binary!r}, checksec=False).checksec())"
+        )
+        command = (
+            f"file {path}; "
+            f"python3 -c {pwntools_probe} "
+            f"2>/dev/null || true; "
+            f"readelf -SW {path} 2>/dev/null | head -45; "
+            f"echo '[imports-symbols]'; "
+            f"(nm -an {path} 2>/dev/null; objdump -T {path} 2>/dev/null) | "
+            "grep -Ei ' main$|win|flag|system|exec|read|write|gets|scanf|printf|puts|malloc|free' | head -80; "
+            f"echo '[strings]'; strings -a -n 5 {path} | "
+            "grep -Ei 'flag|correct|wrong|password|usage|/bin/sh|UPX|packed' | head -80"
+        )
+        res = await env.exec(command, timeout=120)
+        body = res.stdout
+        if res.stderr:
+            body += f"\n[stderr]\n{res.stderr}"
+        return summarize(body or "(no triage output)")
+
+    return binary_triage
+
+
+@register_tool(name="upx_unpack", groups=["reverse"])
+def make_upx_unpack(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def upx_unpack(binary: str, output: str = "unpacked") -> str:
+        """Test and unpack a standard UPX binary into a writable output file.
+
+        The original attachment is preserved. Returns UPX output followed by
+        file information for the unpacked artifact.
+        """
+        src = shlex.quote(binary)
+        dst = shlex.quote(output)
+        command = (
+            "command -v upx >/dev/null || { echo '[error] upx is not installed'; exit 127; }; "
+            f"cp -- {src} {dst}.packed-copy && chmod u+w {dst}.packed-copy; "
+            f"upx -t {dst}.packed-copy && upx -d -o {dst} {dst}.packed-copy && "
+            f"chmod +x {dst} && file {dst}"
+        )
+        res = await env.exec(command, timeout=120)
+        body = res.stdout
+        if res.stderr:
+            body += f"\n[stderr]\n{res.stderr}"
+        body += f"\n[exit={res.exit_code}]"
+        return summarize(body)
+
+    return upx_unpack
+
+
+@register_tool(name="pickle_disassemble", groups=["misc", "forensics"])
+def make_pickle_disassemble(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def pickle_disassemble(path: str) -> str:
+        """Disassemble pickle bytes without loading or executing the payload."""
+        program = shlex.quote(
+            f"import pickletools; pickletools.dis(open({path!r}, 'rb').read())"
+        )
+        res = await env.exec(
+            f"python3 -c {program}",
+            timeout=30,
+        )
+        body = res.stdout
+        if res.stderr:
+            body += f"\n[stderr]\n{res.stderr}"
+        body += f"\n[exit={res.exit_code}]"
+        return summarize(body)
+
+    return pickle_disassemble
 
 
 @register_tool(name="checksec", groups=["pwn"])

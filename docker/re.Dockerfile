@@ -14,8 +14,20 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         python3 python3-pip python3-venv \
         python3-capstone python3-pyelftools \
         gdb gcc libc6-dev binwalk curl \
-        ca-certificates git unzip \
+        ca-certificates git unzip xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# A standard packer should not consume a reverse-engineering budget. Pin and
+# verify the official static UPX binary so offline challenge containers have it.
+ARG UPX_VERSION=4.2.4
+ARG UPX_SHA256=75cab4e57ab72fb4585ee45ff36388d280c7afd72aa03e8d4b9c3cbddb474193
+RUN curl -fsSL --retry 5 \
+        "https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz" \
+        -o /tmp/upx.tar.xz \
+    && echo "${UPX_SHA256}  /tmp/upx.tar.xz" | sha256sum -c - \
+    && tar -xJf /tmp/upx.tar.xz -C /tmp \
+    && install -m 0755 "/tmp/upx-${UPX_VERSION}-amd64_linux/upx" /usr/local/bin/upx \
+    && rm -rf /tmp/upx*
 
 # radare2 is not in Ubuntu repos and building from source is heavy/fragile in
 # CI. It is OPTIONAL: r2_interact degrades gracefully when r2 is absent. To add
