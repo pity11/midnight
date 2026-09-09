@@ -77,6 +77,31 @@ def test_pwn_format_evidence_selects_narrow_specialist_lane():
     assert "SPECIALIST_LANE:FORMAT_STRING" in update["messages"][0].content
 
 
+def test_pwn_format_lane_can_start_from_static_dataflow():
+    gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99, target_gate=99)
+    disassembly = """
+    [main-disassembly]
+    1452: lea rax,[rbp-0x30]
+    1456: mov rdi,rax
+    1459: mov eax,0x0
+    145e: call 10c0 <printf@plt>
+    """
+    messages = [HumanMessage(disassembly)]
+    assert gate.constrained_tool_names(messages) is not None
+    assert "fmtstr_probe" in gate.constrained_tool_names(messages)
+
+
+def test_pwn_format_lane_ignores_literal_printf():
+    gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99, target_gate=99)
+    disassembly = """
+    [main-disassembly]
+    1452: lea rax,[rip+0x123]
+    1459: mov rdi,rax
+    145e: call 10c0 <printf@plt>
+    """
+    assert gate.constrained_tool_names([HumanMessage(disassembly)]) is None
+
+
 def test_repeated_exploit_requires_revision_or_different_tool():
     gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99, target_gate=99)
     messages = [

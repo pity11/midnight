@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -57,7 +58,21 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             marker in text
             for marker in ("format string", "%p", "%n", "%hn", "printf(buf", "printf((char")
         )
-        return has_printf and has_format_evidence
+        if has_printf and has_format_evidence:
+            return True
+        # Generic x86-64 SysV static-dataflow heuristic: a stack-local address
+        # is loaded into RDI immediately before printf. This distinguishes the
+        # common printf(user_buffer) sink from RIP-relative literal formats and
+        # lets a weak model enter the right lane before it invents a payload.
+        for call in re.finditer(r"call[^\n]{0,100}printf", text):
+            window = text[max(0, call.start() - 500) : call.start()]
+            if re.search(
+                r"lea\s+rax,\s*\[rbp-[^\]]+\].{0,220}mov\s+rdi,\s*rax",
+                window,
+                flags=re.DOTALL,
+            ):
+                return True
+        return False
 
     @staticmethod
     def _calls_after_last_write(calls: list[dict], tool_name: str) -> int:
