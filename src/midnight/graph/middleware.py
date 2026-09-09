@@ -18,8 +18,11 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
 
     category: str = "ctf"
     target: str = ""
-    artifact_gate: int = 8
-    target_gate: int = 16
+    # Weak text-only models often spend three useful actions on list/read/
+    # playbook, then drift into prose. Force an executable first draft early;
+    # the artifact can still be refined with later evidence.
+    artifact_gate: int = 3
+    target_gate: int = 6
 
     def before_model(self, state, runtime):
         messages = list(state.get("messages") or [])
