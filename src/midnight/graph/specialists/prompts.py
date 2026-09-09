@@ -45,6 +45,8 @@ the supplied endpoint and capture its complete response. For PIE+BOF, validate
 the leaked address and compute the base before ROP. For format strings, determine
 the positional index and smallest write width. Restart a dead gdb session or use
 batch gdb/objdump; never grind on a broken interactive session.
+For an uncontrolled printf, use fmtstr_probe once locally or against the target
+to obtain indexed leaks instead of issuing many one-offset probes.
 When libc/loader files are supplied, use pwninit_setup before hand-patching. Use
 one_gadget only after you can explain and satisfy the returned constraints.
 Make solve.py accept pwntools-style LOCAL=1 and REMOTE=1 HOST=... PORT=...

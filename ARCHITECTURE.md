@@ -83,7 +83,9 @@ crypto, forensics, or misc work. Specialists use a shared tool registry but
 receive category-specific prompts and tool lists. `ask_expert` permits bounded
 cross-category help inside the same challenge container and rejects cyclic or
 over-depth delegation. Candidate rejection feeds back into the next attempt,
-with a fixed maximum attempt count.
+with a fixed maximum attempt count. Retry routes are deliberately diverse: the
+second route changes representation and favors bounded automation, while the
+final route critiques the current artifact and repairs its weakest assumption.
 
 ## Engineering references
 

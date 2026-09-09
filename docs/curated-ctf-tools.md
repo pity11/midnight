@@ -13,12 +13,15 @@ tool layer:
 | Web | Fenjing | `fenjing_ssti` | A Jinja2 expression is reflected/evaluated, especially behind a blacklist or WAF |
 | Pwn | pwninit | `pwninit_setup` | A challenge supplies an ELF plus libc and optionally its loader |
 | Pwn | one_gadget | `one_gadget` | A libc leak/control-flow primitive exists and gadget constraints can be satisfied |
+| Pwn | pwntools | `fmtstr_probe` | An uncontrolled printf needs one bounded positional leak pass |
+| Pwn | pwntools | `run_exploit` | A complete solve.py must be checked and exercised locally or on the bound target |
 | Crypto | xortool | `xor_analyze` | Repeating-key XOR is suspected and frequency or known plaintext is available |
 | Reverse | pyinstxtractor-ng | `pyinstaller_extract` | An ELF/PE is a PyInstaller bundle |
 | Reverse | JADX | `android_decompile` | An APK or DEX needs source and resource recovery |
 | Forensics | zsteg | `stego_scan` | PNG/BMP LSB steganography is plausible |
 | Forensics | Volatility 3 | `memory_analyze` | A memory image needs process, network, registry, or kernel analysis |
 | Forensics | Sleuthkit | `disk_image_triage` | A disk image needs partition discovery and filesystem enumeration |
+| Forensics | tshark | `pcap_triage` | A capture needs protocol/conversation triage or an exact TCP stream transcript |
 
 Category images also expose common command-line tools used by strong public CTF
 agents: angr, Unicorn, Capstone, ROPgadget and ropper for Pwn/Reverse; nmap,

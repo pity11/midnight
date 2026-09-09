@@ -29,6 +29,7 @@ from midnight.env.ctf_environment import CTFEnvironment
 from midnight.graph.router import make_classify_node, route
 from midnight.graph.specialists import prompts
 from midnight.graph.specialists.base_specialist import make_specialist
+from midnight.graph.strategy import strategy_for_attempt
 from midnight.graph.toolset import build_specialist_tools
 from midnight.interfaces.provider import ChallengeProvider
 from midnight.interfaces.submitter import FlagSubmitter
@@ -226,6 +227,7 @@ def build_main_graph(
                     f"\n\n[RETRY {attempt}/{cfg.settings.max_attempts}] The previous "
                     f"attempt did not yield a correct flag."
                 )
+                feedback += f"\n[ALTERNATE ROUTE] {strategy_for_attempt(expert, attempt)}"
                 if rejected:
                     feedback += (
                         f" These flags were already tried and REJECTED as wrong: "

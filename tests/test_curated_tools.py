@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 
 import pytest
@@ -8,6 +9,7 @@ from midnight.tools.category import (
     make_android_decompile,
     make_disk_image_triage,
     make_fenjing_ssti,
+    make_fmtstr_probe,
     make_memory_analyze,
     make_one_gadget,
     make_pcap_triage,
@@ -181,3 +183,22 @@ async def test_pcap_triage_and_follow_stream_quote_inputs() -> None:
 
     with pytest.raises(ValueError, match="non-negative"):
         await action.ainvoke({"capture": "x.pcap", "follow_tcp_stream": -2})
+
+
+@pytest.mark.asyncio
+async def test_fmtstr_probe_binds_target_and_bounds_indices() -> None:
+    env = _Env()
+    action = make_fmtstr_probe(env=env, state={"challenge": {"remote": "relay:4444"}})
+    await action.ainvoke(
+        {"mode": "target", "prompt": "input: ", "start_index": 4, "end_index": 12}
+    )
+    command, timeout = env.calls[0]
+    assert "python3 -" in command
+    encoded = command.split("printf %s ", 1)[1].split(" |", 1)[0]
+    program = base64.b64decode(encoded).decode()
+    assert "remote('relay', 4444)" in program
+    assert "range(4, 13)" in program
+    assert timeout == 45
+
+    with pytest.raises(ValueError, match="within 1..100"):
+        await action.ainvoke({"mode": "target", "start_index": 1, "end_index": 101})

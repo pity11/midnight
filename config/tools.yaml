@@ -25,6 +25,7 @@ pwn:
   - pwninit_setup
   - one_gadget
   - run_exploit
+  - fmtstr_probe
 
 reverse:
   - *common
