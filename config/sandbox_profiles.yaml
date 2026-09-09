@@ -61,6 +61,7 @@ misc:
     - zsteg
     - convert
     - tesseract
+    - zbarimg
     - ffmpeg
     - sox
     - pickora
@@ -93,6 +94,7 @@ forensics:
     - tshark
     - capinfos
     - tesseract
+    - zbarimg
     - john
     - fcrackzip
     - 7z

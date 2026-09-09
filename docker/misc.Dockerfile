@@ -29,6 +29,12 @@ RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 60 pickora==1.0
 # directly. Version pinning keeps forensic results comparable across runs.
 RUN gem install zsteg -v 0.2.14 --no-document
 
+# Keep QR decoding in the mechanical tool layer so a solver does not spend
+# model turns reimplementing QR error correction after image reconstruction.
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=10 install -y --fix-missing --no-install-recommends zbar-tools \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY resources/wordlists/ctf-small.txt /opt/midnight/wordlists/ctf-small.txt
 
 # NOTE: volatility and large password dictionaries remain opt-in packs.

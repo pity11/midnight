@@ -22,6 +22,12 @@ RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 120 \
         volatility3==2.28.0 python-evtx==0.8.1
 RUN gem install zsteg -v 0.2.14 --no-document
 
+# QR codes frequently appear after document or image reconstruction. Keep the
+# decoder in a small layer after the heavy forensic bootstrap.
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=10 install -y --fix-missing --no-install-recommends zbar-tools \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY resources/wordlists/ctf-small.txt /opt/midnight/wordlists/ctf-small.txt
 
 # Hayabusa ships its Sigma rules and profiles with the binary. Keep that bundle

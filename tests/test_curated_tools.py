@@ -10,8 +10,10 @@ from midnight.tools.advanced import (
     make_hayabusa_timeline,
     make_jwt_analyze,
     make_kaitai_compile,
+    make_qr_decode,
     make_rsa_attack,
     make_tinja_ssti,
+    make_velocity_ssti,
 )
 from midnight.tools.category import (
     make_android_decompile,
@@ -52,6 +54,18 @@ class _Env:
 
 
 @pytest.mark.asyncio
+async def test_qr_decode_uses_bounded_variants_and_verified_decoder() -> None:
+    env = _Env()
+    action = make_qr_decode(env=env)
+    await action.ainvoke({"image": "recovered code.pbm"})
+    command, timeout = env.calls[0]
+    assert "'recovered code.pbm'" in command
+    assert "-resize 800%" in command
+    assert command.count("zbarimg") == 1
+    assert timeout == 180
+
+
+@pytest.mark.asyncio
 async def test_archive_password_is_format_and_time_bounded() -> None:
     env = _Env()
     action = make_archive_password(env=env)
@@ -86,6 +100,20 @@ async def test_tinja_is_target_bound_and_rate_limited() -> None:
 
     with pytest.raises(ValueError, match="between 1 and 100"):
         await action.ainvoke({"requests_per_second": 101})
+
+
+@pytest.mark.asyncio
+async def test_velocity_ssti_is_target_bound_and_output_bounded() -> None:
+    env = _Env()
+    action = make_velocity_ssti(env=env, state={"challenge": {"remote": "velocity:1337"}})
+    await action.ainvoke({"command": "ls /", "max_output_bytes": 256})
+    command, timeout = env.calls[0]
+    assert "python3 -c" in command
+    assert "requests.post" in command
+    assert timeout == 60
+
+    with pytest.raises(ValueError, match="between 32 and 4096"):
+        await action.ainvoke({"command": "id", "max_output_bytes": 5000})
 
 
 @pytest.mark.asyncio

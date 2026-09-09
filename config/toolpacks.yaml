@@ -26,6 +26,12 @@ web:
     command: jwt_tool
     artifact_sha256: 0f8c32aa9f67cea4312e5df81d48f72dc5daf57f3cc0ce09d67db78e23fbe451
     purpose: Decode, mutate, verify, scan, and dictionary-test JSON Web Tokens
+  - name: Velocity output adapter
+    version: midnight-v1
+    source: internal structured wrapper over Python requests
+    license: MIT
+    command: python3
+    purpose: Recover bounded command output after source-confirmed Apache Velocity 1.x template injection
 
 pwn:
   - name: pwninit
@@ -162,6 +168,12 @@ forensics:
     license: GPL-2.0-or-later
     command: john
     purpose: Audit local password hashes with challenge-derived wordlists under a time bound
+  - name: ZBar
+    version: ubuntu-22.04
+    source: https://github.com/mchehab/zbar
+    license: LGPL-2.1-only
+    command: zbarimg
+    purpose: Decode reconstructed or normalized QR and barcode images offline
   - name: fcrackzip
     version: ubuntu-22.04
     source: https://oldhome.schmorp.de/marc/fcrackzip.html

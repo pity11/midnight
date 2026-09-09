@@ -203,6 +203,23 @@ PLAYBOOKS: tuple[Playbook, ...] = (
         "One engine-specific request produces a stable server-side effect and the target response is saved.",
     ),
     Playbook(
+        "web-velocity-ssti",
+        "web",
+        ("apache velocity", "velocity 1", "runtime singleton", "velocitycontext", "#set", "#foreach"),
+        "Convert confirmed Apache Velocity 1.x evaluation into a bounded command-output primitive.",
+        (
+            "Confirm source-level Velocity template parsing or evaluate a harmless arithmetic #set expression.",
+            "Use velocity_ssti with `id` as a proof, then `ls /` when the challenge randomizes a flag filename.",
+            "Read the exact discovered path with a second bounded command and preserve the decoded output.",
+            "Submit only the value returned by the challenge target, retaining the request and command sequence.",
+        ),
+        (
+            "Runtime.exec does not apply shell globbing or redirection; list first and pass the exact path next.",
+            "Scanner reflection is version-sensitive; byte-wise InputStream output is slower but more reliable.",
+        ),
+        "Two target-bound calls prove command execution and recover the exact requested file content.",
+    ),
+    Playbook(
         "web-file-read",
         "web",
         ("lfi", "path traversal", "include", "file", "download", "php filter", "open("),
@@ -529,6 +546,24 @@ PLAYBOOKS: tuple[Playbook, ...] = (
         "The payload passes the local validator and produces a controlled observable value or command output.",
     ),
     Playbook(
+        "misc-python-eval-jail",
+        "misc",
+        ("eval", "blacklist", "pyjail", "python jail", "restricted characters", "appended parentheses"),
+        "Turn the exact eval wrapper and character policy into the shortest expression that reads challenge data.",
+        (
+            "Copy the blacklist and the exact string concatenated before eval; test candidate text against both locally.",
+            "Inventory allowed builtins and syntax before attempting dunder construction or subclass traversal.",
+            "Account for an automatically appended call: an input such as `print(open('path').read())` can perform the useful calls before the final failing `()`.",
+            "Use single quotes, direct allowed builtins, and an exact source-supported path before constructing characters indirectly.",
+            "Replay the minimal expression against the target and preserve the complete response containing the flag.",
+        ),
+        (
+            "ASCII art and banners are presentation unless their bytes demonstrably encode data.",
+            "A blacklist entry may be a substring rather than a token; validate the complete candidate exactly.",
+        ),
+        "The candidate passes the literal blacklist and the target response contains the requested file content.",
+    ),
+    Playbook(
         "forensics-layered-message",
         "forensics",
         ("email", "eml", "mime", "attachment", "base64", "quoted-printable"),
@@ -568,7 +603,7 @@ PLAYBOOKS: tuple[Playbook, ...] = (
         (
             "Identify the real file type, metadata, archive members, trailing bytes, and embedded signatures.",
             "Extract into a separate directory and hash recovered children to preserve provenance.",
-            "For images, inspect dimensions, channels, palette, alpha, OCR, and bounded LSB scans based on format.",
+            "For images, inspect dimensions, channels, palette, alpha, OCR, and bounded LSB scans based on format; use qr_decode when finder patterns or a module grid are present.",
             "Recurse only into evidence-bearing files and record the exact extraction chain.",
         ),
         (

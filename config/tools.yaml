@@ -47,6 +47,7 @@ web:
   - source_audit
   - fenjing_ssti
   - tinja_ssti
+  - velocity_ssti
   - jwt_analyze
 
 crypto:
@@ -61,6 +62,7 @@ misc:
   - artifact_triage
   - stego_scan
   - archive_password
+  - qr_decode
 
 forensics:
   - *common
@@ -76,6 +78,7 @@ forensics:
   - pcap_triage
   - pcap_export_objects
   - archive_password
+  - qr_decode
 
 unknown:
   - *common

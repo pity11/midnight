@@ -12,6 +12,7 @@ tool layer:
 | --- | --- | --- | --- |
 | Web | Fenjing | `fenjing_ssti` | A Jinja2 expression is reflected/evaluated, especially behind a blacklist or WAF |
 | Web | TInjA | `tinja_ssti` | An evaluated template parameter needs multi-engine fingerprinting before choosing a payload |
+| Web | Velocity 1.x adapter | `velocity_ssti` | Source or a harmless expression confirms Apache Velocity 1.x evaluation and command output must be recovered reliably |
 | Web | jwt_tool | `jwt_analyze` | A JWT needs local decoding, mutation, bounded secret testing, or a target-bound verification scan |
 | Pwn | pwninit | `pwninit_setup` | A challenge supplies an ELF plus libc and optionally its loader |
 | Pwn | one_gadget | `one_gadget` | A libc leak/control-flow primitive exists and gadget constraints can be satisfied |
@@ -27,6 +28,7 @@ tool layer:
 | Forensics | Sleuthkit | `disk_image_triage` | A disk image needs partition discovery and filesystem enumeration |
 | Forensics | tshark | `pcap_triage` | A capture needs protocol/conversation triage or an exact TCP stream transcript |
 | Forensics | Hayabusa | `hayabusa_timeline` | One or many EVTX logs need a normalized Sigma-enriched incident timeline |
+| Misc/Forensics | ZBar | `qr_decode` | A reconstructed PBM/PNG or suspicious image contains QR finder patterns or a module grid |
 | Misc/Forensics | fcrackzip / 7-Zip | `archive_password` | A protected archive should be tested against a small or challenge-derived local candidate list |
 
 Category images also expose common command-line tools used by strong public CTF
