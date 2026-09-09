@@ -67,6 +67,7 @@ def test_network_candidate_requires_target_provenance():
         record_flag=found.append,
         flag_format=r"flag\{[^}]+\}",
         state={"challenge": {"remote": "target:1337"}},
+        observed_target_flags={"flag{remote}"},
     )
     rejected = tool.invoke({"candidate": "flag{local}", "source": "local"})
     accepted = tool.invoke({"candidate": "flag{remote}", "source": "target"})

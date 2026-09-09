@@ -16,7 +16,9 @@ from midnight.tools.summarizer import summarize
 
 
 @register_tool(name="connect_tool", groups=["pwn", "web"])
-def make_connect_tool(*, env: CTFEnvironment, state: CTFState | None = None, **_) -> object:
+def make_connect_tool(
+    *, env: CTFEnvironment, state: CTFState | None = None, observe_target_output=None, **_
+) -> object:
     from langchain_core.tools import tool
 
     sessions: dict[str, DockerInteractiveSession] = {}
@@ -65,6 +67,8 @@ def make_connect_tool(*, env: CTFEnvironment, state: CTFState | None = None, **_
                 "[connection session ended; it has been reset] Retry once with "
                 "the complete protocol or use a pwntools script for binary payloads."
             )
+        if observe_target_output is not None:
+            observe_target_output(out)
         return summarize(out) if out.strip() else "(no output)"
 
     return connect_tool

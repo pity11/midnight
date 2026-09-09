@@ -14,6 +14,7 @@ from midnight.config import get_config
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.state import CTFState
 from midnight.tools.registry import REGISTRY
+from midnight.utils.flag import extract_flags
 from midnight.utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -32,6 +33,10 @@ def build_specialist_tools(
     tool_names = cfg.tools.get(expert) or cfg.tools.get("unknown") or []
     ch = state.get("challenge", {})
     flag_format = ch.get("flag_format")
+    observed_target_flags: set[str] = set()
+
+    def observe_target_output(output: str) -> None:
+        observed_target_flags.update(extract_flags(output, flag_format=flag_format))
 
     factory_kwargs = {
         "env": env,
@@ -43,6 +48,8 @@ def build_specialist_tools(
         "stack": state.get("escalation_stack", []),
         "max_depth": cfg.settings.escalation_max_depth,
         "run_helper": run_helper,
+        "observe_target_output": observe_target_output,
+        "observed_target_flags": observed_target_flags,
     }
 
     tools: list[object] = []

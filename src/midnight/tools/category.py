@@ -236,7 +236,7 @@ def make_one_gadget(*, env: CTFEnvironment, **_) -> object:
 
 
 @register_tool(name="run_exploit", groups=["pwn"])
-def make_run_exploit(*, env: CTFEnvironment, state=None, **_) -> object:
+def make_run_exploit(*, env: CTFEnvironment, state=None, observe_target_output=None, **_) -> object:
     from langchain_core.tools import tool
 
     remote = str(((state or {}).get("challenge") or {}).get("remote") or "")
@@ -274,13 +274,17 @@ def make_run_exploit(*, env: CTFEnvironment, state=None, **_) -> object:
             f"timeout {timeout_seconds}s "
             + " ".join(shlex.quote(part) for part in args)
         )
-        return _result_text(await env.exec(command, timeout=timeout_seconds + 15))
+        result = await env.exec(command, timeout=timeout_seconds + 15)
+        rendered = _result_text(result)
+        if mode == "target" and observe_target_output is not None:
+            observe_target_output(f"{result.stdout}\n{result.stderr}")
+        return rendered
 
     return run_exploit
 
 
 @register_tool(name="fmtstr_probe", groups=["pwn"])
-def make_fmtstr_probe(*, env: CTFEnvironment, state=None, **_) -> object:
+def make_fmtstr_probe(*, env: CTFEnvironment, state=None, observe_target_output=None, **_) -> object:
     from langchain_core.tools import tool
 
     remote = str(((state or {}).get("challenge") or {}).get("remote") or "")
@@ -333,13 +337,18 @@ io.close()
 """
         encoded = base64.b64encode(program.encode()).decode()
         command = f"printf %s {encoded} | base64 -d | python3 -"
-        return _result_text(await env.exec(command, timeout=45))
+        result = await env.exec(command, timeout=45)
+        if mode == "target" and observe_target_output is not None:
+            observe_target_output(f"{result.stdout}\n{result.stderr}")
+        return _result_text(result)
 
     return fmtstr_probe
 
 
 @register_tool(name="fmtstr_write_scan", groups=["pwn"])
-def make_fmtstr_write_scan(*, env: CTFEnvironment, state=None, **_) -> object:
+def make_fmtstr_write_scan(
+    *, env: CTFEnvironment, state=None, observe_target_output=None, **_
+) -> object:
     from langchain_core.tools import tool
 
     remote = str(((state or {}).get("challenge") or {}).get("remote") or "")
@@ -409,7 +418,10 @@ for index in range({start_index}, {end_index + 1}):
 """
         encoded = base64.b64encode(program.encode()).decode()
         command = f"printf %s {encoded} | base64 -d | python3 -"
-        return _result_text(await env.exec(command, timeout=180))
+        result = await env.exec(command, timeout=180)
+        if normalized == "target" and observe_target_output is not None:
+            observe_target_output(f"{result.stdout}\n{result.stderr}")
+        return _result_text(result)
 
     return fmtstr_write_scan
 
@@ -536,7 +548,7 @@ def make_android_decompile(*, env: CTFEnvironment, **_) -> object:
 
 
 @register_tool(name="http_request", groups=["web"])
-def make_http_request(*, env: CTFEnvironment, state=None, **_) -> object:
+def make_http_request(*, env: CTFEnvironment, state=None, observe_target_output=None, **_) -> object:
     from langchain_core.tools import tool
 
     default_remote = None
@@ -566,13 +578,15 @@ def make_http_request(*, env: CTFEnvironment, state=None, **_) -> object:
             parts += ["--data", f"{data!r}"]
         parts.append(f"{target!r}")
         res = await env.exec(" ".join(parts), timeout=30)
+        if observe_target_output is not None:
+            observe_target_output(f"{res.stdout}\n{res.stderr}")
         return summarize(res.stdout or res.stderr or "(no response)")
 
     return http_request
 
 
 @register_tool(name="fenjing_ssti", groups=["web"])
-def make_fenjing_ssti(*, env: CTFEnvironment, state=None, **_) -> object:
+def make_fenjing_ssti(*, env: CTFEnvironment, state=None, observe_target_output=None, **_) -> object:
     from langchain_core.tools import tool
 
     remote = None
@@ -615,7 +629,10 @@ def make_fenjing_ssti(*, env: CTFEnvironment, state=None, **_) -> object:
         shell_command = "command -v fenjing >/dev/null || exit 127; " + " ".join(
             shlex.quote(part) for part in parts
         )
-        return _result_text(await env.exec(shell_command, timeout=300))
+        result = await env.exec(shell_command, timeout=300)
+        if observe_target_output is not None:
+            observe_target_output(f"{result.stdout}\n{result.stderr}")
+        return _result_text(result)
 
     return fenjing_ssti
 

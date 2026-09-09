@@ -114,6 +114,7 @@ def make_submit_flag(
     record_flag: Callable[[str], None],
     flag_format: str | None = None,
     state=None,
+    observed_target_flags: set[str] | None = None,
     **_,
 ) -> object:
     from langchain_core.tools import tool
@@ -134,6 +135,10 @@ def make_submit_flag(
         flags = extract_flags(candidate, flag_format=flag_format)
         if not flags:
             return "rejected: does not match the expected flag format"
+        if (challenge.get("targets") or challenge.get("remote")) and any(
+            flag not in (observed_target_flags or set()) for flag in flags
+        ):
+            return "rejected: candidate was not observed verbatim in target tool output"
         for f in flags:
             record_flag(f)
         return f"recorded candidate flag(s): {', '.join(flags)}"
