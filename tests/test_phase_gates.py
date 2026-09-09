@@ -109,6 +109,25 @@ def test_pwn_format_lane_can_start_from_static_dataflow():
     assert "fmtstr_probe" in gate.constrained_tool_names(messages)
 
 
+def test_pwn_format_lane_takes_priority_over_generic_target_gate():
+    gate = ArtifactPhaseGateMiddleware(
+        category="pwn", target="target:1337", artifact_gate=2, target_gate=3
+    )
+    messages = [
+        _tool_message(1, "list_dir"),
+        _tool_message(2, "binary_triage"),
+        _tool_message(3, "write_file", {"path": "/ctf/solve.py", "content": "x"}),
+        _tool_message(4, "run_shell", {"command": "objdump -d chall"}),
+        HumanMessage(
+            "lea rax,[rbp-0x30]\nmov rdi,rax\ncall 10c0 <printf@plt>"
+        ),
+    ]
+    allowed = gate.constrained_tool_names(messages)
+    assert allowed is not None
+    assert "fmtstr_probe" in allowed
+    assert "connect_tool" not in allowed
+
+
 def test_pwn_format_lane_ignores_literal_printf():
     gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99, target_gate=99)
     disassembly = """

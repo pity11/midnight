@@ -102,6 +102,7 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             and len(calls) >= self.target_gate
             and self._made_artifact(calls)
             and not self._reached_target(calls)
+            and not self._format_string_indicated(messages)
         ):
             return {
                 "run_exploit",
@@ -178,7 +179,12 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                     ]
                 }
 
-        if self.target and len(calls) >= self.target_gate and "[PHASE_GATE:TARGET]" not in text:
+        if (
+            self.target
+            and len(calls) >= self.target_gate
+            and "[PHASE_GATE:TARGET]" not in text
+            and not self._format_string_indicated(messages)
+        ):
             reached_target = self._reached_target(calls)
             if not reached_target:
                 return {
