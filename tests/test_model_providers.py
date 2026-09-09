@@ -108,6 +108,28 @@ def test_json_protocol_normalizes_common_tool_action_variants(variant):
     assert result.tool_calls[0]["args"] == {"path": "/health"}
 
 
+def test_json_protocol_normalizes_canonical_action_extras_and_string_arguments():
+    delegate = ScriptedModel(replies=[
+        (
+            '{"type":"tool_call","phase":"TRIAGE","reasoning":"probe next",'
+            '"tool":"http_probe","arguments":"{\\"path\\":\\"/health\\"}"}'
+        )
+    ])
+    model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
+    result = model.invoke("probe")
+    assert result.tool_calls[0]["name"] == "http_probe"
+    assert result.tool_calls[0]["args"] == {"path": "/health"}
+
+
+def test_json_protocol_normalizes_canonical_complete_extras():
+    delegate = ScriptedModel(replies=[
+        '{"type":"complete","summary":"done","reasoning":"verified"}'
+    ])
+    model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
+    result = model.invoke("probe")
+    assert result.content == "done"
+
+
 def test_json_protocol_repairs_structured_output_once():
     class Decision(BaseModel):
         model_config = ConfigDict(extra="forbid")

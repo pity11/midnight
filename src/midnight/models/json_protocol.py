@@ -171,7 +171,7 @@ class JsonProtocolChatModel(BaseChatModel):
             }
         action_type = data.get("type")
         tool_name = data.get("tool") or data.get("name")
-        if action_type in {"tool", "function_call"} or (
+        if action_type in {"tool", "function_call", "tool_call"} or (
             action_type is None and tool_name is not None
         ):
             arguments = data.get("arguments", data.get("args", data.get("input", {})))
@@ -180,8 +180,12 @@ class JsonProtocolChatModel(BaseChatModel):
                     arguments = json.loads(arguments)
                 except ValueError as exc:
                     raise RuntimeError("MODEL_TOOL_ARGUMENTS_INVALID") from exc
-            data = {"type": "tool_call", "tool": tool_name, "arguments": arguments}
-        elif action_type in {"finish", "final"}:
+            data = {
+                "type": "tool_call",
+                "tool": tool_name,
+                "arguments": arguments if arguments is not None else {},
+            }
+        elif action_type in {"finish", "final", "complete"}:
             data = {
                 "type": "complete",
                 "summary": data.get("summary", data.get("answer", data.get("content"))),
