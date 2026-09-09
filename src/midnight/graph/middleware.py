@@ -109,6 +109,9 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                 "connect_tool",
                 "http_request",
                 "fenjing_ssti",
+                "tinja_ssti",
+                "velocity_ssti",
+                "jwt_analyze",
                 "fmtstr_write_scan",
             }
         if self.category == "pwn" and self._calls_after_last_write(calls, "run_exploit") >= 2:

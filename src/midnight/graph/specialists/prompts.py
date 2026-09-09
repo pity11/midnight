@@ -88,6 +88,9 @@ controllable input to a concrete sink. Prefer a minimal source-supported request
 over broad scanner output.
 For confirmed or strongly indicated Jinja2 SSTI, use fenjing_ssti to fingerprint
 the filter and generate a working payload instead of manually mutating strings.
+For source-confirmed Apache Velocity 1.x evaluation, call velocity_ssti with
+`id`, then `ls /`, then read the exact discovered flag path. Do not replace its
+verified byte-wise output adapter with Scanner or `$class.inspect` payloads.
 """
 )
 

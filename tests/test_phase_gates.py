@@ -58,6 +58,7 @@ def test_phase_gate_constrains_target_lane_after_artifact():
     ]
     assert gate.constrained_tool_names(messages) == {
         "run_exploit", "connect_tool", "http_request", "fenjing_ssti",
+        "tinja_ssti", "velocity_ssti", "jwt_analyze",
         "fmtstr_write_scan",
     }
     update = gate.before_model({"messages": messages}, None)
