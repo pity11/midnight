@@ -183,7 +183,10 @@ def build_main_graph(
             target = str((state.get("challenge") or {}).get("remote") or "")
             middleware = [
                 ArtifactPhaseGateMiddleware(category=expert, target=target),
-                ModelCallLimitMiddleware(run_limit=36, exit_behavior="end"),
+                # A model+tool cycle consumes at least two graph transitions.
+                # End well before specialist_step_limit=80 so partial evidence
+                # and artifacts reach the outer continuation/retry loop.
+                ModelCallLimitMiddleware(run_limit=24, exit_behavior="end"),
             ]
             if expert in {"pwn", "reverse"}:
                 middleware.append(
