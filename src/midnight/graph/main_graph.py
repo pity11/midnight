@@ -318,6 +318,7 @@ def build_main_graph(
                 "candidate_flags": collected,
                 "attempt": attempt,
                 "container_id": container_id,
+                "error": None,
             }
 
         return specialist

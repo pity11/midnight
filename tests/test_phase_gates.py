@@ -31,6 +31,27 @@ def test_phase_gate_does_not_repeat_or_override_existing_artifact():
     assert gate.before_model({"messages": messages}, None) is None
 
 
+def test_phase_gate_constrains_implementation_to_artifact_writer():
+    gate = ArtifactPhaseGateMiddleware(artifact_gate=2, target_gate=99)
+    messages = [_tool_message(1), _tool_message(2)]
+    assert gate.constrained_tool_names(messages) == {"write_file"}
+
+
+def test_phase_gate_constrains_target_lane_after_artifact():
+    gate = ArtifactPhaseGateMiddleware(target="target:1337", artifact_gate=2, target_gate=3)
+    messages = [
+        _tool_message(1),
+        _tool_message(2, "write_file", {"path": "/ctf/solve.py", "content": "x"}),
+        _tool_message(3, "run_shell", {"command": "python -m py_compile solve.py"}),
+    ]
+    assert gate.constrained_tool_names(messages) == {
+        "run_exploit", "connect_tool", "http_request", "fenjing_ssti"
+    }
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "PHASE_GATE:TARGET" in update["messages"][0].content
+
+
 def test_target_gate_recognizes_target_bound_structured_tools():
     gate = ArtifactPhaseGateMiddleware(target="target:1337", artifact_gate=99, target_gate=2)
     messages = [

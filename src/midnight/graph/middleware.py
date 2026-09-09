@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import HumanMessage
@@ -24,21 +25,67 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
     artifact_gate: int = 3
     target_gate: int = 6
 
+    @staticmethod
+    def _made_artifact(calls: list[dict]) -> bool:
+        return any(
+            call.get("name") == "write_file"
+            and "solve.py" in str((call.get("args") or {}).get("path", ""))
+            for call in calls
+        ) or any(
+            call.get("name") == "run_shell"
+            and "solve.py" in str((call.get("args") or {}).get("command", ""))
+            for call in calls
+        )
+
+    def _reached_target(self, calls: list[dict]) -> bool:
+        return any(
+            call.get("name") in {"connect_tool", "http_request", "fenjing_ssti"}
+            or (
+                call.get("name") == "run_exploit"
+                and (call.get("args") or {}).get("mode") == "target"
+            )
+            or self.target in str(call.get("args") or {})
+            for call in calls
+        )
+
+    def constrained_tool_names(self, messages: list) -> set[str] | None:
+        """Return the deterministic tool lane for the current phase, if any."""
+        calls = _calls(messages)
+        if len(calls) >= self.artifact_gate and not self._made_artifact(calls):
+            return {"write_file"}
+        if (
+            self.target
+            and len(calls) >= self.target_gate
+            and self._made_artifact(calls)
+            and not self._reached_target(calls)
+        ):
+            return {"run_exploit", "connect_tool", "http_request", "fenjing_ssti"}
+        return None
+
+    @staticmethod
+    def _constrain_request(request: Any, allowed: set[str] | None):
+        if not allowed:
+            return request
+        selected = [tool for tool in request.tools if getattr(tool, "name", "") in allowed]
+        return request.override(tools=selected) if selected else request
+
+    def wrap_model_call(self, request, handler):
+        """Make a phase gate enforceable by exposing only phase-valid tools."""
+        allowed = self.constrained_tool_names(list(request.state.get("messages") or []))
+        return handler(self._constrain_request(request, allowed))
+
+    async def awrap_model_call(self, request, handler):
+        """Async counterpart used by the competition solver."""
+        allowed = self.constrained_tool_names(list(request.state.get("messages") or []))
+        return await handler(self._constrain_request(request, allowed))
+
     def before_model(self, state, runtime):
         messages = list(state.get("messages") or [])
         calls = _calls(messages)
         text = "\n".join(str(getattr(message, "content", "")) for message in messages)
 
         if len(calls) >= self.artifact_gate and "[PHASE_GATE:IMPLEMENT]" not in text:
-            made_artifact = any(
-                call.get("name") == "write_file"
-                and "solve.py" in str((call.get("args") or {}).get("path", ""))
-                for call in calls
-            ) or any(
-                call.get("name") == "run_shell"
-                and "solve.py" in str((call.get("args") or {}).get("command", ""))
-                for call in calls
-            )
+            made_artifact = self._made_artifact(calls)
             if not made_artifact:
                 return {
                     "messages": [
@@ -53,15 +100,7 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                 }
 
         if self.target and len(calls) >= self.target_gate and "[PHASE_GATE:TARGET]" not in text:
-            reached_target = any(
-                call.get("name") in {"connect_tool", "http_request", "fenjing_ssti"}
-                or (
-                    call.get("name") == "run_exploit"
-                    and (call.get("args") or {}).get("mode") == "target"
-                )
-                or self.target in str(call.get("args") or {})
-                for call in calls
-            )
+            reached_target = self._reached_target(calls)
             if not reached_target:
                 return {
                     "messages": [

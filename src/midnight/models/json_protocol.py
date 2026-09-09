@@ -267,9 +267,19 @@ class JsonProtocolChatModel(BaseChatModel):
                 flattened.append(message)
         system_messages = [message for message in flattened if isinstance(message, SystemMessage)]
         conversation = [message for message in flattened if not isinstance(message, SystemMessage)]
-        # Keep the tool protocol as the final system instruction. Some
-        # OpenAI-compatible gateways give the last system message precedence.
-        return [*system_messages, SystemMessage(content=self._tool_prompt()), *conversation]
+        # Keep the protocol late and repeat only its response contract as the
+        # final user message. Tool observations otherwise invite weaker models
+        # to answer with prose despite the system-level JSON requirement.
+        reminder = HumanMessage(content=(
+            "Return the next action now as exactly one JSON object. Do not describe "
+            "the action before or after the JSON."
+        ))
+        return [
+            *system_messages,
+            SystemMessage(content=self._tool_prompt()),
+            *conversation,
+            reminder,
+        ]
 
     def _generate(self, messages: list[BaseMessage], stop: list[str] | None = None,
                   run_manager: Any = None, **kwargs: Any) -> ChatResult:
@@ -279,7 +289,7 @@ class JsonProtocolChatModel(BaseChatModel):
         request = self._tool_messages(messages)
         conversation = list(request)
         responses: list[BaseMessage] = []
-        for repair_attempt in range(3):
+        for repair_attempt in range(2):
             response = self.delegate.invoke(conversation, stop=stop, **kwargs)
             responses.append(response)
             try:
@@ -288,7 +298,7 @@ class JsonProtocolChatModel(BaseChatModel):
                     ChatGeneration(message=self._attach_metadata(parsed, *responses))
                 ])
             except RuntimeError as exc:
-                if repair_attempt == 2:
+                if repair_attempt == 1:
                     if str(exc).startswith("MODEL_ACTION_JSON_INVALID"):
                         content = response.content
                         if isinstance(content, str) and content.strip():
@@ -319,7 +329,7 @@ class JsonProtocolChatModel(BaseChatModel):
         request = self._tool_messages(messages)
         conversation = list(request)
         responses: list[BaseMessage] = []
-        for repair_attempt in range(3):
+        for repair_attempt in range(2):
             response = await self.delegate.ainvoke(conversation, stop=stop, **kwargs)
             responses.append(response)
             try:
@@ -328,7 +338,7 @@ class JsonProtocolChatModel(BaseChatModel):
                     ChatGeneration(message=self._attach_metadata(parsed, *responses))
                 ])
             except RuntimeError as exc:
-                if repair_attempt == 2:
+                if repair_attempt == 1:
                     if str(exc).startswith("MODEL_ACTION_JSON_INVALID"):
                         content = response.content
                         if isinstance(content, str) and content.strip():

@@ -192,6 +192,7 @@ def test_json_protocol_is_the_final_system_instruction():
     assert delegate.seen[0][0].content == "specialist"
     assert "Available tool schemas" in delegate.seen[0][1].content
     assert isinstance(delegate.seen[0][2], HumanMessage)
+    assert "exactly one JSON object" in delegate.seen[0][-1].content
 
 
 def test_json_protocol_rejects_unknown_tool_arguments_after_bounded_repairs():
@@ -199,7 +200,7 @@ def test_json_protocol_rejects_unknown_tool_arguments_after_bounded_repairs():
         '{"type":"tool_call","tool":"http_probe",'
         '"arguments":{"path":"/","unexpected":true}}'
     )
-    delegate = ScriptedModel(replies=[invalid, invalid, invalid])
+    delegate = ScriptedModel(replies=[invalid, invalid])
     model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
 
     with pytest.raises(RuntimeError, match="MODEL_TOOL_ARGUMENTS_INVALID"):
@@ -207,7 +208,7 @@ def test_json_protocol_rejects_unknown_tool_arguments_after_bounded_repairs():
 
 
 def test_json_protocol_falls_back_to_plain_completion_after_bounded_repairs():
-    delegate = ScriptedModel(replies=["working", "still working", "final narrative"])
+    delegate = ScriptedModel(replies=["working", "final narrative"])
     model = JsonProtocolChatModel(delegate=delegate, provider_id="test").bind_tools([http_probe])
 
     result = model.invoke("probe")
