@@ -40,6 +40,33 @@ _DIRECT_PACKAGE_HOSTS = {
 }
 
 
+def _docker_workspace_path(requested: Path) -> Path:
+    """Choose a Docker-visible workspace path for the current host.
+
+    Docker Desktop can lose access to bind mounts below removable/external
+    macOS volumes after the volume or Docker VM is restarted. Keep the
+    requested path everywhere else, but use a deterministic directory below
+    /private/tmp for external-volume checkouts on macOS. The deterministic
+    mapping preserves challenge workspaces across process restarts.
+    """
+    workspace = requested.expanduser().resolve()
+    if _platform.system() != "Darwin":
+        return workspace
+    try:
+        workspace.relative_to("/Volumes")
+    except ValueError:
+        return workspace
+
+    override = os.getenv("MIDNIGHT_DOCKER_WORKSPACE_ROOT", "").strip()
+    root = (
+        Path(override).expanduser()
+        if override
+        else Path("/private/tmp/midnight-workspaces")
+    )
+    scope = hashlib.sha256(str(workspace).encode()).hexdigest()[:24]
+    return (root / scope).resolve()
+
+
 def _host_needs_platform(target_platform: str) -> bool:
     """True if the image's target platform differs from the host arch.
 
@@ -362,7 +389,8 @@ class ContainerManager:
             f"midnight.run_id={self.run_id}",
         ]
         if self.workspace_host_dir is not None:
-            workspace = self.workspace_host_dir.resolve()
+            workspace = _docker_workspace_path(self.workspace_host_dir)
+            self.workspace_host_dir = workspace
             workspace.mkdir(parents=True, exist_ok=True, mode=0o700)
             if not workspace.is_dir():
                 raise RuntimeError(f"challenge workspace is not a directory: {workspace}")

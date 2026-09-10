@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -11,6 +12,7 @@ from midnight.env.container_manager import (
     ExecResult,
     _apt_mirror,
     _docker_build_proxy,
+    _docker_workspace_path,
 )
 
 
@@ -46,6 +48,32 @@ def test_challenge_scopes_get_distinct_container_and_network_names():
     second = ContainerManager(run_id="run-1", scope_id="run-1-challenge-b")
     assert first.container_name("relay") != second.container_name("relay")
     assert first.scope_id != second.scope_id
+
+
+def test_external_macos_workspace_uses_docker_visible_fallback(monkeypatch):
+    monkeypatch.setattr(container_module._platform, "system", lambda: "Darwin")
+    monkeypatch.delenv("MIDNIGHT_DOCKER_WORKSPACE_ROOT", raising=False)
+
+    first = _docker_workspace_path(Path("/Volumes/External/project/run-1"))
+    second = _docker_workspace_path(Path("/Volumes/External/project/run-1"))
+
+    assert first == second
+    assert first.parent == Path("/private/tmp/midnight-workspaces")
+    assert len(first.name) == 24
+
+
+def test_workspace_fallback_root_can_be_overridden(monkeypatch, tmp_path):
+    monkeypatch.setattr(container_module._platform, "system", lambda: "Darwin")
+    monkeypatch.setenv("MIDNIGHT_DOCKER_WORKSPACE_ROOT", str(tmp_path))
+
+    workspace = _docker_workspace_path(Path("/Volumes/External/project/run-1"))
+
+    assert workspace.parent == tmp_path.resolve()
+
+
+def test_non_external_workspace_is_unchanged(monkeypatch, tmp_path):
+    monkeypatch.setattr(container_module._platform, "system", lambda: "Darwin")
+    assert _docker_workspace_path(tmp_path) == tmp_path.resolve()
 
 
 @pytest.mark.asyncio

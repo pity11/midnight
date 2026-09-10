@@ -220,6 +220,29 @@ def test_ichunqiu_accepts_observed_success_message_without_status(monkeypatch):
     asyncio.run(scenario())
 
 
+def test_ichunqiu_accepts_correct_answer_for_already_solved_challenge(monkeypatch):
+    monkeypatch.setenv("MIDNIGHT_PLATFORM_TOKEN", "token")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _json({"code": 0, "message": "答案正确，该题目已被攻克，不计分"})
+
+    async def scenario() -> None:
+        client = httpx.AsyncClient(
+            base_url="https://api.invalid",
+            transport=httpx.MockTransport(handler),
+        )
+        adapter = IchunqiuPlatformAdapter(
+            IchunqiuConfig(base_url="https://api.invalid"), client=client
+        )
+        result = await adapter.submit("one", "flag{right}")
+        assert result.accepted
+        assert result.status == "accepted"
+        assert result.submitted
+        await client.aclose()
+
+    asyncio.run(scenario())
+
+
 def test_platform_loader_selects_ichunqiu_adapter(tmp_path, monkeypatch):
     monkeypatch.setenv("MIDNIGHT_PLATFORM_TOKEN", "token")
     config = tmp_path / "platform.yaml"
