@@ -103,8 +103,7 @@ async def test_pickle_build_compiles_a_declarative_stack_program() -> None:
     action = make_pickle_build(env=env)
     operations = (
         '[{"op":"global","module":"allowed","name":"Root.mapping.get"},'
-        '{"op":"string","value":"callable"},{"op":"tuple","count":1},'
-        '{"op":"reduce"}]'
+        '{"op":"string","value":"callable"},{"op":"call","count":1}]'
     )
     await action.ainvoke(
         {
@@ -116,6 +115,7 @@ async def test_pickle_build_compiles_a_declarative_stack_program() -> None:
     command, timeout = env.calls[0]
     assert "pickletools.dis" in command
     assert "final pickle stack depth must be 1" in command
+    assert 'elif op == "call"' in command
     assert "Root.mapping.get" in command
     assert "payload.pkl" in command
     assert timeout == 60

@@ -95,6 +95,14 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             for call in calls
         ) >= 2
 
+    def _pickle_tuple_failure(self, messages: list) -> bool:
+        if self.category not in {"misc", "forensics"}:
+            return False
+        text = "\n".join(str(getattr(message, "content", "")) for message in messages)
+        failure = text.rfind("validator=FAIL TypeError: argument list must be a tuple")
+        success = text.rfind("validator=PASS")
+        return failure >= 0 and failure > success
+
     @staticmethod
     def _calls_after_last_write(calls: list[dict], tool_name: str) -> int:
         last_write = max(
@@ -133,6 +141,8 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             and not any(call.get("name") == "pwn_crash_probe" for call in calls)
         ):
             return {"pwn_crash_probe"}
+        if self._pickle_tuple_failure(messages):
+            return {"pickle_build"}
         if len(calls) >= self.artifact_gate and not self._made_artifact(calls):
             return {"write_file"}
         if (
@@ -245,6 +255,19 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                     "a measured offset. Call pwn_crash_probe with the exact binary, menu "
                     "prefix, and any required NUL sentinel. Use its register and stack "
                     "offset report before revising solve.py."
+                )]
+            }
+
+        if (
+            self._pickle_tuple_failure(messages)
+            and "[PHASE_GATE:PICKLE_CALL]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:PICKLE_CALL] The latest local validator says REDUCE did not "
+                    "receive an argument tuple. Rebuild with pickle_build and replace each "
+                    "manual callable/argument/REDUCE sequence with call(count). Do not contact "
+                    "the target until validator=PASS."
                 )]
             }
 

@@ -555,7 +555,7 @@ PLAYBOOKS: tuple[Playbook, ...] = (
             "Read the custom Unpickler and any opcode/global allowlist before building a payload.",
             "Model the pickle VM stack explicitly: mark, tuple, reduce, build, get/set state, and memo operations.",
             "Identify an allowed object that reaches attributes, subclasses, globals, builtins, or an evaluator.",
-            "Describe the shortest stack program to pickle_build with global/string/tuple/reduce/memo/get operations; let the compiler emit and disassemble opcode bytes.",
+            "Describe the shortest stack program to pickle_build with global/string/call/memo/get operations; use atomic call(count) so the compiler emits each argument tuple and REDUCE pair.",
             "Run pickle_policy_audit on the source, exact payload bytes, and server-side validator before sending anything to the target.",
         ),
         (

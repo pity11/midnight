@@ -77,6 +77,22 @@ def test_repeated_manual_cyclic_probes_force_batch_crash_probe():
     assert "PHASE_GATE:CRASH_PROBE" in update["messages"][0].content
 
 
+def test_pickle_tuple_validator_failure_forces_atomic_call_rebuild():
+    gate = ArtifactPhaseGateMiddleware(category="misc", artifact_gate=99)
+    messages = [
+        _tool_message(1, "pickle_policy_audit"),
+        _tool_message(2, "pickle_build"),
+        HumanMessage("validator=FAIL TypeError: argument list must be a tuple"),
+    ]
+    assert gate.constrained_tool_names(messages) == {"pickle_build"}
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "PHASE_GATE:PICKLE_CALL" in update["messages"][0].content
+
+    messages.append(HumanMessage("validator=PASS result_type=str"))
+    assert gate.constrained_tool_names(messages) is None
+
+
 def test_phase_gate_does_not_repeat_or_override_existing_artifact():
     gate = PwnPhaseGateMiddleware(target="", artifact_gate=2)
     messages = [

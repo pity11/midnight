@@ -136,7 +136,8 @@ For PNG/BMP LSB evidence, use stego_scan and extract the reported channel.
 For Python serialization challenges, read the validator and allowed opcodes or
 globals, then use pickle_policy_audit on every generated payload and the local
 validator. Use pickle_build for nontrivial payloads so opcode bytes and stack
-depth are compiler-checked. Pickle has no GETATTR or GETITEM opcode: GET/BINGET
+depth are compiler-checked; prefer its atomic call(count) operation over manual
+tuple plus reduce pairs. Pickle has no GETATTR or GETITEM opcode: GET/BINGET
 only read memo slots. Use operations confirmed by pickletools and re-audit after
 every edit. For MIME/archive layers, preserve the
 exact decode provenance. Recover
