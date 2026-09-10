@@ -150,7 +150,11 @@ def load_payload(value, fmt):
     raise ValueError("payload_format must be file or base64")
 
 if source_path:
-    text = pathlib.Path(source_path).read_text(errors="replace")
+    if "\n" in source_path or "\r" in source_path or len(source_path) > 512:
+        text = source_path
+    else:
+        candidate = pathlib.Path(source_path)
+        text = candidate.read_text(errors="replace") if candidate.is_file() else source_path
     print("[policy]")
     for label in ("ALLOWED_PICKLE_MODULES", "ALLOWED_MODULES", "UNSAFE_NAMES", "BLOCKED_NAMES"):
         match = re.search(rf"(?m)^\s*{label}\s*=\s*(\[[^\n]*\]|\([^\n]*\)|\{{[^\n]*\}})", text)
@@ -162,6 +166,11 @@ if source_path:
     for number, line in enumerate(text.splitlines(), 1):
         if any(term in line for term in ("find_class", "super().find_class", "UnpicklingError")):
             print(f"{number}: {line.strip()}")
+    if "super().find_class" in text or "super(RestrictedUnpickler" in text:
+        print("dotted_name_resolution=CPython find_class resolves protocol>=4 dotted names by repeated getattr")
+    if "startswith" in text:
+        print("prefix_filter_review=check whether the filter applies only to the complete requested name; an allowed leading object may expose nested attributes")
+    print("mapping_note=attribute traversal stops at dict-like objects; obtain a bound mapping method and invoke it with REDUCE rather than treating keys as attributes")
 
 raw = load_payload(payload_value, payload_format)
 if raw is not None:
@@ -203,8 +212,8 @@ if validator_path and raw is not None:
     ) -> str:
         """Audit a restricted-pickle policy and validate exact payload opcodes.
 
-        ``source`` is the custom Unpickler source. ``payload`` is either a local
-        file path or Base64 text. When ``validator`` is supplied, the named
+        ``source`` is a custom Unpickler file path or its inline source text.
+        ``payload`` is either a local file path or Base64 text. When ``validator`` is supplied, the named
         function is executed only inside the isolated challenge container using
         the exact payload bytes. This catches invented opcodes and policy
         violations before any target request.
