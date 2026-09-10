@@ -138,8 +138,9 @@ globals, then use pickle_policy_audit on every generated payload and the local
 validator. Use pickle_build for nontrivial payloads so opcode bytes and stack
 depth are compiler-checked; prefer its atomic call(count) operation over manual
 tuple plus reduce pairs. Pickle has no GETATTR or GETITEM opcode: GET/BINGET
-only read memo slots. CPython functions expose __builtins__ directly; do not
-insert __globals__ before __builtins__. Use operations confirmed by pickletools and re-audit after
+only read memo slots. Prefer the version-resilient dotted callable
+function.__globals__.__class__.get, then call it on the separately resolved
+function.__globals__ mapping. Use operations confirmed by pickletools and re-audit after
 every edit. For MIME/archive layers, preserve the
 exact decode provenance. Recover
 the hidden flag from reproducible output.

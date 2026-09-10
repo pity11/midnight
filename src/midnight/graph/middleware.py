@@ -262,12 +262,12 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             return {
                 "messages": [HumanMessage(
                     "[PHASE_GATE:PICKLE_BUILD] Policy reconnaissance is complete. Build and "
-                    "locally validate the shortest executable stack program now. For CPython "
-                    "functions, __builtins__ is directly available: an allowed dotted global "
-                    "such as <Class>.<method>.__builtins__.get resolves a bound mapping method. "
-                    "Do not insert __globals__ between the function and __builtins__. Use that "
-                    "method with string('eval') and call(1), then pass the expression with "
-                    "string(...) and call(1). Supply the challenge validator to pickle_build."
+                    "locally validate the shortest executable stack program now. Use a version-"
+                    "resilient mapping chain: resolve an allowed dotted global ending in "
+                    "<function>.__globals__.__class__.get, memoize it, and call it on the dotted "
+                    "<function>.__globals__ object plus '__builtins__'. Memoize that result, reuse "
+                    "the get callable to fetch 'exec' or 'eval', then call it with the expression. "
+                    "Supply the challenge validator to pickle_build."
                 )]
             }
 

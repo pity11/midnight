@@ -72,7 +72,7 @@ def test_pickle_policy_audit_immediately_forces_compiler():
     update = gate.before_model({"messages": messages}, None)
     assert update is not None
     assert "PHASE_GATE:PICKLE_BUILD" in update["messages"][0].content
-    assert "function and __builtins__" in update["messages"][0].content
+    assert "__globals__.__class__.get" in update["messages"][0].content
 
 
 def test_repeated_manual_cyclic_probes_force_batch_crash_probe():

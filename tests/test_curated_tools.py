@@ -89,6 +89,8 @@ async def test_pickle_policy_audit_checks_opcodes_and_local_validator() -> None:
     assert "opcode 0x96 is BYTEARRAY8, not GETATTR" in command
     assert "dotted_name_resolution" in command
     assert "mapping_note" in command
+    assert "version_note" in command
+    assert "__globals__.__class__.get" in command
     assert "sandbox.py" in command
     assert "payload.pkl" in command
     assert timeout == 60
