@@ -20,11 +20,13 @@ Commands:
   platform-preflight    Read and normalize the official challenge inventory
   dry-run ID            Solve one organizer test task without submitting
   submit-test ID        Solve and submit one organizer-authorized test task
+  monitor RUN_ID        Follow the redacted event stream for a running test
   round2                Start the unattended 27-minute second-stage run
   round3                Start the unattended 27-minute final-stage run
 
 Local overrides:
   MIDNIGHT_PLATFORM_CONFIG
+  MIDNIGHT_RUN_ID
   MIDNIGHT_COMPETITION_CONCURRENCY
   MIDNIGHT_COMPETITION_RUN_TIMEOUT
   MIDNIGHT_COMPETITION_TASK_TIMEOUT
@@ -50,6 +52,32 @@ require_platform_config() {
 
 run_midnight() {
   "$PYTHON" -m midnight.app "$@"
+}
+
+run_single() {
+  local stage="$1"
+  local challenge_id="$2"
+  local submission="$3"
+  local run_id="${MIDNIGHT_RUN_ID:-$stage}"
+  local output_root="$ROOT/logs/$run_id"
+  mkdir -p "$output_root"
+  local -a args=(
+    --platform-config "$PLATFORM_CONFIG"
+    --id "$challenge_id"
+    --run-id "$run_id"
+    --max-concurrency 1
+    --task-timeout 900
+    --events-path "$output_root/events.jsonl"
+    --checkpoint-path "$output_root/checkpoints.sqlite"
+    --submission-ledger-path "$output_root/submissions.sqlite"
+    --artifacts-root "$output_root/artifacts"
+    --workspace-root "$output_root/workspaces"
+    --report-path "$output_root/report.json"
+  )
+  if [[ "$submission" == "enabled" ]]; then
+    args+=(--submit)
+  fi
+  run_midnight "${args[@]}"
 }
 
 run_round() {
@@ -98,24 +126,22 @@ case "$command" in
     require_runtime
     require_platform_config
     challenge_id="${2:?dry-run requires a test challenge ID}"
-    run_midnight \
-      --platform-config "$PLATFORM_CONFIG" \
-      --id "$challenge_id" \
-      --run-id platform-dry-run \
-      --max-concurrency 1 \
-      --task-timeout 900
+    run_single platform-dry-run "$challenge_id" disabled
     ;;
   submit-test)
     require_runtime
     require_platform_config
     challenge_id="${2:?submit-test requires an organizer-authorized challenge ID}"
-    run_midnight \
-      --platform-config "$PLATFORM_CONFIG" \
-      --id "$challenge_id" \
-      --run-id platform-submit-test \
-      --submit \
-      --max-concurrency 1 \
-      --task-timeout 900
+    run_single platform-submit-test "$challenge_id" enabled
+    ;;
+  monitor)
+    run_id="${2:?monitor requires a run ID}"
+    event_path="$ROOT/logs/$run_id/events.jsonl"
+    if [[ ! -f "$event_path" ]]; then
+      echo "No event stream yet: $event_path" >&2
+      exit 2
+    fi
+    exec tail -n +1 -f "$event_path"
     ;;
   round2|round3)
     require_runtime

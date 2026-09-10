@@ -55,6 +55,14 @@ scripts/competition submit-test TEST_CHALLENGE_ID
 
 `dry-run` 会取题和解题，但禁止提交。`submit-test` 只应对主办方明确授权的测试题使用。提交测试成功后冻结代码、依赖和镜像，不要在比赛现场运行 `git pull`、`uv sync`、Docker 清理或镜像重建。
 
+需要让同一道测试题从空白状态重新求解和提交时，为每次彩排指定新的 run ID：
+
+```bash
+MIDNIGHT_RUN_ID=rehearsal-1 scripts/competition submit-test TEST_CHALLENGE_ID
+```
+
+run ID 只能使用不含空格的简短名称，例如下一次改成 `rehearsal-2`。如果复用相同 run ID，Midnight 会复用断点和提交账本，这是恢复功能，不代表重新求解。
+
 在比赛使用的网络环境中再次运行前，检查终端是否遗留无效代理：
 
 ```bash
@@ -115,6 +123,17 @@ waiting up to 300 seconds for live challenges
 ```
 
 程序结束时会打印每题状态和 `solved X/Y`。只要存在未解题，进程退出码可能为 `1`；这表示本轮有题未解，不能据此判断程序启动失败。崩溃应以 traceback、配置错误、Docker 错误或接口错误为准。
+
+启动命令在前台运行，原终端会实时显示配置加载、发现题目、分类、模型请求、容器启动、专家尝试、提交结果和清理结果。它不会打印模型隐藏推理、完整 Flag 或每条工具原始输出。
+
+测试时可以另开一个终端，观察经过脱敏的生命周期事件：
+
+```bash
+cd /path/to/midnight
+scripts/competition monitor rehearsal-1
+```
+
+按 `Ctrl-C` 只会结束这个监控命令，不会停止另一个终端中的 Agent。正式自主阶段是否允许打开或操作监控终端，以现场规则和裁判指令为准。
 
 运行数据分别位于：
 

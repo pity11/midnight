@@ -98,6 +98,15 @@ Enable submission only for an organizer-provided test challenge:
 scripts/competition submit-test TEST_CHALLENGE_ID
 ```
 
+Use a fresh run ID when intentionally repeating the full solve and platform
+submission path. Reusing an ID correctly resumes its checkpoint and suppresses
+duplicate local submissions:
+
+```bash
+MIDNIGHT_RUN_ID=rehearsal-1 scripts/competition submit-test TEST_CHALLENGE_ID
+scripts/competition monitor rehearsal-1
+```
+
 Confirm that the platform accepts the flag and that rerunning the same command
 does not duplicate the submission.
 
