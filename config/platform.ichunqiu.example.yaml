@@ -7,6 +7,9 @@ timeout_seconds: 20
 max_attachment_bytes: 268435456
 include_solved: false
 reset_poll_seconds: 20
+user_agent: "Midnight-CTF-Agent/1.0"
+# Keep organizer traffic independent from ambient shell proxy variables.
+trust_env: false
 
 endpoints:
   challenges: "/questions-endpoint-from-organizer-document"

@@ -4,6 +4,7 @@ import asyncio
 import json
 
 import httpx
+import pytest
 
 from midnight.app import _load_http_adapter
 from midnight.interfaces.ichunqiu import IchunqiuConfig, IchunqiuPlatformAdapter
@@ -205,4 +206,32 @@ endpoints:
     adapter = _load_http_adapter(str(config))
     assert isinstance(adapter, IchunqiuPlatformAdapter)
     assert adapter.config.endpoints.challenges == "/inventory"
+    assert adapter.client.headers["user-agent"] == "Midnight-CTF-Agent/1.0"
+    assert not adapter.config.trust_env
     asyncio.run(adapter.close())
+
+
+def test_platform_http_error_does_not_expose_query_token(monkeypatch):
+    token = "secret-platform-token"
+    monkeypatch.setenv("MIDNIGHT_PLATFORM_TOKEN", token)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, text="forbidden")
+
+    async def scenario() -> None:
+        client = httpx.AsyncClient(
+            base_url="https://api.invalid",
+            transport=httpx.MockTransport(handler),
+        )
+        adapter = IchunqiuPlatformAdapter(
+            IchunqiuConfig(base_url="https://api.invalid"), client=client
+        )
+        with pytest.raises(RuntimeError) as caught:
+            await adapter.list_challenges()
+        message = str(caught.value)
+        assert message == "challenge query returned HTTP 403"
+        assert token not in message
+        assert "?token=" not in message
+        await client.aclose()
+
+    asyncio.run(scenario())

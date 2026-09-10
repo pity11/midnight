@@ -33,6 +33,8 @@ class IchunqiuConfig:
     max_attachment_bytes: int = 256 * 1024 * 1024
     include_solved: bool = False
     reset_poll_seconds: int = 20
+    user_agent: str = "Midnight-CTF-Agent/1.0"
+    trust_env: bool = False
     endpoints: IchunqiuEndpoints = field(default_factory=IchunqiuEndpoints)
 
     def __post_init__(self) -> None:
@@ -45,6 +47,8 @@ class IchunqiuConfig:
             raise ValueError("max_attachment_bytes must be positive")
         if self.reset_poll_seconds <= 0:
             raise ValueError("reset_poll_seconds must be positive")
+        if not self.user_agent.strip():
+            raise ValueError("user_agent must not be empty")
 
 
 def _truthy(value: Any) -> bool:
@@ -80,6 +84,8 @@ class IchunqiuPlatformAdapter:
             base_url=config.base_url.rstrip("/"),
             timeout=config.timeout_seconds,
             follow_redirects=False,
+            headers={"User-Agent": config.user_agent, "Accept": "application/json"},
+            trust_env=config.trust_env,
         )
         self._raw: dict[str, dict[str, Any]] = {}
         self._attachments: dict[str, list[str]] = {}
@@ -92,6 +98,12 @@ class IchunqiuPlatformAdapter:
 
     def _params(self, **values: str) -> dict[str, str]:
         return {"token": self._token(), **values}
+
+    @staticmethod
+    def _raise_for_status(response: httpx.Response, operation: str) -> None:
+        """Raise without embedding the query-token URL in the exception."""
+        if response.is_error:
+            raise RuntimeError(f"{operation} returned HTTP {response.status_code}")
 
     @staticmethod
     def _check_envelope(payload: Any, operation: str) -> dict[str, Any]:
@@ -174,7 +186,7 @@ class IchunqiuPlatformAdapter:
             self.config.endpoints.challenges,
             params=self._params(),
         )
-        response.raise_for_status()
+        self._raise_for_status(response, "challenge query")
         payload = self._check_envelope(response.json(), "challenge query")
         data = payload.get("data")
         if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
@@ -228,7 +240,7 @@ class IchunqiuPlatformAdapter:
             size = 0
             try:
                 async with self.client.stream("GET", absolute_url) as response:
-                    response.raise_for_status()
+                    self._raise_for_status(response, "attachment download")
                     disposition = response.headers.get("content-disposition", "")
                     match = re.search(
                         r"filename\*?=(?:UTF-8''|\")?([^\";]+)",
@@ -264,7 +276,7 @@ class IchunqiuPlatformAdapter:
             self.config.endpoints.reset,
             params=self._params(question_id=challenge_id),
         )
-        response.raise_for_status()
+        self._raise_for_status(response, "environment reset")
         self._check_envelope(response.json(), "environment reset")
         for attempt in range(self.config.reset_poll_seconds):
             items = await self._inventory()
@@ -289,7 +301,7 @@ class IchunqiuPlatformAdapter:
             self.config.endpoints.submit,
             params=self._params(question_id=challenge_id, answer=flag),
         )
-        response.raise_for_status()
+        self._raise_for_status(response, "answer submission")
         payload = response.json()
         if not isinstance(payload, dict):
             raise TypeError("answer submission response must be a JSON object")
