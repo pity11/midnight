@@ -21,6 +21,7 @@ pwn:
   - binary_triage
   - source_audit
   - pwn_rop_inventory
+  - pwn_ret2libc_target
   - gdb_tool
   - connect_tool
   - checksec

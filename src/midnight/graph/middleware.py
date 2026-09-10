@@ -40,7 +40,8 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
 
     def _reached_target(self, calls: list[dict]) -> bool:
         return any(
-            call.get("name") in {"connect_tool", "http_request", "fenjing_ssti"}
+            call.get("name")
+            in {"connect_tool", "http_request", "fenjing_ssti", "pwn_ret2libc_target"}
             or (
                 call.get("name") == "run_exploit"
                 and (call.get("args") or {}).get("mode") == "target"
@@ -123,6 +124,22 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         content = str((writes[-1].get("args") or {}).get("content", ""))
         return ".interactive()" in content
 
+    @staticmethod
+    def _ret2libc_artifact(calls: list[dict]) -> bool:
+        writes = [
+            call
+            for call in calls
+            if call.get("name") == "write_file"
+            and "solve.py" in str((call.get("args") or {}).get("path", ""))
+        ]
+        if not writes:
+            return False
+        content = str((writes[-1].get("args") or {}).get("content", "")).lower()
+        return (
+            all(marker in content for marker in ("libc", "got", "plt", "offset"))
+            and re.search(r"offset\s*=\s*(?:0x[0-9a-f]+|\d+)", content) is not None
+        )
+
     def _pickle_tuple_failure(self, messages: list) -> bool:
         if self.category not in {"misc", "forensics"}:
             return False
@@ -183,6 +200,12 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         if self._pickle_audited_without_build(messages):
             return {"pickle_build"}
         if (
+            self.category == "pwn"
+            and self._ret2libc_artifact(calls)
+            and not any(call.get("name") == "pwn_ret2libc_target" for call in calls)
+        ):
+            return {"pwn_ret2libc_target"}
+        if (
             self._repeated_manual_cyclic(calls)
             and not any(call.get("name") == "pwn_crash_probe" for call in calls)
         ):
@@ -208,6 +231,7 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         ):
             return {
                 "run_exploit",
+                "pwn_ret2libc_target",
                 "connect_tool",
                 "http_request",
                 "fenjing_ssti",
@@ -227,6 +251,7 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                 "fmtstr_write_scan",
                 "pwn_crash_probe",
                 "pwn_rop_inventory",
+                "pwn_ret2libc_target",
             }
         if self._format_string_indicated(messages):
             return {

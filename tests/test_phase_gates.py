@@ -182,7 +182,7 @@ def test_phase_gate_constrains_target_lane_after_artifact():
         _tool_message(3, "run_shell", {"command": "python -m py_compile solve.py"}),
     ]
     assert gate.constrained_tool_names(messages) == {
-        "run_exploit", "connect_tool", "http_request", "fenjing_ssti",
+        "run_exploit", "pwn_ret2libc_target", "connect_tool", "http_request", "fenjing_ssti",
         "tinja_ssti", "velocity_ssti", "jwt_analyze",
         "fmtstr_write_scan",
     }
@@ -198,6 +198,23 @@ def test_target_gate_recognizes_target_bound_structured_tools():
         _tool_message(2, "run_exploit", {"script": "solve.py", "mode": "target"}),
     ]
     assert gate.before_model({"messages": messages}, None) is None
+
+
+def test_pwn_ret2libc_artifact_forces_deterministic_target_tool():
+    gate = ArtifactPhaseGateMiddleware(category="pwn", target="target:1337")
+    messages = [
+        _tool_message(1, "list_dir", {"path": "/ctf"}),
+        _tool_message(2, "binary_triage", {"path": "/ctf/chall"}),
+        _tool_message(
+            3,
+            "write_file",
+            {
+                "path": "/ctf/solve.py",
+                "content": "offset = 88\n# libc ret2libc via puts GOT and puts PLT",
+            },
+        ),
+    ]
+    assert gate.constrained_tool_names(messages) == {"pwn_ret2libc_target"}
 
 
 def test_pwn_format_evidence_selects_narrow_specialist_lane():

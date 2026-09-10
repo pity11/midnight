@@ -32,6 +32,7 @@ from midnight.tools.category import (
     make_pickle_build,
     make_pickle_policy_audit,
     make_pwn_crash_probe,
+    make_pwn_ret2libc_target,
     make_pwn_rop_inventory,
     make_pyinstaller_extract,
     make_rsa_quickcheck,
@@ -69,6 +70,7 @@ def test_pwn_and_pickle_deterministic_auditors_are_configured() -> None:
     assert "source_audit" in config.tools["pwn"]
     assert "pwn_crash_probe" in config.tools["pwn"]
     assert "pwn_rop_inventory" in config.tools["pwn"]
+    assert "pwn_ret2libc_target" in config.tools["pwn"]
     assert "pickle_policy_audit" in config.tools["misc"]
     assert "pickle_policy_audit" in config.tools["forensics"]
     assert "pickle_build" in config.tools["misc"]
@@ -170,6 +172,31 @@ async def test_pwn_crash_probe_uses_batch_gdb_and_bounded_input() -> None:
         await action.ainvoke({"binary": "x", "pattern_length": 10})
     with pytest.raises(ValueError, match="function_query"):
         await action.ainvoke({"binary": "x", "function_query": "read; id"})
+
+
+@pytest.mark.asyncio
+async def test_pwn_ret2libc_target_is_bound_and_records_output() -> None:
+    env = _Env()
+    observed: list[str] = []
+    action = make_pwn_ret2libc_target(
+        env=env,
+        state={"challenge": {"remote": "pwn-target:31337"}},
+        observe_target_output=observed.append,
+    )
+    await action.ainvoke(
+        {"binary": "/ctf/chall", "libc": "/ctf/libc.so.6", "offset": 88}
+    )
+    command, timeout = env.calls[0]
+    assert "midnight-ret2libc.py" in command
+    assert "--host pwn-target --port 31337" in command
+    assert "--offset 88" in command
+    assert timeout == 45
+    assert observed == ["ok\n"]
+
+    with pytest.raises(ValueError, match="offset"):
+        await action.ainvoke(
+            {"binary": "/ctf/chall", "libc": "/ctf/libc.so.6", "offset": 4}
+        )
 
 
 @pytest.mark.asyncio

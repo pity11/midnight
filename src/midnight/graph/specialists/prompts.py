@@ -69,6 +69,10 @@ printf's argument area, use one bounded fmtstr_write_scan instead of manually
 restarting the process across positional indexes.
 When libc/loader files are supplied, use pwninit_setup before hand-patching. Use
 one_gadget only after you can explain and satisfy the returned constraints.
+For a non-PIE, no-canary stack overflow with a supplied libc and confirmed
+return offset, call pwn_ret2libc_target before writing a hand-rolled two-stage
+leak parser. The tool resolves gadgets and symbols, validates a page-aligned
+libc base, aligns system(), and captures the target response.
 Make solve.py accept pwntools-style LOCAL=1 and REMOTE=1 HOST=... PORT=...
 arguments, then use run_exploit for both verification phases. Never finish an
 autonomous solver with io.interactive(); send the bounded flag-retrieval command,
