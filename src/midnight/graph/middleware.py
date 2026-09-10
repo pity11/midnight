@@ -103,6 +103,15 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         success = text.rfind("validator=PASS")
         return failure >= 0 and failure > success
 
+    def _pickle_audited_without_build(self, messages: list) -> bool:
+        if not self._restricted_pickle_indicated(messages):
+            return False
+        calls = _calls(messages)
+        return (
+            any(call.get("name") == "pickle_policy_audit" for call in calls)
+            and not any(call.get("name") == "pickle_build" for call in calls)
+        )
+
     @staticmethod
     def _calls_after_last_write(calls: list[dict], tool_name: str) -> int:
         last_write = max(
@@ -136,6 +145,8 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             and not any(call.get("name") == "pickle_policy_audit" for call in calls)
         ):
             return {"pickle_policy_audit"}
+        if self._pickle_audited_without_build(messages):
+            return {"pickle_build"}
         if (
             self._repeated_manual_cyclic(calls)
             and not any(call.get("name") == "pwn_crash_probe" for call in calls)
@@ -241,6 +252,22 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                     "[PHASE_GATE:PICKLE_POLICY] A custom Unpickler/find_class policy is visible. "
                     "Run pickle_policy_audit on its source and any current payload. Treat an "
                     "opcode chain as invalid until pickletools and the local validator accept it."
+                )]
+            }
+
+        if (
+            self._pickle_audited_without_build(messages)
+            and "[PHASE_GATE:PICKLE_BUILD]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:PICKLE_BUILD] Policy reconnaissance is complete. Build and "
+                    "locally validate the shortest executable stack program now. For CPython "
+                    "functions, __builtins__ is directly available: an allowed dotted global "
+                    "such as <Class>.<method>.__builtins__.get resolves a bound mapping method. "
+                    "Do not insert __globals__ between the function and __builtins__. Use that "
+                    "method with string('eval') and call(1), then pass the expression with "
+                    "string(...) and call(1). Supply the challenge validator to pickle_build."
                 )]
             }
 

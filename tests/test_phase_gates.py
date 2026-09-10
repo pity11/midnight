@@ -60,7 +60,19 @@ def test_pickle_phase_gate_requires_policy_audit_after_find_class_evidence():
     assert "PHASE_GATE:PICKLE_POLICY" in update["messages"][0].content
 
     messages.append(_tool_message(2, "pickle_policy_audit"))
-    assert gate.constrained_tool_names(messages) is None
+    assert gate.constrained_tool_names(messages) == {"pickle_build"}
+
+
+def test_pickle_policy_audit_immediately_forces_compiler():
+    gate = ArtifactPhaseGateMiddleware(category="misc", artifact_gate=99)
+    messages = [
+        HumanMessage("RestrictedUnpickler.find_class calls super().find_class"),
+        _tool_message(1, "pickle_policy_audit"),
+    ]
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "PHASE_GATE:PICKLE_BUILD" in update["messages"][0].content
+    assert "function and __builtins__" in update["messages"][0].content
 
 
 def test_repeated_manual_cyclic_probes_force_batch_crash_probe():

