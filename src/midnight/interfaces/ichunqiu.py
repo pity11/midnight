@@ -71,10 +71,33 @@ def _category(value: Any) -> str | None:
         "reverse engineering": "reverse",
         "forensic": "forensics",
         "取证": "forensics",
+        "取证分析": "forensics",
+        "应急响应与日志取证": "forensics",
         "密码": "crypto",
+        "密码学": "crypto",
+        "密码学分析": "crypto",
+        "网站安全": "web",
+        "web 复杂应用渗透": "web",
+        "web复杂应用渗透": "web",
+        "二进制漏洞利用": "pwn",
+        "二进制漏洞": "pwn",
+        "逆向工程": "reverse",
+        "逆向工程与复杂协议分析": "reverse",
         "杂项": "misc",
     }
-    return aliases.get(text, text or None)
+    if text in aliases:
+        return aliases[text]
+    keyword_routes = (
+        (("取证", "应急响应", "forensic", "dfir"), "forensics"),
+        (("网站", "web"), "web"),
+        (("二进制漏洞", "pwn"), "pwn"),
+        (("逆向", "复杂协议", "reverse"), "reverse"),
+        (("密码", "crypto"), "crypto"),
+    )
+    for markers, category in keyword_routes:
+        if any(marker in text for marker in markers):
+            return category
+    return text or None
 
 
 class IchunqiuPlatformAdapter:

@@ -36,11 +36,11 @@ class Classification(BaseModel):
 
 _CLASSIFY_PROMPT = """You are a CTF triage assistant. Classify the challenge into exactly one category:
 - pwn: binary exploitation, memory corruption, remote service to exploit
-- reverse: reverse engineering a binary to recover logic/flag
-- web: web application exploitation
-- crypto: cryptography puzzles
+- reverse: reverse engineering, custom or complex protocol analysis
+- web: website security and complex web application exploitation
+- crypto: cryptography puzzles and cryptanalysis
 - misc: miscellaneous, scripting, jails
-- forensics: file/network/memory forensics, steganography
+- forensics: incident response, log, file, network, memory, or disk forensics
 
 Challenge name: {name}
 Category hint (may be empty/unreliable): {hint}

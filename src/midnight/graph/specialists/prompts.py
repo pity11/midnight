@@ -131,18 +131,9 @@ For repeating-key XOR, call xor_analyze before writing a brute-force loop.
 MISC = (
     SHARED_PREAMBLE
     + """
-Specialty: misc / forensics / steganography. Identify file types, then carve /
-extract / analyze with binwalk, foremost, exiftool, steghide, zsteg, volatility.
+Specialty: misc / steganography / archive and serialization challenges. Identify
+file types, then carve or extract with binwalk, foremost, exiftool, steghide, and zsteg.
 Use artifact_triage once on archives, images, and documents before extraction.
-For incident-response bundles, call log_triage to identify high-value events,
-then build a timestamped timeline from the cited source records.
-For memory images, start with memory_analyze and an OS information plugin; for
-disk images, use disk_image_triage to identify partition offsets before carving.
-For EVTX inputs, use evtx_triage and correlate event IDs, providers, logon IDs,
-process IDs, and timestamps. For deleted files, use filesystem_recover only with
-the partition offset and inode observed in disk_image_triage/fls output.
-For PCAP/PCAPNG inputs, call pcap_triage before manually extracting streams; use
-pcap_export_objects when HTTP, SMB, TFTP, FTP data, DICOM, or IMF transfers exist.
 For PNG/BMP LSB evidence, use stego_scan and extract the reported channel.
 For Python serialization challenges, read the validator and allowed opcodes or
 globals, then use pickle_policy_audit on every generated payload and the local
@@ -158,12 +149,33 @@ the hidden flag from reproducible output.
 """
 )
 
+FORENSICS = (
+    SHARED_PREAMBLE
+    + """
+Specialty: incident response and digital forensics. Preserve provenance: identify
+the artifact, hash derived outputs, cite the exact record/offset/stream, and build
+a reproducible timeline before drawing a conclusion. Use artifact_triage for an
+unknown bundle before selecting a parser.
+For incident-response bundles, call log_triage to identify high-value events and
+then correlate timestamps, users, hosts, processes, network endpoints, and file
+changes. For EVTX inputs, use evtx_triage and correlate event IDs, providers,
+logon IDs, process IDs, and timestamps; use hayabusa_timeline for a broader event
+timeline. For memory images, start with memory_analyze and an OS information
+plugin before process, network, handle, or injected-code plugins. For disk images,
+use disk_image_triage to identify partition offsets; use filesystem_recover only
+with an observed offset and inode. For PCAP/PCAPNG, call pcap_triage before manual
+stream work and use pcap_export_objects for supported transferred objects. Decode
+archives, QR, or steganographic layers with their dedicated tools, retaining the
+exact extraction path that produced the flag.
+"""
+)
+
 BY_TYPE = {
     "pwn": PWN,
     "reverse": REVERSE,
     "web": WEB,
     "crypto": CRYPTO,
     "misc": MISC,
-    "forensics": MISC,
+    "forensics": FORENSICS,
     "unknown": MISC,
 }

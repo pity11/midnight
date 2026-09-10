@@ -7,7 +7,11 @@ import httpx
 import pytest
 
 from midnight.app import _load_http_adapter
-from midnight.interfaces.ichunqiu import IchunqiuConfig, IchunqiuPlatformAdapter
+from midnight.interfaces.ichunqiu import (
+    IchunqiuConfig,
+    IchunqiuPlatformAdapter,
+    _category,
+)
 
 
 def _json(data: object) -> httpx.Response:
@@ -16,6 +20,25 @@ def _json(data: object) -> httpx.Response:
         content=json.dumps(data).encode(),
         headers={"content-type": "application/json"},
     )
+
+
+@pytest.mark.parametrize(
+    ("label", "expected"),
+    [
+        ("网站安全", "web"),
+        ("Web 复杂应用渗透", "web"),
+        ("二进制漏洞利用", "pwn"),
+        ("二进制漏洞", "pwn"),
+        ("逆向工程", "reverse"),
+        ("逆向工程与复杂协议分析", "reverse"),
+        ("密码学", "crypto"),
+        ("密码学分析", "crypto"),
+        ("取证分析", "forensics"),
+        ("应急响应与日志取证", "forensics"),
+    ],
+)
+def test_handbook_category_labels_route_deterministically(label, expected):
+    assert _category(label) == expected
 
 
 def test_ichunqiu_inventory_reset_download_and_submit(tmp_path, monkeypatch):

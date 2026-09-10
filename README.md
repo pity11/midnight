@@ -59,6 +59,8 @@ The short operational procedure used before a live competition is documented in
 [docs/competition-mvp.md](docs/competition-mvp.md).
 For a clean-clone installation and the exact offline competition-day sequence,
 see the [Chinese startup guide](docs/competition-startup-cn.md).
+The mapping from organizer challenge labels to specialist tools and sandboxes is
+documented in [competition-routing.md](docs/competition-routing.md).
 The latest frozen-build evidence is recorded in
 [docs/readiness-2026-09-10.md](docs/readiness-2026-09-10.md).
 
