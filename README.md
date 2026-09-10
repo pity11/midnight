@@ -57,6 +57,8 @@ Keep real credentials in `.env`; the file is excluded from version control.
 
 The short operational procedure used before a live competition is documented in
 [docs/competition-mvp.md](docs/competition-mvp.md).
+For a clean-clone installation and the exact offline competition-day sequence,
+see the [Chinese startup guide](docs/competition-startup-cn.md).
 The latest frozen-build evidence is recorded in
 [docs/readiness-2026-09-10.md](docs/readiness-2026-09-10.md).
 

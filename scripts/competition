@@ -9,6 +9,7 @@ PLATFORM_CONFIG="${MIDNIGHT_PLATFORM_CONFIG:-$ROOT/config/platform.local.yaml}"
 CONCURRENCY="${MIDNIGHT_COMPETITION_CONCURRENCY:-2}"
 RUN_TIMEOUT="${MIDNIGHT_COMPETITION_RUN_TIMEOUT:-1620}"
 TASK_TIMEOUT="${MIDNIGHT_COMPETITION_TASK_TIMEOUT:-1800}"
+WAIT_FOR_CHALLENGES="${MIDNIGHT_COMPETITION_WAIT_FOR_CHALLENGES:-300}"
 
 usage() {
   cat <<'EOF'
@@ -27,6 +28,7 @@ Local overrides:
   MIDNIGHT_COMPETITION_CONCURRENCY
   MIDNIGHT_COMPETITION_RUN_TIMEOUT
   MIDNIGHT_COMPETITION_TASK_TIMEOUT
+  MIDNIGHT_COMPETITION_WAIT_FOR_CHALLENGES
 
 Credentials must remain in the protected .env file. This script never prints them.
 EOF
@@ -55,13 +57,18 @@ run_round() {
   local run_id="${MIDNIGHT_RUN_ID:-$stage}"
   local output_root="$ROOT/logs/$run_id"
   mkdir -p "$output_root"
-  exec "$PYTHON" -m midnight.app \
+  local -a runner=("$PYTHON")
+  if command -v caffeinate >/dev/null 2>&1; then
+    runner=(caffeinate -dimsu "$PYTHON")
+  fi
+  exec "${runner[@]}" -m midnight.app \
     --platform-config "$PLATFORM_CONFIG" \
     --run-id "$run_id" \
     --submit \
     --max-concurrency "$CONCURRENCY" \
     --task-timeout "$TASK_TIMEOUT" \
     --run-timeout "$RUN_TIMEOUT" \
+    --wait-for-challenges "$WAIT_FOR_CHALLENGES" \
     --events-path "$output_root/events.jsonl" \
     --checkpoint-path "$output_root/checkpoints.sqlite" \
     --submission-ledger-path "$output_root/submissions.sqlite" \

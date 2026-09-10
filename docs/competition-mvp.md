@@ -134,6 +134,13 @@ window for in-flight platform submissions and operational inspection. Every
 challenge receives the same deadline, including tasks waiting for a worker slot.
 Organizer-labelled easy tasks are scheduled first.
 
+The wrapper also passes `--wait-for-challenges 300`, so a short organizer-side
+publication delay does not make an unattended round exit. Challenge discovery is
+retried every five seconds for at most five minutes, including transient query or
+DNS failures; this wait happens before the 27-minute solving budget starts. On
+macOS the wrapper launches the process under `caffeinate` to keep the laptop and
+disks awake for the duration of the round.
+
 Reuse the same run ID and paths after an interruption. Midnight resumes compatible
 challenge revisions from checkpoints. If the platform changes a challenge, its
 content-derived revision creates a separate workspace and checkpoint identity.

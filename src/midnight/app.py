@@ -165,11 +165,62 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="global solving window shared by all challenges, in seconds",
     )
     p.add_argument(
+        "--wait-for-challenges",
+        type=int,
+        default=0,
+        help=(
+            "when using a live platform without --id, poll for unsolved "
+            "challenges for up to this many seconds"
+        ),
+    )
+    p.add_argument(
         "--cleanup-run",
         metavar="RUN_ID",
         help="remove orphaned Midnight containers for a run and exit",
     )
     return p.parse_args(argv)
+
+
+async def _list_challenges_with_wait(
+    provider: ChallengeProvider,
+    *,
+    wait_seconds: int,
+    poll_interval: float = 5.0,
+) -> list[Any]:
+    """List live challenges, tolerating a short delay in platform publication."""
+    deadline = time.monotonic() + wait_seconds
+    had_successful_query = False
+    last_error: Exception | None = None
+    announced_wait = False
+    while True:
+        try:
+            challenges = await provider.list_challenges()
+            had_successful_query = True
+            last_error = None
+            if challenges or wait_seconds <= 0:
+                return challenges
+        except Exception as exc:
+            if wait_seconds <= 0:
+                raise
+            last_error = exc
+            log.warning(
+                "challenge discovery failed (%s); retrying during startup window",
+                type(exc).__name__,
+            )
+
+        if not announced_wait:
+            log.info("waiting up to %d seconds for live challenges", wait_seconds)
+            announced_wait = True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        await asyncio.sleep(min(poll_interval, remaining))
+
+    if not had_successful_query and last_error is not None:
+        raise RuntimeError(
+            f"challenge discovery unavailable after {wait_seconds} seconds"
+        ) from last_error
+    return []
 
 
 def _load_http_adapter(path: str) -> Any:
@@ -255,11 +306,17 @@ async def _amain(args: argparse.Namespace) -> int:
             log.info("sandbox %s satisfies its capability contract", category)
         return 0
 
-    selected_platforms = sum(bool(value) for value in (args.platform_config, args.bundles_dir, args.tsecbench))
+    selected_platforms = sum(
+        bool(value) for value in (args.platform_config, args.bundles_dir, args.tsecbench)
+    )
     if selected_platforms > 1:
         raise ValueError("--platform-config, --bundles-dir, and --tsecbench are mutually exclusive")
-    if (args.evaluator_manifest or args.evaluation_spec or args.service_manifest) and not args.bundles_dir:
+    if (
+        args.evaluator_manifest or args.evaluation_spec or args.service_manifest
+    ) and not args.bundles_dir:
         raise ValueError("evaluator and service manifests require --bundles-dir")
+    if args.wait_for_challenges < 0:
+        raise ValueError("--wait-for-challenges cannot be negative")
 
     platform: Any = None
     if args.tsecbench:
@@ -297,7 +354,9 @@ async def _amain(args: argparse.Namespace) -> int:
         evaluator_path = Path(args.evaluator_manifest).resolve()
         if evaluator_path.is_relative_to(bundle_root):
             raise ValueError("evaluator manifest must be outside the clean bundle root")
-        if args.service_manifest and Path(args.service_manifest).resolve().is_relative_to(bundle_root):
+        if args.service_manifest and Path(args.service_manifest).resolve().is_relative_to(
+            bundle_root
+        ):
             raise ValueError("service manifest must be outside the clean bundle root")
         delegate = EvaluatorManifestSubmitter(args.evaluator_manifest)
     else:
@@ -307,7 +366,13 @@ async def _amain(args: argparse.Namespace) -> int:
     if args.id:
         challenges = [await provider.fetch(args.id)]
     else:
-        challenges = await provider.list_challenges()
+        wait_seconds = (
+            args.wait_for_challenges if platform is not None and not args.list_only else 0
+        )
+        challenges = await _list_challenges_with_wait(
+            provider,
+            wait_seconds=wait_seconds,
+        )
     if not challenges:
         if platform is not None:
             log.info("platform reported no unsolved challenges")
@@ -366,7 +431,9 @@ async def _amain(args: argparse.Namespace) -> int:
                 if manifest.internet_policy == "target_only"
             }
             if service_manager.challenge_ids != set(target_manifests):
-                raise ValueError("service manifest must cover exactly the selected target-only tasks")
+                raise ValueError(
+                    "service manifest must cover exactly the selected target-only tasks"
+                )
             for challenge_id, target in service_manager.targets.items():
                 if target not in target_manifests[challenge_id].allowed_targets:
                     raise ValueError(f"service target is not allowlisted for {challenge_id}")
