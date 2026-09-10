@@ -89,6 +89,20 @@ def test_repeated_manual_cyclic_probes_force_batch_crash_probe():
     assert "PHASE_GATE:CRASH_PROBE" in update["messages"][0].content
 
 
+def test_pie_leak_and_source_overflow_force_rop_inventory():
+    gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99, target_gate=99)
+    messages = [
+        HumanMessage("Something is leaked: {:p}; split_at after read size 0x400 stack overflow"),
+        _tool_message(1, "list_dir"),
+        _tool_message(2, "binary_triage"),
+        _tool_message(3, "source_audit"),
+    ]
+    assert gate.constrained_tool_names(messages) == {"pwn_rop_inventory"}
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "PHASE_GATE:PIE_ROP" in update["messages"][0].content
+
+
 def test_pickle_tuple_validator_failure_forces_atomic_call_rebuild():
     gate = ArtifactPhaseGateMiddleware(category="misc", artifact_gate=99)
     messages = [

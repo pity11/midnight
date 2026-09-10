@@ -95,6 +95,17 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             for call in calls
         ) >= 2
 
+    def _pie_overflow_indicated(self, messages: list) -> bool:
+        if self.category != "pwn":
+            return False
+        text = "\n".join(str(getattr(message, "content", "")) for message in messages).lower()
+        has_leak = "leaked" in text or "runtime symbol leak" in text or "{:p}" in text
+        has_overwrite = any(
+            marker in text
+            for marker in ("stack overwrite", "stack overflow", "buffer overflow", "0x400", "split_at")
+        )
+        return has_leak and has_overwrite
+
     def _pickle_tuple_failure(self, messages: list) -> bool:
         if self.category not in {"misc", "forensics"}:
             return False
@@ -152,6 +163,12 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             and not any(call.get("name") == "pwn_crash_probe" for call in calls)
         ):
             return {"pwn_crash_probe"}
+        if (
+            self._pie_overflow_indicated(messages)
+            and any(call.get("name") == "source_audit" for call in calls)
+            and not any(call.get("name") == "pwn_rop_inventory" for call in calls)
+        ):
+            return {"pwn_rop_inventory"}
         if self._pickle_tuple_failure(messages):
             return {"pickle_build"}
         if len(calls) >= self.artifact_gate and not self._made_artifact(calls):
@@ -183,6 +200,7 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                 "fmtstr_probe",
                 "fmtstr_write_scan",
                 "pwn_crash_probe",
+                "pwn_rop_inventory",
             }
         if self._format_string_indicated(messages):
             return {
@@ -282,6 +300,22 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                     "a measured offset. Call pwn_crash_probe with the exact binary, menu "
                     "prefix, and any required NUL sentinel. Use its register and stack "
                     "offset report before revising solve.py."
+                )]
+            }
+
+        if (
+            self._pie_overflow_indicated(messages)
+            and any(call.get("name") == "source_audit" for call in calls)
+            and not any(call.get("name") == "pwn_rop_inventory" for call in calls)
+            and "[PHASE_GATE:PIE_ROP]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:PIE_ROP] Source evidence establishes a raw stack overwrite "
+                    "and the service exposes a runtime symbol address. Call pwn_rop_inventory "
+                    "on the primary ELF with the vulnerable function and leaked symbol. Use "
+                    "its exact saved-return distance and PIE base equation; do not probe for "
+                    "a format string."
                 )]
             }
 

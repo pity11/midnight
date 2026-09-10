@@ -32,6 +32,7 @@ from midnight.tools.category import (
     make_pickle_build,
     make_pickle_policy_audit,
     make_pwn_crash_probe,
+    make_pwn_rop_inventory,
     make_pyinstaller_extract,
     make_rsa_quickcheck,
     make_run_exploit,
@@ -67,6 +68,7 @@ def test_pwn_and_pickle_deterministic_auditors_are_configured() -> None:
     config = get_config()
     assert "source_audit" in config.tools["pwn"]
     assert "pwn_crash_probe" in config.tools["pwn"]
+    assert "pwn_rop_inventory" in config.tools["pwn"]
     assert "pickle_policy_audit" in config.tools["misc"]
     assert "pickle_policy_audit" in config.tools["forensics"]
     assert "pickle_build" in config.tools["misc"]
@@ -121,6 +123,24 @@ async def test_pickle_build_compiles_a_declarative_stack_program() -> None:
     assert "Root.mapping.get" in command
     assert "payload.pkl" in command
     assert timeout == 60
+
+
+@pytest.mark.asyncio
+async def test_pwn_rop_inventory_extracts_offsets_and_gadgets() -> None:
+    env = _Env()
+    action = make_pwn_rop_inventory(env=env)
+    await action.ainvoke(
+        {"binary": "chall", "function_query": "vulnerable", "leaked_symbol": "CHOICE"}
+    )
+    command, timeout = env.calls[0]
+    assert "candidate_saved_return_distance" in command
+    assert "leaked_symbol_candidate" in command
+    assert "ROPgadget" in command
+    assert "PIE runtime address" in command
+    assert timeout == 150
+
+    with pytest.raises(ValueError, match="unsupported"):
+        await action.ainvoke({"binary": "chall", "function_query": "x;id"})
 
 
 @pytest.mark.asyncio

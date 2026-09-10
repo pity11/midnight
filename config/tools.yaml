@@ -20,6 +20,7 @@ pwn:
   - *common
   - binary_triage
   - source_audit
+  - pwn_rop_inventory
   - gdb_tool
   - connect_tool
   - checksec

@@ -57,6 +57,11 @@ return; satisfy that check with an embedded terminator when the copy continues.
 Use pwn_crash_probe for a source-confirmed stack overwrite instead of repeating
 shell pipelines or relying on dmesg. Supply the exact menu prefix and sentinel
 offset, then use its register/stack candidate offsets in solve.py.
+For a PIE binary with both a runtime symbol leak and a source-confirmed raw
+overwrite, call pwn_rop_inventory with the vulnerable function and leaked
+symbol. Use its base equation, saved-return distance, writable memory, and
+filtered gadgets to build a base-relative ROP chain. Do not switch to format
+string probing after the source has established a raw overwrite.
 For an uncontrolled printf, use fmtstr_probe once locally or against the target
 to obtain indexed leaks instead of issuing many one-offset probes.
 If evidence shows the desired 16-bit value and a writable pointer is already in

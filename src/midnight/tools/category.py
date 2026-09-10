@@ -106,7 +106,7 @@ def make_source_audit(*, env: CTFEnvironment, **_) -> object:
             r"pickle\.loads|yaml\.load|unserialize|include\(|require\(|open\(|"
             r"send_file|SELECT |INSERT |UPDATE |jwt|secret|password|flag|"
             r"strcpy|strcat|gets\(|scanf\(|printf\(|memcpy\(|malloc\(|free\("
-            r"|unsafe[[:space:]]*\{|\.offset\(|read_exact|split_at|"
+            r"|unsafe[[:space:]]*\{|\.offset\(|read_exact|split_at|leak|\{:\?*p\}|static mut|"
             r"\[u8;[[:space:]]*[0-9]+\]|for[[:space:]].*\.\."
         )
         command = (
@@ -124,6 +124,125 @@ def make_source_audit(*, env: CTFEnvironment, **_) -> object:
         return _result_text(await env.exec(command, timeout=90))
 
     return source_audit
+
+
+@register_tool(name="pwn_rop_inventory", groups=["pwn"])
+def make_pwn_rop_inventory(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    program = r'''import pathlib
+import re
+import subprocess
+import sys
+
+binary, function_query, leaked_symbol = sys.argv[1:]
+path = pathlib.Path(binary)
+if not path.is_file():
+    raise FileNotFoundError(binary)
+
+def run(argv, timeout=45):
+    try:
+        result = subprocess.run(argv, text=True, errors="replace", capture_output=True, timeout=timeout)
+        return result.stdout + ("\n[stderr]\n" + result.stderr if result.stderr else "")
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return f"[unavailable] {type(exc).__name__}: {exc}\n"
+
+symbols_text = run(["nm", "-an", str(path)])
+symbols = []
+for line in symbols_text.splitlines():
+    match = re.match(r"^([0-9a-fA-F]+)\s+([A-Za-z])\s+(.+)$", line)
+    if match:
+        symbols.append((int(match.group(1), 16), match.group(2), match.group(3)))
+
+print("[address-model]")
+print("PIE runtime address = leaked runtime symbol - static symbol offset + desired static offset")
+if leaked_symbol:
+    matches = [item for item in symbols if leaked_symbol.lower() in item[2].lower()]
+    for address, kind, name in matches[:20]:
+        print(f"leaked_symbol_candidate=0x{address:x} type={kind} name={name}")
+
+functions = [item for item in symbols if item[1] in "tT" and function_query.lower() in item[2].lower()]
+if function_query and functions:
+    address, _, name = functions[0]
+    disassembly = run(["objdump", "-d", "-Mintel", f"--disassemble={name}", str(path)])
+    print("[function]")
+    print(f"name={name} static_address=0x{address:x}")
+    frame = re.search(r"sub\s+rsp,\s*0x([0-9a-f]+)", disassembly)
+    buffers = [int(value, 16) for value in re.findall(r"lea\s+rdi,\s*\[rsp\s*\+\s*0x([0-9a-f]+)\]", disassembly)]
+    if frame:
+        frame_size = int(frame.group(1), 16)
+        print(f"stack_frame_size=0x{frame_size:x}")
+        for offset in sorted(set(buffers))[:16]:
+            if offset < frame_size:
+                print(f"candidate_buffer_rsp_offset=0x{offset:x} candidate_saved_return_distance=0x{frame_size-offset:x}")
+    print("[focused-disassembly]")
+    for line in disassembly.splitlines():
+        if any(token in line for token in ("sub    rsp", "lea    rdi", "call", "ret")):
+            print(line[:240])
+
+print("[writable-sections]")
+sections = run(["readelf", "-SW", str(path)])
+for line in sections.splitlines():
+    if re.search(r"\sWA\s", line):
+        print(line[:240])
+
+print("[relocations]")
+relocs = run(["readelf", "-Wr", str(path)])
+for line in relocs.splitlines():
+    if re.search(r"\b(read|write|system|execve|syscall|open|puts|printf)\b", line, re.I):
+        print(line[:240])
+
+print("[gadgets]")
+gadgets = run(["ROPgadget", "--binary", str(path), "--only", "pop|ret|syscall|mov|call"], timeout=75)
+patterns = (
+    ("pop_rax", r": pop rax(?: ; [^;]+)* ; ret$"),
+    ("pop_rdi", r": pop rdi(?: ; [^;]+)* ; ret$"),
+    ("pop_rsi", r": pop rsi(?: ; [^;]+)* ; ret$"),
+    ("pop_rdx", r": pop rdx(?: ; [^;]+)* ; ret$"),
+    ("pop_rcx", r": pop rcx(?: ; [^;]+)* ; ret$"),
+    ("syscall", r": syscall(?: ; ret)?$"),
+    ("write_memory", r"mov qword ptr \[rdi\], rax"),
+    ("indirect_call", r"call (?:rax|qword ptr \[rdi\])"),
+)
+selected = []
+for label, pattern in patterns:
+    matches = [line for line in gadgets.splitlines() if re.search(pattern, line, re.I)]
+    for line in matches[:12]:
+        selected.append(f"{label}: {line}")
+for line in selected:
+    print(line[:260])
+if not selected:
+    print("No filtered gadgets found; use ropper/objdump or a ret2csu sequence.")
+print("[plan-checks]")
+print("Confirm the first NUL sentinel required by any post-read strlen/count loop.")
+print("Derive every runtime gadget as PIE base + static gadget offset; do not use static addresses directly.")
+print("Prefer a verified read-to-writable-memory then execve/syscall chain when no win/system function exists.")
+'''
+
+    @tool
+    async def pwn_rop_inventory(
+        binary: str,
+        function_query: str = "",
+        leaked_symbol: str = "",
+    ) -> str:
+        """Extract a deterministic PIE/ROP plan from a local ELF.
+
+        Reports static symbol offsets, candidate saved-return distances from a
+        focused function's stack frame, writable sections, useful relocations,
+        and filtered syscall/register/write gadgets. Use after source evidence
+        proves a stack overwrite and a runtime code/data leak.
+        """
+        if not re.fullmatch(r"[A-Za-z0-9_:$<>.\-]*", function_query):
+            raise ValueError("function_query contains unsupported characters")
+        if not re.fullmatch(r"[A-Za-z0-9_:$<>.\-]*", leaked_symbol):
+            raise ValueError("leaked_symbol contains unsupported characters")
+        args = [binary, function_query, leaked_symbol]
+        command = "python3 -c " + shlex.quote(program) + " " + " ".join(
+            shlex.quote(value) for value in args
+        )
+        return _result_text(await env.exec(command, timeout=150))
+
+    return pwn_rop_inventory
 
 
 @register_tool(name="pickle_policy_audit", groups=["misc", "forensics"])
