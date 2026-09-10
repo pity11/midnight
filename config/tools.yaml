@@ -23,6 +23,7 @@ pwn:
   - gdb_tool
   - connect_tool
   - checksec
+  - pwn_crash_probe
   - rop_gadget
   - pwninit_setup
   - one_gadget

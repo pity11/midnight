@@ -31,6 +31,7 @@ from midnight.tools.category import (
     make_pcap_triage,
     make_pickle_build,
     make_pickle_policy_audit,
+    make_pwn_crash_probe,
     make_pyinstaller_extract,
     make_rsa_quickcheck,
     make_run_exploit,
@@ -65,6 +66,7 @@ def test_run_exploit_is_shared_across_specialists() -> None:
 def test_pwn_and_pickle_deterministic_auditors_are_configured() -> None:
     config = get_config()
     assert "source_audit" in config.tools["pwn"]
+    assert "pwn_crash_probe" in config.tools["pwn"]
     assert "pickle_policy_audit" in config.tools["misc"]
     assert "pickle_policy_audit" in config.tools["forensics"]
     assert "pickle_build" in config.tools["misc"]
@@ -117,6 +119,33 @@ async def test_pickle_build_compiles_a_declarative_stack_program() -> None:
     assert "Root.mapping.get" in command
     assert "payload.pkl" in command
     assert timeout == 60
+
+
+@pytest.mark.asyncio
+async def test_pwn_crash_probe_uses_batch_gdb_and_bounded_input() -> None:
+    env = _Env()
+    action = make_pwn_crash_probe(env=env)
+    await action.ainvoke(
+        {
+            "binary": "chall binary",
+            "menu_prefix": "3\n",
+            "sentinel_offset": 400,
+            "pattern_length": 512,
+        }
+    )
+    command, timeout = env.calls[0]
+    assert "gdb -q -nx -batch 'chall binary'" in command
+    assert "midnight-crash-input" in command
+    assert "cyclic_find" in command
+    assert "sentinel=400" in command
+    assert "static-fallback: runtime registers unavailable" in command
+    assert "objdump -dC -Mintel" in command
+    assert timeout == 40
+
+    with pytest.raises(ValueError, match="pattern_length"):
+        await action.ainvoke({"binary": "x", "pattern_length": 10})
+    with pytest.raises(ValueError, match="function_query"):
+        await action.ainvoke({"binary": "x", "function_query": "read; id"})
 
 
 @pytest.mark.asyncio

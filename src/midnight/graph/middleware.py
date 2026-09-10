@@ -86,6 +86,15 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         text = "\n".join(str(getattr(message, "content", "")) for message in messages).lower()
         return "find_class" in text and "unpickl" in text
 
+    def _repeated_manual_cyclic(self, calls: list[dict]) -> bool:
+        if self.category != "pwn":
+            return False
+        return sum(
+            call.get("name") == "run_shell"
+            and "cyclic(" in str((call.get("args") or {}).get("command", ""))
+            for call in calls
+        ) >= 2
+
     @staticmethod
     def _calls_after_last_write(calls: list[dict], tool_name: str) -> int:
         last_write = max(
@@ -119,6 +128,11 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             and not any(call.get("name") == "pickle_policy_audit" for call in calls)
         ):
             return {"pickle_policy_audit"}
+        if (
+            self._repeated_manual_cyclic(calls)
+            and not any(call.get("name") == "pwn_crash_probe" for call in calls)
+        ):
+            return {"pwn_crash_probe"}
         if len(calls) >= self.artifact_gate and not self._made_artifact(calls):
             return {"write_file"}
         if (
@@ -147,6 +161,7 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                 "lookup_playbook",
                 "fmtstr_probe",
                 "fmtstr_write_scan",
+                "pwn_crash_probe",
             }
         if self._format_string_indicated(messages):
             return {
@@ -216,6 +231,20 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                     "[PHASE_GATE:PICKLE_POLICY] A custom Unpickler/find_class policy is visible. "
                     "Run pickle_policy_audit on its source and any current payload. Treat an "
                     "opcode chain as invalid until pickletools and the local validator accept it."
+                )]
+            }
+
+        if (
+            self._repeated_manual_cyclic(calls)
+            and not any(call.get("name") == "pwn_crash_probe" for call in calls)
+            and "[PHASE_GATE:CRASH_PROBE]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:CRASH_PROBE] Manual cyclic shell probes repeated without "
+                    "a measured offset. Call pwn_crash_probe with the exact binary, menu "
+                    "prefix, and any required NUL sentinel. Use its register and stack "
+                    "offset report before revising solve.py."
                 )]
             }
 

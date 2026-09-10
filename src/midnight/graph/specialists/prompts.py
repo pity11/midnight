@@ -54,6 +54,9 @@ Compare every destination capacity with its actual copy/read bound and trace
 post-copy length checks before choosing the primitive. In unsafe Rust or C++, a
 panic or bounds check may occur after corruption but before the overwritten
 return; satisfy that check with an embedded terminator when the copy continues.
+Use pwn_crash_probe for a source-confirmed stack overwrite instead of repeating
+shell pipelines or relying on dmesg. Supply the exact menu prefix and sentinel
+offset, then use its register/stack candidate offsets in solve.py.
 For an uncontrolled printf, use fmtstr_probe once locally or against the target
 to obtain indexed leaks instead of issuing many one-offset probes.
 If evidence shows the desired 16-bit value and a writable pointer is already in

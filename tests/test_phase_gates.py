@@ -63,6 +63,20 @@ def test_pickle_phase_gate_requires_policy_audit_after_find_class_evidence():
     assert gate.constrained_tool_names(messages) is None
 
 
+def test_repeated_manual_cyclic_probes_force_batch_crash_probe():
+    gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99, target_gate=99)
+    messages = [
+        _tool_message(1, "list_dir"),
+        _tool_message(2, "binary_triage"),
+        _tool_message(3, "run_shell", {"command": "python -c 'print(cyclic(500))'"}),
+        _tool_message(4, "run_shell", {"command": "python -c 'print(cyclic(600))'"}),
+    ]
+    assert gate.constrained_tool_names(messages) == {"pwn_crash_probe"}
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "PHASE_GATE:CRASH_PROBE" in update["messages"][0].content
+
+
 def test_phase_gate_does_not_repeat_or_override_existing_artifact():
     gate = PwnPhaseGateMiddleware(target="", artifact_gate=2)
     messages = [

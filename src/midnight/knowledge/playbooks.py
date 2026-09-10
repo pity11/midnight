@@ -50,7 +50,7 @@ PLAYBOOKS: tuple[Playbook, ...] = (
             "Compare the destination capacity with the loop, read, memcpy, or pointer-offset bound and record both exact sizes.",
             "Trace all operations after the overwrite. Identify bounds checks, string decoding, terminator scans, destructors, and panic paths that can prevent the corrupted function from returning.",
             "If copying continues after a NUL or other logical terminator, place the sentinel inside the legitimate buffer and put a cyclic pattern after it so later parsing stays in bounds while the physical write still reaches saved state.",
-            "Use batch GDB with the exact menu/prompt transcript; recover the offset from RIP, RSP, or overwritten callee-saved registers and verify it with a unique marker.",
+            "Call pwn_crash_probe with the exact menu prefix and sentinel offset; recover the offset from RIP, RSP, or overwritten callee-saved registers and verify it with a unique marker.",
             "Account for PIE with a source-supported leak, build the smallest ret2win/ROP/ORW chain, and exercise the identical byte stream through run_exploit.",
         ),
         (

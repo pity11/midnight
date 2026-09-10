@@ -471,6 +471,77 @@ def make_checksec(*, env: CTFEnvironment, **_) -> object:
     return checksec
 
 
+@register_tool(name="pwn_crash_probe", groups=["pwn"])
+def make_pwn_crash_probe(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def pwn_crash_probe(
+        binary: str,
+        menu_prefix: str = "",
+        sentinel_offset: int = -1,
+        pattern_length: int = 512,
+        timeout_seconds: int = 20,
+        function_query: str = "read|recv|copy|lookup|parse|vuln",
+    ) -> str:
+        """Measure a stack overwrite with one deterministic batch-GDB run.
+
+        Generated stdin is ``menu_prefix``, optional ``A`` padding plus NUL at
+        ``sentinel_offset``, a pwntools cyclic pattern, and newline. The report
+        includes registers, stack, backtrace, and candidate cyclic offsets.
+        """
+        if sentinel_offset < -1 or sentinel_offset > 65536:
+            raise ValueError("sentinel_offset must be -1 or within 0..65536")
+        if pattern_length < 32 or pattern_length > 65536:
+            raise ValueError("pattern_length must be within 32..65536")
+        if timeout_seconds < 2 or timeout_seconds > 120:
+            raise ValueError("timeout_seconds must be within 2..120")
+        if not re.fullmatch(r"[A-Za-z0-9_|:.+\-]{1,120}", function_query):
+            raise ValueError("function_query contains unsupported characters")
+        prefix_b64 = base64.b64encode(menu_prefix.encode()).decode()
+        generator = shlex.quote(
+            "from base64 import b64decode; from pwn import cyclic; "
+            f"prefix=b64decode({prefix_b64!r}); sentinel={sentinel_offset}; "
+            f"pattern=cyclic({pattern_length}); "
+            "body=(pattern if sentinel < 0 else b'A'*sentinel+b'\\0'+pattern); "
+            "open('/tmp/midnight-crash-input','wb').write(prefix+body+b'\\n')"
+        )
+        analyzer = shlex.quote(
+            "import re; from pwn import cyclic_find; "
+            "data=open('/tmp/midnight-gdb.log',errors='replace').read(); seen=set(); "
+            "print('[candidate-cyclic-offsets]'); "
+            "[(seen.add((v,o)),print(hex(v),o)) for v in "
+            "[int(x,16) for x in re.findall(r'0x[0-9a-fA-F]{8,16}',data)] "
+            "for o in [cyclic_find((v & 0xffffffff).to_bytes(4,'little'))] "
+            "if o >= 0 and (v,o) not in seen]"
+        )
+        target = shlex.quote(binary)
+        query = shlex.quote(function_query)
+        command = (
+            f"python3 -c {generator} && "
+            f"timeout {timeout_seconds}s gdb -q -nx -batch {target} "
+            "-ex 'set pagination off' -ex 'set confirm off' "
+            "-ex 'run < /tmp/midnight-crash-input' "
+            "-ex 'info registers rip rsp rbp rbx r12 r13 r14 r15' "
+            "-ex 'x/64gx $rsp-0x100' -ex 'bt 12' "
+            "> /tmp/midnight-gdb.log 2>&1 || true; "
+            "cat /tmp/midnight-gdb.log; "
+            "if ! grep -qE 'Program received signal|exited normally|Inferior .* exited' "
+            "/tmp/midnight-gdb.log; then "
+            "echo '[static-fallback: runtime registers unavailable]'; "
+            f"nm -anC {target} 2>/dev/null | grep -Ei -- {query} | "
+            "grep -Eiv ' (std|core|alloc|gimli|addr2line|object|rustc_demangle|dns_lookup)::' | head -40; "
+            f"objdump -dC -Mintel {target} 2>/dev/null | "
+            f"awk -v q={query} 'BEGIN{{IGNORECASE=1}} "
+            "/^[0-9a-f]+ <.*>:$/{on=($0 ~ q && $0 !~ /<(std|core|alloc|gimli|addr2line|dns_lookup)::/)} "
+            "on{print}' | head -500; fi; "
+            f"python3 -c {analyzer}"
+        )
+        return _result_text(await env.exec(command, timeout=timeout_seconds + 20))
+
+    return pwn_crash_probe
+
+
 @register_tool(name="rop_gadget", groups=["pwn"])
 def make_rop_gadget(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
