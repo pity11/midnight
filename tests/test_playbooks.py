@@ -32,6 +32,9 @@ def test_playbook_selection_uses_observable_signals():
     assert find_playbooks("forensics", "many EVTX directory Sigma timeline")[0].key == (
         "forensics-hayabusa-timeline"
     )
+    assert find_playbooks(
+        "pwn", "unsafe Rust arr_ptr.offset read_exact into a fixed stack array"
+    )[0].key == "pwn-oversized-stack-write"
 
 
 def test_catalog_has_no_benchmark_specific_material():

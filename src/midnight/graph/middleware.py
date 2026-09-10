@@ -74,6 +74,18 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                 return True
         return False
 
+    def _source_indicated(self, messages: list) -> bool:
+        if self.category != "pwn":
+            return False
+        text = "\n".join(str(getattr(message, "content", "")) for message in messages).lower()
+        return bool(re.search(r"(?:^|[ /])[^\n ]+\.(?:c|cc|cpp|rs)(?:\b|$)", text))
+
+    def _restricted_pickle_indicated(self, messages: list) -> bool:
+        if self.category not in {"misc", "forensics"}:
+            return False
+        text = "\n".join(str(getattr(message, "content", "")) for message in messages).lower()
+        return "find_class" in text and "unpickl" in text
+
     @staticmethod
     def _calls_after_last_write(calls: list[dict], tool_name: str) -> int:
         last_write = max(
@@ -95,6 +107,18 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             and not any(call.get("name") == "binary_triage" for call in calls)
         ):
             return {"binary_triage"}
+        if (
+            self.category == "pwn"
+            and any(call.get("name") == "binary_triage" for call in calls)
+            and self._source_indicated(messages)
+            and not any(call.get("name") == "source_audit" for call in calls)
+        ):
+            return {"source_audit"}
+        if (
+            self._restricted_pickle_indicated(messages)
+            and not any(call.get("name") == "pickle_policy_audit" for call in calls)
+        ):
+            return {"pickle_policy_audit"}
         if len(calls) >= self.artifact_gate and not self._made_artifact(calls):
             return {"write_file"}
         if (
@@ -164,6 +188,34 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                 "messages": [HumanMessage(
                     "[PHASE_GATE:TRIAGE] List /ctf now. The following turn must run "
                     "binary_triage on the primary executable before building an exploit."
+                )]
+            }
+
+        if (
+            self.category == "pwn"
+            and any(call.get("name") == "binary_triage" for call in calls)
+            and self._source_indicated(messages)
+            and not any(call.get("name") == "source_audit" for call in calls)
+            and "[PHASE_GATE:SOURCE]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:SOURCE] Supplied native source is visible. Run source_audit now, "
+                    "compare destination capacities with real write bounds, and trace every "
+                    "post-copy check before selecting an exploit primitive."
+                )]
+            }
+
+        if (
+            self._restricted_pickle_indicated(messages)
+            and not any(call.get("name") == "pickle_policy_audit" for call in calls)
+            and "[PHASE_GATE:PICKLE_POLICY]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:PICKLE_POLICY] A custom Unpickler/find_class policy is visible. "
+                    "Run pickle_policy_audit on its source and any current payload. Treat an "
+                    "opcode chain as invalid until pickletools and the local validator accept it."
                 )]
             }
 

@@ -49,6 +49,11 @@ the supplied endpoint and capture its complete response. For PIE+BOF, validate
 the leaked address and compute the base before ROP. For format strings, determine
 the positional index and smallest write width. Restart a dead gdb session or use
 batch gdb/objdump; never grind on a broken interactive session.
+When source is supplied, call source_audit immediately after binary_triage.
+Compare every destination capacity with its actual copy/read bound and trace
+post-copy length checks before choosing the primitive. In unsafe Rust or C++, a
+panic or bounds check may occur after corruption but before the overwritten
+return; satisfy that check with an embedded terminator when the copy continues.
 For an uncontrolled printf, use fmtstr_probe once locally or against the target
 to obtain indexed leaks instead of issuing many one-offset probes.
 If evidence shows the desired 16-bit value and a writable pointer is already in
@@ -126,8 +131,10 @@ For PCAP/PCAPNG inputs, call pcap_triage before manually extracting streams; use
 pcap_export_objects when HTTP, SMB, TFTP, FTP data, DICOM, or IMF transfers exist.
 For PNG/BMP LSB evidence, use stego_scan and extract the reported channel.
 For Python serialization challenges, read the validator and allowed opcodes or
-globals, model the VM stack, disassemble the generated payload, and validate it
-locally. For MIME/archive layers, preserve the exact decode provenance. Recover
+globals, then use pickle_policy_audit on every generated payload and the local
+validator. Pickle has no GETATTR opcode: use only operations confirmed by
+pickletools and re-audit after every edit. For MIME/archive layers, preserve the
+exact decode provenance. Recover
 the hidden flag from reproducible output.
 """
 )

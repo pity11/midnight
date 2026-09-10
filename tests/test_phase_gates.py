@@ -32,6 +32,37 @@ def test_pwn_phase_gate_requires_inventory_then_binary_triage():
     assert "PHASE_GATE:TRIAGE" in update["messages"][0].content
 
 
+def test_pwn_phase_gate_requires_source_audit_when_native_source_is_visible():
+    gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99)
+    messages = [
+        _tool_message(1, "list_dir"),
+        HumanMessage("/ctf/challenge.rs /ctf/challenge"),
+        _tool_message(2, "binary_triage"),
+    ]
+    assert gate.constrained_tool_names(messages) == {"source_audit"}
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "PHASE_GATE:SOURCE" in update["messages"][0].content
+
+    messages.append(_tool_message(3, "source_audit"))
+    assert gate.constrained_tool_names(messages) is None
+
+
+def test_pickle_phase_gate_requires_policy_audit_after_find_class_evidence():
+    gate = ArtifactPhaseGateMiddleware(category="misc", artifact_gate=99)
+    messages = [
+        _tool_message(1, "read_file"),
+        HumanMessage("class RestrictedUnpickler: def find_class(self, module, name): pass"),
+    ]
+    assert gate.constrained_tool_names(messages) == {"pickle_policy_audit"}
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "PHASE_GATE:PICKLE_POLICY" in update["messages"][0].content
+
+    messages.append(_tool_message(2, "pickle_policy_audit"))
+    assert gate.constrained_tool_names(messages) is None
+
+
 def test_phase_gate_does_not_repeat_or_override_existing_artifact():
     gate = PwnPhaseGateMiddleware(target="", artifact_gate=2)
     messages = [

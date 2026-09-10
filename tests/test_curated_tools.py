@@ -29,6 +29,7 @@ from midnight.tools.category import (
     make_one_gadget,
     make_pcap_export_objects,
     make_pcap_triage,
+    make_pickle_policy_audit,
     make_pyinstaller_extract,
     make_rsa_quickcheck,
     make_run_exploit,
@@ -58,6 +59,36 @@ def test_run_exploit_is_shared_across_specialists() -> None:
     config = get_config()
     for expert in ("pwn", "reverse", "web", "crypto", "misc", "forensics"):
         assert "run_exploit" in config.tools[expert]
+
+
+def test_pwn_and_pickle_deterministic_auditors_are_configured() -> None:
+    config = get_config()
+    assert "source_audit" in config.tools["pwn"]
+    assert "pickle_policy_audit" in config.tools["misc"]
+    assert "pickle_policy_audit" in config.tools["forensics"]
+
+
+@pytest.mark.asyncio
+async def test_pickle_policy_audit_checks_opcodes_and_local_validator() -> None:
+    env = _Env()
+    action = make_pickle_policy_audit(env=env)
+    await action.ainvoke(
+        {
+            "source": "sandbox.py",
+            "payload": "payload.pkl",
+            "validator": "sandbox.py",
+            "validator_function": "unpickle",
+        }
+    )
+    command, timeout = env.calls[0]
+    assert "pickletools.genops" in command
+    assert "opcode 0x96 is BYTEARRAY8, not GETATTR" in command
+    assert "sandbox.py" in command
+    assert "payload.pkl" in command
+    assert timeout == 60
+
+    with pytest.raises(ValueError, match="file or base64"):
+        await action.ainvoke({"payload_format": "hex"})
 
 
 @pytest.mark.asyncio
@@ -272,6 +303,8 @@ async def test_source_and_artifact_triage_quote_paths() -> None:
     command, timeout = source_env.calls[0]
     assert "find 'source tree'" in command
     assert "grep -RInE" in command
+    assert "--exclude=solve.py" in command
+    assert "read_exact" in command
     assert timeout == 90
 
     artifact_env = _Env()

@@ -88,7 +88,7 @@ def make_binary_triage(*, env: CTFEnvironment, **_) -> object:
     return binary_triage
 
 
-@register_tool(name="source_audit", groups=["web", "reverse"])
+@register_tool(name="source_audit", groups=["pwn", "web", "reverse"])
 def make_source_audit(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool
 
@@ -106,20 +106,121 @@ def make_source_audit(*, env: CTFEnvironment, **_) -> object:
             r"pickle\.loads|yaml\.load|unserialize|include\(|require\(|open\(|"
             r"send_file|SELECT |INSERT |UPDATE |jwt|secret|password|flag|"
             r"strcpy|strcat|gets\(|scanf\(|printf\(|memcpy\(|malloc\(|free\("
+            r"|unsafe[[:space:]]*\{|\.offset\(|read_exact|split_at|"
+            r"\[u8;[[:space:]]*[0-9]+\]|for[[:space:]].*\.\."
         )
         command = (
             f"echo '[files]'; find {root} -maxdepth 5 -type f "
             "\\( -name '*.py' -o -name '*.php' -o -name '*.js' -o -name '*.ts' "
             "-o -name '*.java' -o -name '*.c' -o -name '*.cc' -o -name '*.cpp' "
             "-o -name '*.go' -o -name '*.rs' -o -name 'Dockerfile*' "
-            "-o -name '*.yml' -o -name '*.yaml' \\) | head -160; "
-            f"echo '[high-value-lines]'; grep -RInE --binary-files=without-match "
+            "-o -name '*.yml' -o -name '*.yaml' \\) "
+            "! -name 'solve.py' ! -name 'progress.md' | head -160; "
+            f"echo '[high-value-lines]'; grep -RInE -C 3 --binary-files=without-match "
+            "--exclude=solve.py --exclude=progress.md "
             f"--exclude-dir=.git --exclude-dir=node_modules {shlex.quote(pattern)} {root} "
             "2>/dev/null | head -240"
         )
         return _result_text(await env.exec(command, timeout=90))
 
     return source_audit
+
+
+@register_tool(name="pickle_policy_audit", groups=["misc", "forensics"])
+def make_pickle_policy_audit(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    program = r'''import ast
+import base64
+import importlib.util
+import pathlib
+import pickletools
+import re
+import sys
+
+source_path, payload_value, payload_format, validator_path, function_name = sys.argv[1:]
+
+def load_payload(value, fmt):
+    if not value:
+        return None
+    if fmt == "file":
+        return pathlib.Path(value).read_bytes()
+    if fmt == "base64":
+        return base64.b64decode(value, validate=True)
+    raise ValueError("payload_format must be file or base64")
+
+if source_path:
+    text = pathlib.Path(source_path).read_text(errors="replace")
+    print("[policy]")
+    for label in ("ALLOWED_PICKLE_MODULES", "ALLOWED_MODULES", "UNSAFE_NAMES", "BLOCKED_NAMES"):
+        match = re.search(rf"(?m)^\s*{label}\s*=\s*(\[[^\n]*\]|\([^\n]*\)|\{{[^\n]*\}})", text)
+        if match:
+            try:
+                print(f"{label}={ast.literal_eval(match.group(1))!r}")
+            except Exception:
+                print(f"{label}={match.group(1)}")
+    for number, line in enumerate(text.splitlines(), 1):
+        if any(term in line for term in ("find_class", "super().find_class", "UnpicklingError")):
+            print(f"{number}: {line.strip()}")
+
+raw = load_payload(payload_value, payload_format)
+if raw is not None:
+    print("[payload]")
+    print(f"length={len(raw)} protocol_marker={raw[:2].hex()}")
+    try:
+        ops = list(pickletools.genops(raw))
+        for opcode, argument, position in ops:
+            print(f"{position:04x} {opcode.name:<18} {argument!r}")
+        print("opcode_validation=PASS")
+    except Exception as exc:
+        print(f"opcode_validation=FAIL {type(exc).__name__}: {exc}")
+    if b"\x96" in raw:
+        print("note: opcode 0x96 is BYTEARRAY8, not GETATTR; pickle has no GETATTR opcode")
+    print("note: attribute traversal must be performed by an allowed dotted GLOBAL/STACK_GLOBAL name or by a verified callable plus REDUCE")
+
+if validator_path and raw is not None:
+    print("[validator]")
+    path = pathlib.Path(validator_path).resolve()
+    sys.path.insert(0, str(path.parent))
+    spec = importlib.util.spec_from_file_location("midnight_pickle_validator", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    function = getattr(module, function_name)
+    try:
+        result = function(base64.b64encode(raw))
+        print(f"validator=PASS result_type={type(result).__name__} result={result!r}"[:4000])
+    except Exception as exc:
+        print(f"validator=FAIL {type(exc).__name__}: {exc}"[:4000])
+'''
+
+    @tool
+    async def pickle_policy_audit(
+        source: str = "",
+        payload: str = "",
+        payload_format: str = "file",
+        validator: str = "",
+        validator_function: str = "unpickle",
+    ) -> str:
+        """Audit a restricted-pickle policy and validate exact payload opcodes.
+
+        ``source`` is the custom Unpickler source. ``payload`` is either a local
+        file path or Base64 text. When ``validator`` is supplied, the named
+        function is executed only inside the isolated challenge container using
+        the exact payload bytes. This catches invented opcodes and policy
+        violations before any target request.
+        """
+        normalized_format = payload_format.strip().lower()
+        if normalized_format not in {"file", "base64"}:
+            raise ValueError("payload_format must be file or base64")
+        if validator_function and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", validator_function):
+            raise ValueError("validator_function must be a Python identifier")
+        args = [source, payload, normalized_format, validator, validator_function]
+        command = "python3 -c " + shlex.quote(program) + " " + " ".join(
+            shlex.quote(value) for value in args
+        )
+        return _result_text(await env.exec(command, timeout=60))
+
+    return pickle_policy_audit
 
 
 @register_tool(name="upx_unpack", groups=["reverse"])
