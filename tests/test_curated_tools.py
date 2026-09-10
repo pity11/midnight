@@ -134,6 +134,8 @@ async def test_pwn_rop_inventory_extracts_offsets_and_gadgets() -> None:
     )
     command, timeout = env.calls[0]
     assert "candidate_saved_return_distance" in command
+    assert "padding_invariant" in command
+    assert "complete gadget text as semantics" in command
     assert "leaked_symbol_candidate" in command
     assert "ROPgadget" in command
     assert "PIE runtime address" in command

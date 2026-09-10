@@ -103,6 +103,17 @@ def test_pie_leak_and_source_overflow_force_rop_inventory():
     assert "PHASE_GATE:PIE_ROP" in update["messages"][0].content
 
 
+def test_rop_inventory_injects_padding_and_gadget_invariants():
+    gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99, target_gate=99)
+    messages = [_tool_message(1, "pwn_rop_inventory")]
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    content = update["messages"][0].content
+    assert "PHASE_GATE:ROP_INVARIANTS" in content
+    assert "do not subtract" in content
+    assert "side effect" in content
+
+
 def test_pickle_tuple_validator_failure_forces_atomic_call_rebuild():
     gate = ArtifactPhaseGateMiddleware(category="misc", artifact_gate=99)
     messages = [

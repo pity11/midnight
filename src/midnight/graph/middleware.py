@@ -247,6 +247,22 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
 
         if (
             self.category == "pwn"
+            and any(call.get("name") == "pwn_rop_inventory" for call in calls)
+            and "[PHASE_GATE:ROP_INVARIANTS]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:ROP_INVARIANTS] Use candidate_saved_return_distance directly "
+                    "as the padding from the identified input buffer; do not subtract the buffer "
+                    "offset a second time. Copy each full gadget's semantics into the plan. A "
+                    "gadget with an add/mov/call side effect is not a plain pop: establish safe "
+                    "registers and writable mapped memory before it executes. Assert the PIE "
+                    "base equation and payload length in solve.py before target execution."
+                )]
+            }
+
+        if (
+            self.category == "pwn"
             and any(call.get("name") == "binary_triage" for call in calls)
             and self._source_indicated(messages)
             and not any(call.get("name") == "source_audit" for call in calls)

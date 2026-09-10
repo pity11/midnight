@@ -100,3 +100,15 @@ When the organizer contract arrives:
 
 The detailed procedure and safety checks are in
 [`competition-mvp.md`](competition-mvp.md).
+
+## Post-report hard-tail diagnostics
+
+Later generic tooling added deterministic restricted-Pickle policy auditing and
+payload compilation, source-aware crash probing, and static PIE/ROP inventory.
+A fresh targeted run solved `Were Pickle Phreaks Revenge` 1/1 and received an
+accepted evaluator verdict. `network-tools` remained unsolved in its targeted
+run; the tool recovered the correct symbol and frame geometry, but the low-cost
+model misused the saved-return distance and a side-effect gadget. Those two
+mistakes are now explicit phase invariants with tests. See
+[`capability-iteration-2.md`](capability-iteration-2.md). The frozen full score
+above remains unchanged until another complete aggregate evaluation is run.

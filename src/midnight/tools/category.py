@@ -175,6 +175,7 @@ if function_query and functions:
         for offset in sorted(set(buffers))[:16]:
             if offset < frame_size:
                 print(f"candidate_buffer_rsp_offset=0x{offset:x} candidate_saved_return_distance=0x{frame_size-offset:x}")
+        print("padding_invariant=candidate_saved_return_distance is already measured from the buffer start; use it directly and do not subtract candidate_buffer_rsp_offset again")
     print("[focused-disassembly]")
     for line in disassembly.splitlines():
         if any(token in line for token in ("sub    rsp", "lea    rdi", "call", "ret")):
@@ -216,6 +217,7 @@ if not selected:
 print("[plan-checks]")
 print("Confirm the first NUL sentinel required by any post-read strlen/count loop.")
 print("Derive every runtime gadget as PIE base + static gadget offset; do not use static addresses directly.")
+print("Treat the complete gadget text as semantics. Before using a side-effect gadget such as 'pop rdx ; add byte ptr [rax], al ; ret', make RAX point to writable mapped memory; the short label is not a plain pop.")
 print("Prefer a verified read-to-writable-memory then execve/syscall chain when no win/system function exists.")
 '''
 
