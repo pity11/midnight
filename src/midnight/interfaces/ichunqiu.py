@@ -172,6 +172,7 @@ class IchunqiuPlatformAdapter:
             description=self._description(item),
             files=[],
             remote=self._remote(item, category),
+            interactive=_truthy(item.get("interactive")),
             category_hint=category,
             flag_format=None,
             round_id=None,

@@ -117,8 +117,8 @@ does not duplicate the submission.
 
 ## Competition command
 
-Start conservatively on Apple Silicon because pwn and reverse images use amd64
-emulation:
+Start with broad static-task scheduling while keeping organizer instances and
+amd64 analysis separately bounded:
 
 ```bash
 scripts/competition round2
@@ -132,7 +132,8 @@ uv run midnight \
   --platform-config config/platform.local.yaml \
   --run-id competition-1 \
   --submit \
-  --max-concurrency 2 \
+  --max-concurrency 8 \
+  --platform-instance-concurrency 2 \
   --task-timeout 1800 \
   --run-timeout 1620 \
   --events-path logs/competition-1/events.jsonl \
@@ -159,9 +160,11 @@ Reuse the same run ID and paths after an interruption. Midnight resumes compatib
 challenge revisions from checkpoints. If the platform changes a challenge, its
 content-derived revision creates a separate workspace and checkpoint identity.
 
-Increase concurrency only after observing stable CPU, memory, Docker, model rate
-limits, and platform rate limits. Keep pwn/reverse concurrency at one unless the
-host has been tested under amd64 emulation.
+Static attachment tasks may occupy the eight general solver slots. Challenges
+marked interactive, including those whose target address appears only after a
+reset, acquire one of two organizer-instance slots for their full lifetime.
+Pwn/reverse additionally share one local amd64 analysis slot. Increase general
+concurrency only after observing stable CPU, memory, Docker, and model behavior.
 
 ## Freeze rule
 

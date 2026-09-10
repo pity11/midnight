@@ -66,9 +66,7 @@ def _transcript_metrics(messages: list) -> dict[str, int]:
     protocol_recoveries = 0
     call_counts: dict[str, int] = {}
     for message in messages:
-        if (getattr(message, "additional_kwargs", None) or {}).get(
-            "midnight_protocol_error"
-        ):
+        if (getattr(message, "additional_kwargs", None) or {}).get("midnight_protocol_error"):
             protocol_recoveries += 1
         usage = getattr(message, "usage_metadata", None) or {}
         input_tokens += int(usage.get("input_tokens", 0) or 0)
@@ -101,6 +99,7 @@ class Scheduler:
         provider: ChallengeProvider,
         submitter: FlagSubmitter,
         max_concurrency: int | None = None,
+        platform_instance_concurrency: int = 2,
         per_task_timeout: int | None = None,
         run_timeout: float | None = None,
         journal: EventJournal | None = None,
@@ -114,6 +113,9 @@ class Scheduler:
         self.provider = provider
         self.submitter = submitter
         self.max_concurrency = max_concurrency or cfg.max_concurrency
+        if platform_instance_concurrency <= 0:
+            raise ValueError("platform_instance_concurrency must be positive")
+        self._platform_instance_limit = asyncio.Semaphore(platform_instance_concurrency)
         self.per_task_timeout = per_task_timeout or cfg.per_task_timeout
         self.run_timeout = run_timeout
         self.journal = journal
@@ -168,8 +170,12 @@ class Scheduler:
                 hydrated: Challenge | None = None
                 self._event("challenge_started", challenge_id)
                 instance_started = False
+                instance_slot_acquired = False
                 try:
                     if isinstance(self.provider, ManagedChallengeProvider):
+                        if ch.get("interactive") or ch.get("remote"):
+                            await self._platform_instance_limit.acquire()
+                            instance_slot_acquired = True
                         await self.provider.start_challenge(challenge_id)
                         instance_started = True
                         self._event("challenge_instance_started", challenge_id)
@@ -244,6 +250,8 @@ class Scheduler:
                                 challenge_id,
                                 error=str(exc),
                             )
+                    if instance_slot_acquired:
+                        self._platform_instance_limit.release()
 
         results = list(await asyncio.gather(*(run_one(c) for c in ordered)))
         self._event(
@@ -254,8 +262,9 @@ class Scheduler:
         return results
 
     @staticmethod
-    def _priority_key(challenge: Challenge) -> tuple[int, int, str]:
-        """Prefer organizer-labelled easy tasks while keeping ordering deterministic."""
+    def _priority_key(challenge: Challenge) -> tuple[int, int, int, str]:
+        """Prefer static and organizer-labelled easy tasks deterministically."""
+        instance_rank = int(bool(challenge.get("interactive") or challenge.get("remote")))
         difficulty = str(challenge.get("difficulty") or "").strip().lower()
         difficulty_rank = {
             "easy": 0,
@@ -274,7 +283,7 @@ class Scheduler:
             "reverse": 4,
             "pwn": 5,
         }.get(category, 6)
-        return difficulty_rank, category_rank, str(challenge.get("id") or "")
+        return instance_rank, difficulty_rank, category_rank, str(challenge.get("id") or "")
 
     async def _hydrate(self, challenge: Challenge) -> Challenge:
         """Refresh metadata, materialize attachments, and assign a revision."""

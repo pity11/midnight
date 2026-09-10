@@ -104,6 +104,8 @@ def test_ichunqiu_inventory_reset_download_and_submit(tmp_path, monkeypatch):
         adapter = IchunqiuPlatformAdapter(config, client=client)
         challenges = await adapter.list_challenges()
         assert [item["id"] for item in challenges] == ["pwn-1", "web-1"]
+        assert challenges[0]["interactive"] is True
+        assert challenges[1]["interactive"] is True
         assert challenges[0]["remote"] is None
         assert challenges[1]["remote"] == "http://web.invalid:80"
         assert 'Capabilities: ["docker"]' in challenges[0]["description"]

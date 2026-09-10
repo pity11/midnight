@@ -234,6 +234,65 @@ async def test_managed_provider_instance_is_always_stopped(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_static_tasks_run_broadly_while_interactive_instances_are_capped(tmp_path):
+    class ManagedProvider(FixtureProvider):
+        def __init__(self, source):
+            super().__init__(source)
+            self.active_instances = 0
+            self.maximum_instances = 0
+
+        async def start_challenge(self, challenge_id: str):
+            if challenge_id.startswith("remote-"):
+                self.active_instances += 1
+                self.maximum_instances = max(
+                    self.maximum_instances,
+                    self.active_instances,
+                )
+
+        async def stop_challenge(self, challenge_id: str):
+            if challenge_id.startswith("remote-"):
+                self.active_instances -= 1
+
+        async def fetch(self, challenge_id: str):
+            challenge = await super().fetch(challenge_id)
+            challenge["category_hint"] = "misc"
+            return challenge
+
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"fixture")
+    provider = ManagedProvider(source)
+    scheduler = Scheduler(
+        provider=provider,
+        submitter=NoopSubmitter(),
+        artifacts_root=tmp_path / "artifacts",
+        max_concurrency=8,
+        platform_instance_concurrency=2,
+    )
+    active_solves = 0
+    maximum_solves = 0
+
+    async def fake_solve(challenge):
+        nonlocal active_solves, maximum_solves
+        active_solves += 1
+        maximum_solves = max(maximum_solves, active_solves)
+        await asyncio.sleep(0.02)
+        active_solves -= 1
+        return Result(challenge["id"], "failed")
+
+    scheduler._solve_one = fake_solve
+    challenges = [
+        *[{"id": f"static-{index}", "interactive": False} for index in range(6)],
+        *[{"id": f"remote-{index}", "interactive": True} for index in range(4)],
+    ]
+
+    await scheduler.solve_all(challenges)
+
+    assert maximum_solves > 2
+    assert provider.maximum_instances == 2
+    assert provider.active_instances == 0
+
+
+@pytest.mark.asyncio
 async def test_scheduler_preserves_hydrated_metadata_on_solver_failure(tmp_path):
     source = tmp_path / "source.bin"
     source.write_bytes(b"fixture")

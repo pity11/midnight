@@ -6,7 +6,8 @@ cd "$ROOT"
 
 PYTHON="${MIDNIGHT_PYTHON:-$ROOT/.venv/bin/python}"
 PLATFORM_CONFIG="${MIDNIGHT_PLATFORM_CONFIG:-$ROOT/config/platform.local.yaml}"
-CONCURRENCY="${MIDNIGHT_COMPETITION_CONCURRENCY:-2}"
+CONCURRENCY="${MIDNIGHT_COMPETITION_CONCURRENCY:-8}"
+PLATFORM_INSTANCE_CONCURRENCY="${MIDNIGHT_PLATFORM_INSTANCE_CONCURRENCY:-2}"
 RUN_TIMEOUT="${MIDNIGHT_COMPETITION_RUN_TIMEOUT:-1620}"
 TASK_TIMEOUT="${MIDNIGHT_COMPETITION_TASK_TIMEOUT:-1800}"
 WAIT_FOR_CHALLENGES="${MIDNIGHT_COMPETITION_WAIT_FOR_CHALLENGES:-300}"
@@ -29,6 +30,7 @@ Local overrides:
   MIDNIGHT_PLATFORM_CONFIG
   MIDNIGHT_RUN_ID
   MIDNIGHT_COMPETITION_CONCURRENCY
+  MIDNIGHT_PLATFORM_INSTANCE_CONCURRENCY
   MIDNIGHT_COMPETITION_RUN_TIMEOUT
   MIDNIGHT_COMPETITION_TASK_TIMEOUT
   MIDNIGHT_COMPETITION_WAIT_FOR_CHALLENGES
@@ -95,6 +97,7 @@ run_round() {
     --run-id "$run_id" \
     --submit \
     --max-concurrency "$CONCURRENCY" \
+    --platform-instance-concurrency "$PLATFORM_INSTANCE_CONCURRENCY" \
     --task-timeout "$TASK_TIMEOUT" \
     --run-timeout "$RUN_TIMEOUT" \
     --wait-for-challenges "$WAIT_FOR_CHALLENGES" \
@@ -120,6 +123,7 @@ run_rehearsal() {
     --run-id "$run_id" \
     --submit \
     --max-concurrency "$CONCURRENCY" \
+    --platform-instance-concurrency "$PLATFORM_INSTANCE_CONCURRENCY" \
     --task-timeout "$TASK_TIMEOUT" \
     --run-timeout "$RUN_TIMEOUT" \
     --events-path "$output_root/events.jsonl" \

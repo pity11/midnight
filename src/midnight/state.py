@@ -24,6 +24,7 @@ class Challenge(TypedDict, total=False):
     files: list[str]  # starter files (host paths)
     file_destinations: dict[str, str]  # host path -> relative in-sandbox path
     remote: str | None  # "host:port" for pwn/web, if any
+    interactive: bool  # whether solving occupies an organizer target instance
     category_hint: str | None  # platform-provided category hint (optional)
     flag_format: str | None  # per-challenge flag regex override (optional)
     round_id: str | None  # platform round/version identifier

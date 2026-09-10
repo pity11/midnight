@@ -160,6 +160,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="override the configured number of concurrently solved challenges",
     )
     p.add_argument(
+        "--platform-instance-concurrency",
+        type=int,
+        default=2,
+        help="maximum organizer interactive target instances held concurrently",
+    )
+    p.add_argument(
         "--task-timeout",
         type=int,
         help="override the configured per-challenge timeout in seconds",
@@ -496,6 +502,8 @@ async def _amain(args: argparse.Namespace) -> int:
         task_timeout = args.task_timeout
     if args.max_concurrency is not None and args.max_concurrency <= 0:
         raise ValueError("--max-concurrency must be positive")
+    if args.platform_instance_concurrency <= 0:
+        raise ValueError("--platform-instance-concurrency must be positive")
     if args.run_timeout is not None and args.run_timeout <= 0:
         raise ValueError("--run-timeout must be positive")
     log.info("run id: %s", run_id)
@@ -519,6 +527,7 @@ async def _amain(args: argparse.Namespace) -> int:
             per_task_timeout=task_timeout,
             run_timeout=args.run_timeout,
             max_concurrency=args.max_concurrency,
+            platform_instance_concurrency=args.platform_instance_concurrency,
             agent_mode=args.agent_mode,
         )
         started = time.monotonic()
