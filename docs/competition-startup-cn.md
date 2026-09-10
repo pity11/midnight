@@ -55,6 +55,14 @@ scripts/competition submit-test TEST_CHALLENGE_ID
 
 `dry-run` 会取题和解题，但禁止提交。`submit-test` 只应对主办方明确授权的测试题使用。提交测试成功后冻结代码、依赖和镜像，不要在比赛现场运行 `git pull`、`uv sync`、Docker 清理或镜像重建。
 
+上面两个带题号的命令用于开发人员定点排查接口。队员演练正式的“只启动、不输入题号”流程时执行：
+
+```bash
+scripts/competition rehearsal
+```
+
+`rehearsal` 会自动生成新的 run ID，从平台拉取当前全部测试题，包括已经解过的题，然后自主解题并提交。平台可能接受正确答案但不重复计分。该命令只用于明确允许重复提交的测试平台；正式比赛不要使用它。
+
 需要让同一道测试题从空白状态重新求解和提交时，为每次彩排指定新的 run ID：
 
 ```bash
@@ -62,6 +70,8 @@ MIDNIGHT_RUN_ID=rehearsal-1 scripts/competition submit-test TEST_CHALLENGE_ID
 ```
 
 run ID 只能使用不含空格的简短名称，例如下一次改成 `rehearsal-2`。如果复用相同 run ID，Midnight 会复用断点和提交账本，这是恢复功能，不代表重新求解。
+
+通常不需要手工指定 run ID；直接执行 `scripts/competition rehearsal` 会自动生成。它只是日志、断点和提交账本的本地运行名称，不是题号。
 
 在比赛使用的网络环境中再次运行前，检查终端是否遗留无效代理：
 

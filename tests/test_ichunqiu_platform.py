@@ -265,6 +265,24 @@ endpoints:
     asyncio.run(adapter.close())
 
 
+def test_platform_loader_can_include_solved_tasks_for_rehearsal(tmp_path, monkeypatch):
+    monkeypatch.setenv("MIDNIGHT_PLATFORM_TOKEN", "token")
+    config = tmp_path / "platform.yaml"
+    config.write_text(
+        """\
+adapter: ichunqiu
+base_url: https://api.invalid
+include_solved: false
+""",
+        encoding="utf-8",
+    )
+
+    adapter = _load_http_adapter(str(config), include_solved=True)
+
+    assert adapter.config.include_solved
+    asyncio.run(adapter.close())
+
+
 def test_platform_http_error_does_not_expose_query_token(monkeypatch):
     token = "secret-platform-token"
     monkeypatch.setenv("MIDNIGHT_PLATFORM_TOKEN", token)

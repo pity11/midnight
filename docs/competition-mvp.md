@@ -107,6 +107,11 @@ MIDNIGHT_RUN_ID=rehearsal-1 scripts/competition submit-test TEST_CHALLENGE_ID
 scripts/competition monitor rehearsal-1
 ```
 
+For a platform-level rehearsal that matches the operator workflow and therefore
+requires no challenge ID, use `scripts/competition rehearsal`. It generates a
+fresh run ID, includes already-solved test tasks, solves them concurrently, and
+submits results. Never use this include-solved mode during the scored rounds.
+
 Confirm that the platform accepts the flag and that rerunning the same command
 does not duplicate the submission.
 

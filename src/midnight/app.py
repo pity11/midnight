@@ -83,6 +83,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="allow submissions when using an HTTP platform (default: dry run)",
     )
+    p.add_argument(
+        "--include-solved",
+        action="store_true",
+        help="include solved organizer tasks for an explicit rehearsal run",
+    )
     p.add_argument("--id", help="solve a single challenge by id (default: all)")
     p.add_argument(
         "--agent-mode",
@@ -223,7 +228,7 @@ async def _list_challenges_with_wait(
     return []
 
 
-def _load_http_adapter(path: str) -> Any:
+def _load_http_adapter(path: str, *, include_solved: bool = False) -> Any:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     adapter = raw.pop("adapter", "generic")
     if adapter == "ichunqiu":
@@ -234,11 +239,15 @@ def _load_http_adapter(path: str) -> Any:
         )
 
         endpoint_raw = raw.pop("endpoints", {})
+        if include_solved:
+            raw["include_solved"] = True
         return IchunqiuPlatformAdapter(
             IchunqiuConfig(**raw, endpoints=IchunqiuEndpoints(**endpoint_raw))
         )
     if adapter != "generic":
         raise ValueError(f"unknown platform adapter: {adapter}")
+    if include_solved:
+        raise ValueError("--include-solved is supported only by the organizer adapter")
     endpoint_raw = raw.pop("endpoints", {})
     field_raw = raw.pop("fields", {})
     response_raw = raw.pop("responses", {})
@@ -317,6 +326,8 @@ async def _amain(args: argparse.Namespace) -> int:
         raise ValueError("evaluator and service manifests require --bundles-dir")
     if args.wait_for_challenges < 0:
         raise ValueError("--wait-for-challenges cannot be negative")
+    if args.include_solved and not args.platform_config:
+        raise ValueError("--include-solved requires --platform-config")
 
     platform: Any = None
     if args.tsecbench:
@@ -328,7 +339,14 @@ async def _amain(args: argparse.Namespace) -> int:
             raise RuntimeError("Tsecbench requires BENCHMARK_BASE_URL and BENCHMARK_TOKEN")
         platform = TsecbenchAdapter.from_sdk(base_url=base_url, token=token)
     else:
-        platform = _load_http_adapter(args.platform_config) if args.platform_config else None
+        platform = (
+            _load_http_adapter(
+                args.platform_config,
+                include_solved=args.include_solved,
+            )
+            if args.platform_config
+            else None
+        )
     provider: ChallengeProvider
     delegate: FlagSubmitter
     service_manager = None

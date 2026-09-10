@@ -20,6 +20,7 @@ class SequencedProvider:
 def test_wait_for_challenges_argument_defaults_to_disabled():
     assert _parse_args([]).wait_for_challenges == 0
     assert _parse_args(["--wait-for-challenges", "300"]).wait_for_challenges == 300
+    assert _parse_args(["--include-solved"]).include_solved
 
 
 async def test_live_discovery_polls_until_a_challenge_appears():

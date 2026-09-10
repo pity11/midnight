@@ -20,6 +20,7 @@ Commands:
   platform-preflight    Read and normalize the official challenge inventory
   dry-run ID            Solve one organizer test task without submitting
   submit-test ID        Solve and submit one organizer-authorized test task
+  rehearsal             Auto-fetch, re-solve, and submit all test-platform tasks
   monitor RUN_ID        Follow the redacted event stream for a running test
   round2                Start the unattended 27-minute second-stage run
   round3                Start the unattended 27-minute final-stage run
@@ -105,6 +106,30 @@ run_round() {
     --report-path "$output_root/report.json"
 }
 
+run_rehearsal() {
+  local run_id="${MIDNIGHT_RUN_ID:-rehearsal-$(date +%Y%m%d-%H%M%S)}"
+  local output_root="$ROOT/logs/$run_id"
+  mkdir -p "$output_root"
+  local -a runner=("$PYTHON")
+  if command -v caffeinate >/dev/null 2>&1; then
+    runner=(caffeinate -dimsu "$PYTHON")
+  fi
+  exec "${runner[@]}" -m midnight.app \
+    --platform-config "$PLATFORM_CONFIG" \
+    --include-solved \
+    --run-id "$run_id" \
+    --submit \
+    --max-concurrency "$CONCURRENCY" \
+    --task-timeout "$TASK_TIMEOUT" \
+    --run-timeout "$RUN_TIMEOUT" \
+    --events-path "$output_root/events.jsonl" \
+    --checkpoint-path "$output_root/checkpoints.sqlite" \
+    --submission-ledger-path "$output_root/submissions.sqlite" \
+    --artifacts-root "$output_root/artifacts" \
+    --workspace-root "$output_root/workspaces" \
+    --report-path "$output_root/report.json"
+}
+
 command="${1:-help}"
 case "$command" in
   help|-h|--help)
@@ -133,6 +158,11 @@ case "$command" in
     require_platform_config
     challenge_id="${2:?submit-test requires an organizer-authorized challenge ID}"
     run_single platform-submit-test "$challenge_id" enabled
+    ;;
+  rehearsal)
+    require_runtime
+    require_platform_config
+    run_rehearsal
     ;;
   monitor)
     run_id="${2:?monitor requires a run ID}"
