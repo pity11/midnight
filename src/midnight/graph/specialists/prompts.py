@@ -142,8 +142,12 @@ depth are compiler-checked; prefer its atomic call(count) operation over manual
 tuple plus reduce pairs. Pickle has no GETATTR or GETITEM opcode: GET/BINGET
 only read memo slots. Prefer the version-resilient dotted callable
 function.__globals__.__class__.get, then call it on the separately resolved
-function.__globals__ mapping. Use operations confirmed by pickletools and re-audit after
-every edit. For MIME/archive layers, preserve the
+function.__globals__ mapping. Trace the complete server state transition from
+input storage to the code path that actually deserializes it. Registration or
+upload may only store attacker bytes; solve.py must invoke the later view/load/
+process action that reaches unpickle, then capture that action's full response.
+Use operations confirmed by pickletools and re-audit after every edit. For
+MIME/archive layers, preserve the
 exact decode provenance. Recover
 the hidden flag from reproducible output.
 """

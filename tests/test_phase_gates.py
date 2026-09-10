@@ -141,6 +141,31 @@ def test_interactive_pwn_solver_must_be_rewritten_for_observable_output():
     assert "PHASE_GATE:NONINTERACTIVE" in update["messages"][0].content
 
 
+def test_crash_only_pwn_solver_must_be_rewritten_after_rop_inventory():
+    gate = ArtifactPhaseGateMiddleware(category="pwn")
+    messages = [
+        _tool_message(1, "pwn_rop_inventory"),
+        _tool_message(
+            2,
+            "write_file",
+            {
+                "path": "/ctf/solve.py",
+                "content": "# crash to confirm offset\npayload += p64(0xdeadbeef)",
+            },
+        ),
+    ]
+
+    assert gate.constrained_tool_names(messages) == {"write_file"}
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "PHASE_GATE:ROP_INVARIANTS" in update["messages"][0].content
+
+    messages.extend(update["messages"])
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "PHASE_GATE:FINAL_EXPLOIT" in update["messages"][0].content
+
+
 def test_pickle_tuple_validator_failure_forces_atomic_call_rebuild():
     gate = ArtifactPhaseGateMiddleware(category="misc", artifact_gate=99)
     messages = [

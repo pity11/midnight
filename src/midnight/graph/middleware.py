@@ -125,6 +125,25 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         return ".interactive()" in content
 
     @staticmethod
+    def _diagnostic_pwn_solver(calls: list[dict]) -> bool:
+        """Detect a crash-only probe accidentally persisted as the final solver."""
+        writes = [
+            call for call in calls
+            if call.get("name") == "write_file"
+            and "solve.py" in str((call.get("args") or {}).get("path", ""))
+        ]
+        if not writes:
+            return False
+        content = str((writes[-1].get("args") or {}).get("content", "")).lower()
+        return any(marker in content for marker in (
+            "0xdeadbeef",
+            "crash to confirm",
+            "just crash",
+            "placeholder exploit",
+            "todo: build",
+        ))
+
+    @staticmethod
     def _ret2libc_artifact(calls: list[dict]) -> bool:
         writes = [
             call
@@ -219,6 +238,12 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         if self._pickle_tuple_failure(messages):
             return {"pickle_build"}
         if self.category == "pwn" and self._interactive_solver(calls):
+            return {"write_file"}
+        if (
+            self.category == "pwn"
+            and any(call.get("name") == "pwn_rop_inventory" for call in calls)
+            and self._diagnostic_pwn_solver(calls)
+        ):
             return {"write_file"}
         if len(calls) >= self.artifact_gate and not self._made_artifact(calls):
             return {"write_file"}
@@ -338,6 +363,23 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                     "io.interactive(). Rewrite solve.py to send a bounded post-exploitation "
                     "flag retrieval command, receive until EOF or timeout, and print the full "
                     "response so the target-bound verifier can observe the flag."
+                )]
+            }
+
+        if (
+            self.category == "pwn"
+            and any(call.get("name") == "pwn_rop_inventory" for call in calls)
+            and self._diagnostic_pwn_solver(calls)
+            and "[PHASE_GATE:FINAL_EXPLOIT]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:FINAL_EXPLOIT] The current solve.py is only a crash or "
+                    "control-offset diagnostic. It cannot close a challenge. Rewrite it now "
+                    "as a complete exploit using the recorded ROP inventory, full gadget "
+                    "semantics, runtime base equation, and an observable bounded flag-retrieval "
+                    "stage. Preserve measured offsets; remove sentinel return addresses and "
+                    "placeholder crash code before contacting the target."
                 )]
             }
 
