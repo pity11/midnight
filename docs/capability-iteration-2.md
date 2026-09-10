@@ -49,7 +49,11 @@ PIE symbol offset, stack-frame size, saved-return distance, writable sections,
 and syscall-oriented gadgets. The end-to-end diagnostic still failed 0/1: the
 configured low-cost model initially double-subtracted the buffer offset and
 ignored a gadget side effect. The resulting invariant checks were added after
-that run and have unit coverage, but no later solve is claimed.
+that run. A later diagnostic used the correct padding and accounted for the
+side-effect gadget, producing a plausible two-stage `read`/`execve` chain, but
+then stopped in `io.interactive()` and lost the stronger artifact on the next
+retry. Midnight now rejects interactive final solvers and reads an existing
+`solve.py` before restarting Pwn reconnaissance. No Pwn solve is claimed.
 
 ## Evidence boundary
 

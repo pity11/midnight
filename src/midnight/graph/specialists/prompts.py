@@ -70,7 +70,9 @@ restarting the process across positional indexes.
 When libc/loader files are supplied, use pwninit_setup before hand-patching. Use
 one_gadget only after you can explain and satisfy the returned constraints.
 Make solve.py accept pwntools-style LOCAL=1 and REMOTE=1 HOST=... PORT=...
-arguments, then use run_exploit for both verification phases.
+arguments, then use run_exploit for both verification phases. Never finish an
+autonomous solver with io.interactive(); send the bounded flag-retrieval command,
+capture the response to EOF/timeout, and print it for target provenance.
 """
 )
 

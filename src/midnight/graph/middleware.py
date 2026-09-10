@@ -106,6 +106,23 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         )
         return has_leak and has_overwrite
 
+    @staticmethod
+    def _solver_visible(messages: list) -> bool:
+        text = "\n".join(str(getattr(message, "content", "")) for message in messages)
+        return "solve.py" in text
+
+    @staticmethod
+    def _interactive_solver(calls: list[dict]) -> bool:
+        writes = [
+            call for call in calls
+            if call.get("name") == "write_file"
+            and "solve.py" in str((call.get("args") or {}).get("path", ""))
+        ]
+        if not writes:
+            return False
+        content = str((writes[-1].get("args") or {}).get("content", ""))
+        return ".interactive()" in content
+
     def _pickle_tuple_failure(self, messages: list) -> bool:
         if self.category not in {"misc", "forensics"}:
             return False
@@ -141,6 +158,13 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         if (
             self.category == "pwn"
             and any(call.get("name") == "list_dir" for call in calls)
+            and self._solver_visible(messages)
+            and not any(call.get("name") == "read_file" for call in calls)
+        ):
+            return {"read_file"}
+        if (
+            self.category == "pwn"
+            and any(call.get("name") == "list_dir" for call in calls)
             and not any(call.get("name") == "binary_triage" for call in calls)
         ):
             return {"binary_triage"}
@@ -171,6 +195,8 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             return {"pwn_rop_inventory"}
         if self._pickle_tuple_failure(messages):
             return {"pickle_build"}
+        if self.category == "pwn" and self._interactive_solver(calls):
+            return {"write_file"}
         if len(calls) >= self.artifact_gate and not self._made_artifact(calls):
             return {"write_file"}
         if (
@@ -247,6 +273,21 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
 
         if (
             self.category == "pwn"
+            and any(call.get("name") == "list_dir" for call in calls)
+            and self._solver_visible(messages)
+            and not any(call.get("name") == "read_file" for call in calls)
+            and "[PHASE_GATE:RESUME_SOLVER]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:RESUME_SOLVER] An existing solve.py is present from a prior "
+                    "attempt. Read it before new reconnaissance. Preserve confirmed offsets, "
+                    "leaks, and validated primitives; revise only the observed failure."
+                )]
+            }
+
+        if (
+            self.category == "pwn"
             and any(call.get("name") == "pwn_rop_inventory" for call in calls)
             and "[PHASE_GATE:ROP_INVARIANTS]" not in text
         ):
@@ -258,6 +299,20 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                     "gadget with an add/mov/call side effect is not a plain pop: establish safe "
                     "registers and writable mapped memory before it executes. Assert the PIE "
                     "base equation and payload length in solve.py before target execution."
+                )]
+            }
+
+        if (
+            self.category == "pwn"
+            and self._interactive_solver(calls)
+            and "[PHASE_GATE:NONINTERACTIVE]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:NONINTERACTIVE] Autonomous evaluation cannot stop in "
+                    "io.interactive(). Rewrite solve.py to send a bounded post-exploitation "
+                    "flag retrieval command, receive until EOF or timeout, and print the full "
+                    "response so the target-bound verifier can observe the flag."
                 )]
             }
 

@@ -109,6 +109,9 @@ A fresh targeted run solved `Were Pickle Phreaks Revenge` 1/1 and received an
 accepted evaluator verdict. `network-tools` remained unsolved in its targeted
 run; the tool recovered the correct symbol and frame geometry, but the low-cost
 model misused the saved-return distance and a side-effect gadget. Those two
-mistakes are now explicit phase invariants with tests. See
+mistakes became explicit phase invariants; a subsequent run corrected both but
+stopped at an interactive shell instead of emitting flag output. Interactive
+final solvers are now rejected, and retries must resume the existing solver
+artifact before new reconnaissance. See
 [`capability-iteration-2.md`](capability-iteration-2.md). The frozen full score
 above remains unchanged until another complete aggregate evaluation is run.
