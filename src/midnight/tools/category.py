@@ -866,8 +866,10 @@ def make_run_exploit(*, env: CTFEnvironment, state=None, observe_target_output=N
             raise ValueError("mode must be local or target")
         if timeout_seconds < 1 or timeout_seconds > 600:
             raise ValueError("timeout_seconds must be between 1 and 600")
+        environment = ["env"]
         args = ["python3", script]
         if mode == "local":
+            environment.append("LOCAL=1")
             args.append("LOCAL=1")
         else:
             if not remote or ":" not in remote:
@@ -875,12 +877,13 @@ def make_run_exploit(*, env: CTFEnvironment, state=None, observe_target_output=N
             host, raw_port = remote.rsplit(":", 1)
             if not host or not raw_port.isdigit() or not 1 <= int(raw_port) <= 65535:
                 raise ValueError("the evaluator-provided target is not host:port")
+            environment += ["REMOTE=1", f"HOST={host}", f"PORT={raw_port}"]
             args += ["REMOTE=1", f"HOST={host}", f"PORT={raw_port}"]
         quoted_script = shlex.quote(script)
         command = (
             f"python3 -m py_compile {quoted_script} && "
             f"timeout {timeout_seconds}s "
-            + " ".join(shlex.quote(part) for part in args)
+            + " ".join(shlex.quote(part) for part in environment + args)
         )
         result = await env.exec(command, timeout=timeout_seconds + 15)
         rendered = _result_text(result)

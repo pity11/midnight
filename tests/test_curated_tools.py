@@ -524,8 +524,12 @@ async def test_run_exploit_binds_target_and_checks_script() -> None:
     await action.ainvoke({"script": "solve pwn.py", "mode": "target", "timeout_seconds": 90})
     command, timeout = env.calls[0]
     assert "python3 -m py_compile 'solve pwn.py'" in command
+    assert "env REMOTE=1 HOST=target-relay PORT=31337 python3 'solve pwn.py'" in command
     assert "REMOTE=1 HOST=target-relay PORT=31337" in command
     assert timeout == 105
+
+    await action.ainvoke({"script": "solve.py", "mode": "local"})
+    assert "env LOCAL=1 python3 solve.py LOCAL=1" in env.calls[1][0]
 
     with pytest.raises(ValueError, match="between 1 and 600"):
         await action.ainvoke({"timeout_seconds": 999})
