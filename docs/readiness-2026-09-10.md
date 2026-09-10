@@ -85,9 +85,9 @@ not a statistical pass@N claim.
 
 When the organizer contract arrives:
 
-1. Copy `config/platform.example.yaml` to the ignored
-   `config/platform.local.yaml` and map the base URL, paths, fields, and auth
-   header. Keep the token in the `.env` variable selected by `token_env`.
+1. Copy `config/platform.ichunqiu.example.yaml` to the ignored
+   `config/platform.local.yaml` and fill the base URL and three endpoint paths
+   from the organizer document. Keep the team token in `.env`.
 2. Run `scripts/competition local-preflight` without reinstalling packages.
 3. Run `scripts/competition platform-preflight` for read-only discovery.
 4. Run `scripts/competition dry-run TEST_CHALLENGE_ID` with submissions disabled.

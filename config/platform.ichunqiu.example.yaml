@@ -1,0 +1,14 @@
+# Organizer AI-agent CTF API. Copy to the ignored platform.local.yaml.
+# Put the real team token only in .env as MIDNIGHT_PLATFORM_TOKEN.
+adapter: "ichunqiu"
+base_url: "https://ctf.example.invalid"
+token_env: "MIDNIGHT_PLATFORM_TOKEN"
+timeout_seconds: 20
+max_attachment_bytes: 268435456
+include_solved: false
+reset_poll_seconds: 20
+
+endpoints:
+  challenges: "/questions-endpoint-from-organizer-document"
+  reset: "/reset-endpoint-from-organizer-document"
+  submit: "/submit-endpoint-from-organizer-document"

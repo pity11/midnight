@@ -19,6 +19,7 @@ The benchmark policy and capability-claim criteria are defined in
 - Bounded retries and rejected-candidate tracking.
 - Platform-neutral provider and submission interfaces.
 - A configurable JSON-over-HTTP competition adapter.
+- A dedicated organizer adapter for query, reset, attachment, and answer APIs.
 - SQLite graph checkpoints and a durable, flag-redacted submission ledger.
 - Durable per-run challenge workspaces for container restart recovery.
 - Append-only JSONL run events with credential-field redaction.
@@ -101,22 +102,26 @@ Each challenge also receives a revision-scoped directory below
 survive container recreation while remaining isolated from changed task content
 and independent evaluation attempts.
 
-## HTTP platform adapter
+## Competition platform adapter
 
-Copy `config/platform.example.yaml`, then map its endpoint paths to the
-competition API. The adapter keeps credentials in an environment variable,
-restricts attachment downloads to the configured origin by default, and runs
-with platform submission disabled unless `--submit` is present:
+Copy `config/platform.ichunqiu.example.yaml` to the ignored local configuration,
+then fill in the base URL and three endpoint paths from the organizer document.
+Keep the team token in `.env`; the dedicated adapter sends it only from the
+controller and suppresses HTTP client URL logs because the API uses a query
+parameter credential:
 
 ```bash
-export MIDNIGHT_PLATFORM_TOKEN="..."
-uv run midnight --platform-config config/platform.local.yaml --list-only
-uv run midnight --platform-config config/platform.local.yaml --submit
+cp config/platform.ichunqiu.example.yaml config/platform.local.yaml
+# Edit config/platform.local.yaml, then set MIDNIGHT_PLATFORM_TOKEN in .env.
+scripts/competition platform-preflight
+scripts/competition dry-run ORGANIZER_TEST_CHALLENGE_ID
 ```
 
-The exact response-field mapping can be implemented as a small adapter once the
-official platform contract is available. The solver, scheduler, checkpoints,
-containers, reports, and submission policy do not depend on that contract.
+Discovery never resets a target or submits an answer. Starting an interactive
+challenge calls the reset API and waits for its connection information; static
+challenges skip reset. Platform submission remains disabled unless `--submit`
+is present. The public example deliberately contains no event endpoint or team
+credential.
 
 If a runner process is terminated before its cleanup executes, remove only the
 containers labeled for that run:

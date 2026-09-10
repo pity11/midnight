@@ -45,9 +45,28 @@ identifier. It does not print credentials or execute a solver tool.
 
 ## Platform integration
 
-Copy `config/platform.example.yaml` to an ignored local path and adapt only the
-base URL, endpoint paths, and authentication header. Put the token in the
-environment variable named by `token_env`.
+Copy the dedicated organizer template to an ignored local path. Fill in the base
+URL and the query, reset, and submit paths from the interface document. Put the
+team token in `.env`; never place it in YAML or a shell history entry.
+
+```bash
+cp config/platform.ichunqiu.example.yaml config/platform.local.yaml
+chmod 600 .env
+# Edit MIDNIGHT_PLATFORM_TOKEN in .env.
+```
+
+The adapter maps the platform contract as follows:
+
+- the query endpoint supplies both the challenge inventory and current target
+  connection data;
+- solved challenges are skipped by default;
+- static challenges are downloaded without an environment reset;
+- interactive challenges are reset once and polled until a Pwn or Web target is
+  available;
+- an empty attachment URL is valid, and a supplied URL is streamed with a size
+  limit;
+- answers use the platform submit endpoint and are sent only with `--submit`;
+- cleanup is local because the contract does not expose a stop endpoint.
 
 First perform a read-only discovery pass. Omit `--submit`:
 
@@ -63,6 +82,10 @@ scripts/competition dry-run TEST_CHALLENGE_ID
 
 Inspect `logs/events.jsonl` and `logs/report.json`. Events and reports redact flag
 values and credential-shaped fields.
+
+The platform carries the credential in a URL query parameter. Midnight suppresses
+HTTPX request URL logging, and all shipped configuration keeps the real endpoint
+paths and token in ignored local files.
 
 ## Submission rehearsal
 

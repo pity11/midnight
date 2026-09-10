@@ -50,7 +50,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument(
         "--platform-config",
-        help="YAML configuration for the generic HTTP platform adapter",
+        help="YAML configuration for an HTTP competition platform adapter",
     )
     p.add_argument(
         "--tsecbench",
@@ -172,8 +172,22 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def _load_http_adapter(path: str) -> HTTPPlatformAdapter:
+def _load_http_adapter(path: str) -> Any:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    adapter = raw.pop("adapter", "generic")
+    if adapter == "ichunqiu":
+        from midnight.interfaces.ichunqiu import (
+            IchunqiuConfig,
+            IchunqiuEndpoints,
+            IchunqiuPlatformAdapter,
+        )
+
+        endpoint_raw = raw.pop("endpoints", {})
+        return IchunqiuPlatformAdapter(
+            IchunqiuConfig(**raw, endpoints=IchunqiuEndpoints(**endpoint_raw))
+        )
+    if adapter != "generic":
+        raise ValueError(f"unknown platform adapter: {adapter}")
     endpoint_raw = raw.pop("endpoints", {})
     field_raw = raw.pop("fields", {})
     response_raw = raw.pop("responses", {})
