@@ -29,6 +29,7 @@ from midnight.tools.category import (
     make_one_gadget,
     make_pcap_export_objects,
     make_pcap_triage,
+    make_pickle_build,
     make_pickle_policy_audit,
     make_pyinstaller_extract,
     make_rsa_quickcheck,
@@ -66,6 +67,7 @@ def test_pwn_and_pickle_deterministic_auditors_are_configured() -> None:
     assert "source_audit" in config.tools["pwn"]
     assert "pickle_policy_audit" in config.tools["misc"]
     assert "pickle_policy_audit" in config.tools["forensics"]
+    assert "pickle_build" in config.tools["misc"]
 
 
 @pytest.mark.asyncio
@@ -91,6 +93,30 @@ async def test_pickle_policy_audit_checks_opcodes_and_local_validator() -> None:
 
     with pytest.raises(ValueError, match="file or base64"):
         await action.ainvoke({"payload_format": "hex"})
+
+
+@pytest.mark.asyncio
+async def test_pickle_build_compiles_a_declarative_stack_program() -> None:
+    env = _Env()
+    action = make_pickle_build(env=env)
+    operations = (
+        '[{"op":"global","module":"allowed","name":"Root.mapping.get"},'
+        '{"op":"string","value":"callable"},{"op":"tuple","count":1},'
+        '{"op":"reduce"}]'
+    )
+    await action.ainvoke(
+        {
+            "operations_json": operations,
+            "output": "payload.pkl",
+            "validator": "sandbox.py",
+        }
+    )
+    command, timeout = env.calls[0]
+    assert "pickletools.dis" in command
+    assert "final pickle stack depth must be 1" in command
+    assert "Root.mapping.get" in command
+    assert "payload.pkl" in command
+    assert timeout == 60
 
 
 @pytest.mark.asyncio

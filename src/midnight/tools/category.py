@@ -170,7 +170,7 @@ if source_path:
         print("dotted_name_resolution=CPython find_class resolves protocol>=4 dotted names by repeated getattr")
     if "startswith" in text:
         print("prefix_filter_review=check whether the filter applies only to the complete requested name; an allowed leading object may expose nested attributes")
-    print("mapping_note=attribute traversal stops at dict-like objects; obtain a bound mapping method and invoke it with REDUCE rather than treating keys as attributes")
+    print("mapping_note=pickle has no GETATTR or GETITEM opcode; GET/BINGET read memo slots. Obtain a bound mapping method through an allowed dotted global and invoke it with REDUCE")
 
 raw = load_payload(payload_value, payload_format)
 if raw is not None:
@@ -184,7 +184,7 @@ if raw is not None:
     except Exception as exc:
         print(f"opcode_validation=FAIL {type(exc).__name__}: {exc}")
     if b"\x96" in raw:
-        print("note: opcode 0x96 is BYTEARRAY8, not GETATTR; pickle has no GETATTR opcode")
+        print("note: opcode 0x96 is BYTEARRAY8, not GETATTR; pickle has no GETATTR or GETITEM opcode")
     print("note: attribute traversal must be performed by an allowed dotted GLOBAL/STACK_GLOBAL name or by a verified callable plus REDUCE")
 
 if validator_path and raw is not None:
@@ -230,6 +230,173 @@ if validator_path and raw is not None:
         return _result_text(await env.exec(command, timeout=60))
 
     return pickle_policy_audit
+
+
+@register_tool(name="pickle_build", groups=["misc", "forensics"])
+def make_pickle_build(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    program = r'''import base64
+import importlib.util
+import io
+import json
+import pathlib
+import pickletools
+import struct
+import sys
+
+operations_json, output_path, validator_path, function_name = sys.argv[1:]
+operations = json.loads(operations_json)
+if not isinstance(operations, list) or not operations:
+    raise ValueError("operations must be a non-empty JSON list")
+
+payload = bytearray(b"\x80\x04")
+depth = 0
+memo_count = 0
+
+def push_unicode(value):
+    data = value.encode()
+    if len(data) <= 255:
+        payload.extend(b"\x8c" + bytes([len(data)]) + data)
+    else:
+        payload.extend(b"X" + struct.pack("<I", len(data)) + data)
+
+for index, item in enumerate(operations):
+    if not isinstance(item, dict) or not isinstance(item.get("op"), str):
+        raise ValueError(f"operation {index} must be an object with string op")
+    op = item["op"].lower()
+    if op == "global":
+        module, name = item.get("module"), item.get("name")
+        if not isinstance(module, str) or not isinstance(name, str) or not module or not name:
+            raise ValueError(f"operation {index}: global requires module and name")
+        push_unicode(module)
+        push_unicode(name)
+        payload.extend(b"\x93")
+        depth += 1
+    elif op == "string":
+        value = item.get("value")
+        if not isinstance(value, str):
+            raise ValueError(f"operation {index}: string requires value")
+        push_unicode(value)
+        depth += 1
+    elif op == "bytes":
+        value = base64.b64decode(item.get("base64", ""), validate=True)
+        if len(value) <= 255:
+            payload.extend(b"C" + bytes([len(value)]) + value)
+        else:
+            payload.extend(b"B" + struct.pack("<I", len(value)) + value)
+        depth += 1
+    elif op == "int":
+        value = item.get("value")
+        if not isinstance(value, int):
+            raise ValueError(f"operation {index}: int requires an integer value")
+        if 0 <= value <= 255:
+            payload.extend(b"K" + bytes([value]))
+        else:
+            payload.extend(b"I" + str(value).encode() + b"\n")
+        depth += 1
+    elif op == "none":
+        payload.extend(b"N")
+        depth += 1
+    elif op == "tuple":
+        count = item.get("count")
+        if not isinstance(count, int) or count < 0 or count > depth:
+            raise ValueError(f"operation {index}: tuple count exceeds stack depth {depth}")
+        if count == 0:
+            payload.extend(b")")
+        elif count == 1:
+            payload.extend(b"\x85")
+        elif count == 2:
+            payload.extend(b"\x86")
+        elif count == 3:
+            payload.extend(b"\x87")
+        else:
+            raise ValueError(f"operation {index}: tuple count above 3 requires a staged plan")
+        depth = depth - count + 1
+    elif op == "reduce":
+        if depth < 2:
+            raise ValueError(f"operation {index}: REDUCE needs callable and argument tuple")
+        payload.extend(b"R")
+        depth -= 1
+    elif op == "memoize":
+        if depth < 1:
+            raise ValueError(f"operation {index}: MEMOIZE needs a stack item")
+        payload.extend(b"\x94")
+        memo_count += 1
+    elif op == "get":
+        memo = item.get("index")
+        if not isinstance(memo, int) or memo < 0 or memo >= memo_count:
+            raise ValueError(f"operation {index}: memo index is not initialized")
+        if memo <= 255:
+            payload.extend(b"h" + bytes([memo]))
+        else:
+            payload.extend(b"j" + struct.pack("<I", memo))
+        depth += 1
+    elif op == "pop":
+        if depth < 1:
+            raise ValueError(f"operation {index}: POP on empty stack")
+        payload.extend(b"0")
+        depth -= 1
+    elif op == "dup":
+        if depth < 1:
+            raise ValueError(f"operation {index}: DUP on empty stack")
+        payload.extend(b"2")
+        depth += 1
+    else:
+        raise ValueError(f"operation {index}: unsupported op {op!r}")
+
+if depth != 1:
+    raise ValueError(f"final pickle stack depth must be 1, got {depth}")
+payload.extend(b".")
+raw = bytes(payload)
+target = pathlib.Path(output_path)
+target.write_bytes(raw)
+listing = io.StringIO()
+pickletools.dis(raw, out=listing)
+print(f"output={target} bytes={len(raw)} stack_depth={depth} memo_slots={memo_count}")
+print(listing.getvalue())
+print("payload_base64=" + base64.b64encode(raw).decode())
+
+if validator_path:
+    path = pathlib.Path(validator_path).resolve()
+    sys.path.insert(0, str(path.parent))
+    spec = importlib.util.spec_from_file_location("midnight_pickle_validator", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    function = getattr(module, function_name)
+    try:
+        result = function(base64.b64encode(raw))
+        print(f"validator=PASS result_type={type(result).__name__} result={result!r}"[:4000])
+    except Exception as exc:
+        print(f"validator=FAIL {type(exc).__name__}: {exc}"[:4000])
+'''
+
+    @tool
+    async def pickle_build(
+        operations_json: str,
+        output: str = "payload.pkl",
+        validator: str = "",
+        validator_function: str = "unpickle",
+    ) -> str:
+        """Compile a declarative pickle stack program and validate it.
+
+        Pass a JSON list using ``global`` (module/name), ``string`` (value),
+        ``bytes`` (base64), ``int`` (value), ``none``, ``tuple`` (count 0..3),
+        ``reduce``, ``memoize``, ``get`` (index), ``pop``, or ``dup``. The tool
+        owns opcode bytes, checks stack depth, writes and disassembles the exact
+        payload, and can invoke the local restricted validator.
+        """
+        if not output or "\x00" in output:
+            raise ValueError("output must be a non-empty path")
+        if validator_function and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", validator_function):
+            raise ValueError("validator_function must be a Python identifier")
+        args = [operations_json, output, validator, validator_function]
+        command = "python3 -c " + shlex.quote(program) + " " + " ".join(
+            shlex.quote(value) for value in args
+        )
+        return _result_text(await env.exec(command, timeout=60))
+
+    return pickle_build
 
 
 @register_tool(name="upx_unpack", groups=["reverse"])

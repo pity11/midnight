@@ -132,8 +132,10 @@ pcap_export_objects when HTTP, SMB, TFTP, FTP data, DICOM, or IMF transfers exis
 For PNG/BMP LSB evidence, use stego_scan and extract the reported channel.
 For Python serialization challenges, read the validator and allowed opcodes or
 globals, then use pickle_policy_audit on every generated payload and the local
-validator. Pickle has no GETATTR opcode: use only operations confirmed by
-pickletools and re-audit after every edit. For MIME/archive layers, preserve the
+validator. Use pickle_build for nontrivial payloads so opcode bytes and stack
+depth are compiler-checked. Pickle has no GETATTR or GETITEM opcode: GET/BINGET
+only read memo slots. Use operations confirmed by pickletools and re-audit after
+every edit. For MIME/archive layers, preserve the
 exact decode provenance. Recover
 the hidden flag from reproducible output.
 """

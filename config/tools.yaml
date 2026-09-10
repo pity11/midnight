@@ -61,6 +61,7 @@ misc:
   - *common
   - pickle_disassemble
   - pickle_policy_audit
+  - pickle_build
   - artifact_triage
   - stego_scan
   - archive_password
@@ -70,6 +71,7 @@ forensics:
   - *common
   - pickle_disassemble
   - pickle_policy_audit
+  - pickle_build
   - artifact_triage
   - log_triage
   - stego_scan
