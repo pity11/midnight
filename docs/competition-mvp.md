@@ -66,6 +66,9 @@ The adapter maps the platform contract as follows:
 - an empty attachment URL is valid, and a supplied URL is streamed with a size
   limit;
 - answers use the platform submit endpoint and are sent only with `--submit`;
+- a candidate from a newly reset instance is retried once after 30 seconds when
+  the answer oracle initially reports a rejection, covering observed instance
+  synchronization delay;
 - cleanup is local because the contract does not expose a stop endpoint.
 
 First perform a read-only discovery pass. Omit `--submit`:

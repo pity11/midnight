@@ -87,3 +87,27 @@ def test_two_gate_instances_share_atomic_reservation(tmp_path):
         assert first_delegate.calls + second_delegate.calls == 1
 
     asyncio.run(scenario())
+
+
+def test_dry_run_candidate_can_be_promoted_once(tmp_path):
+    async def scenario():
+        ledger = tmp_path / "submissions.sqlite"
+        dry_delegate = CountingSubmitter()
+        dry_gate = SubmissionGate(
+            dry_delegate, enabled=False, ledger_path=ledger, namespace="run-1"
+        )
+        dry_result = await dry_gate.submit("c1", "flag{candidate}")
+        assert dry_result.status == "dry_run"
+        assert dry_delegate.calls == 0
+
+        live_delegate = CountingSubmitter()
+        live_gate = SubmissionGate(
+            live_delegate, enabled=True, ledger_path=ledger, namespace="run-1"
+        )
+        live_result = await live_gate.submit("c1", "flag{candidate}")
+        duplicate = await live_gate.submit("c1", "flag{candidate}")
+        assert live_result.accepted and live_result.submitted
+        assert duplicate.status == "duplicate"
+        assert live_delegate.calls == 1
+
+    asyncio.run(scenario())

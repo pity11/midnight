@@ -21,12 +21,22 @@ def _json(data: object) -> httpx.Response:
 def test_ichunqiu_inventory_reset_download_and_submit(tmp_path, monkeypatch):
     monkeypatch.setenv("MIDNIGHT_PLATFORM_TOKEN", "team-token-for-test")
     requests: list[httpx.Request] = []
+    reset_challenges: set[str] = set()
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if request.url.host != "files.invalid":
             assert request.url.params.get("token") == "team-token-for-test"
         if request.url.path == "/questions":
+            pwn_connection = (
+                {
+                    "docker_url": "nc 192.0.2.5 31337",
+                    "docker_ip": "192.0.2.5",
+                    "docker_port": "31337",
+                }
+                if "pwn-1" in reset_challenges
+                else []
+            )
             return _json(
                 {
                     "code": 0,
@@ -43,11 +53,7 @@ def test_ichunqiu_inventory_reset_download_and_submit(tmp_path, monkeypatch):
                             "description": "test",
                             "interactive": "true",
                             "capabilities": ["docker"],
-                            "connection": {
-                                "docker_url": "nc 192.0.2.5 31337",
-                                "docker_ip": "192.0.2.5",
-                                "docker_port": "31337",
-                            },
+                            "connection": pwn_connection,
                             "extensions": {"pwn": "context"},
                         },
                         {
@@ -73,6 +79,7 @@ def test_ichunqiu_inventory_reset_download_and_submit(tmp_path, monkeypatch):
             )
         if request.url.path == "/reset":
             assert request.url.params.get("question_id") in {"pwn-1", "web-1"}
+            reset_challenges.add(str(request.url.params.get("question_id")))
             return _json({"code": 0, "message": "操作成功"})
         if request.url.path == "/submit":
             assert request.method == "GET"
@@ -97,14 +104,16 @@ def test_ichunqiu_inventory_reset_download_and_submit(tmp_path, monkeypatch):
         adapter = IchunqiuPlatformAdapter(config, client=client)
         challenges = await adapter.list_challenges()
         assert [item["id"] for item in challenges] == ["pwn-1", "web-1"]
-        assert challenges[0]["remote"] == "192.0.2.5:31337"
+        assert challenges[0]["remote"] is None
         assert challenges[1]["remote"] == "http://web.invalid:80"
         assert 'Capabilities: ["docker"]' in challenges[0]["description"]
 
         await adapter.start_challenge("pwn-1")
         await adapter.start_challenge("web-1")
         reset_requests = [request for request in requests if request.url.path == "/reset"]
-        assert len(reset_requests) == 2
+        assert len(reset_requests) == 1
+        refreshed = await adapter.fetch("pwn-1")
+        assert refreshed["remote"] == "192.0.2.5:31337"
 
         paths = await adapter.download_files("pwn-1", str(tmp_path))
         assert len(paths) == 1
@@ -189,6 +198,28 @@ def test_ichunqiu_rejected_submission_is_a_result(monkeypatch):
     asyncio.run(scenario())
 
 
+def test_ichunqiu_accepts_observed_success_message_without_status(monkeypatch):
+    monkeypatch.setenv("MIDNIGHT_PLATFORM_TOKEN", "token")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _json({"code": 0, "message": "恭喜您，回答正确"})
+
+    async def scenario() -> None:
+        client = httpx.AsyncClient(
+            base_url="https://api.invalid",
+            transport=httpx.MockTransport(handler),
+        )
+        adapter = IchunqiuPlatformAdapter(
+            IchunqiuConfig(base_url="https://api.invalid"), client=client
+        )
+        result = await adapter.submit("one", "flag{right}")
+        assert result.accepted
+        assert result.status == "accepted"
+        await client.aclose()
+
+    asyncio.run(scenario())
+
+
 def test_platform_loader_selects_ichunqiu_adapter(tmp_path, monkeypatch):
     monkeypatch.setenv("MIDNIGHT_PLATFORM_TOKEN", "token")
     config = tmp_path / "platform.yaml"
@@ -232,6 +263,60 @@ def test_platform_http_error_does_not_expose_query_token(monkeypatch):
         assert message == "challenge query returned HTTP 403"
         assert token not in message
         assert "?token=" not in message
+        await client.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_interactive_submission_retries_after_instance_reset(monkeypatch):
+    monkeypatch.setenv("MIDNIGHT_PLATFORM_TOKEN", "token")
+    was_reset = False
+    submissions = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal was_reset, submissions
+        if request.url.path == "/questions":
+            connection = {"docker_ip": "192.0.2.1", "docker_port": 31337} if was_reset else []
+            return _json(
+                {
+                    "code": 0,
+                    "data": [
+                        {
+                            "question_id": "dynamic",
+                            "title": "dynamic",
+                            "category": "pwn",
+                            "interactive": "true",
+                            "connection": connection,
+                        }
+                    ],
+                }
+            )
+        if request.url.path == "/reset":
+            was_reset = True
+            return _json({"code": 0, "message": "操作成功"})
+        if request.url.path == "/submit":
+            submissions += 1
+            if submissions == 1:
+                return _json({"code": 0, "message": "答案错误", "status": 0})
+            return _json({"code": 0, "message": "恭喜您，回答正确"})
+        return httpx.Response(404)
+
+    async def scenario() -> None:
+        client = httpx.AsyncClient(
+            base_url="https://api.invalid",
+            transport=httpx.MockTransport(handler),
+        )
+        adapter = IchunqiuPlatformAdapter(
+            IchunqiuConfig(
+                base_url="https://api.invalid",
+                submission_retry_delay_seconds=0,
+            ),
+            client=client,
+        )
+        await adapter.start_challenge("dynamic")
+        result = await adapter.submit("dynamic", "flag{synced}")
+        assert result.accepted
+        assert submissions == 2
         await client.aclose()
 
     asyncio.run(scenario())

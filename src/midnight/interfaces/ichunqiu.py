@@ -33,6 +33,8 @@ class IchunqiuConfig:
     max_attachment_bytes: int = 256 * 1024 * 1024
     include_solved: bool = False
     reset_poll_seconds: int = 20
+    submission_retry_attempts: int = 1
+    submission_retry_delay_seconds: float = 30.0
     user_agent: str = "Midnight-CTF-Agent/1.0"
     trust_env: bool = False
     endpoints: IchunqiuEndpoints = field(default_factory=IchunqiuEndpoints)
@@ -47,6 +49,10 @@ class IchunqiuConfig:
             raise ValueError("max_attachment_bytes must be positive")
         if self.reset_poll_seconds <= 0:
             raise ValueError("reset_poll_seconds must be positive")
+        if self.submission_retry_attempts < 0:
+            raise ValueError("submission_retry_attempts must not be negative")
+        if self.submission_retry_delay_seconds < 0:
+            raise ValueError("submission_retry_delay_seconds must not be negative")
         if not self.user_agent.strip():
             raise ValueError("user_agent must not be empty")
 
@@ -89,6 +95,7 @@ class IchunqiuPlatformAdapter:
         )
         self._raw: dict[str, dict[str, Any]] = {}
         self._attachments: dict[str, list[str]] = {}
+        self._reset_challenges: set[str] = set()
 
     def _token(self) -> str:
         token = os.environ.get(self.config.token_env, "").strip()
@@ -272,12 +279,15 @@ class IchunqiuPlatformAdapter:
             item = self._raw[challenge_id]
         if not _truthy(item.get("interactive")):
             return
+        if self._remote(item, _category(item.get("category"))):
+            return
         response = await self.client.get(
             self.config.endpoints.reset,
             params=self._params(question_id=challenge_id),
         )
         self._raise_for_status(response, "environment reset")
         self._check_envelope(response.json(), "environment reset")
+        self._reset_challenges.add(challenge_id)
         for attempt in range(self.config.reset_poll_seconds):
             items = await self._inventory()
             current = next(
@@ -297,18 +307,37 @@ class IchunqiuPlatformAdapter:
         return None
 
     async def submit(self, challenge_id: str, flag: str) -> SubmitResult:
-        response = await self.client.get(
-            self.config.endpoints.submit,
-            params=self._params(question_id=challenge_id, answer=flag),
-        )
-        self._raise_for_status(response, "answer submission")
-        payload = response.json()
-        if not isinstance(payload, dict):
-            raise TypeError("answer submission response must be a JSON object")
-        accepted = str(payload.get("code")) == "0" and _truthy(payload.get("status"))
-        return SubmitResult(
-            accepted=accepted,
-            message=str(payload.get("message") or ""),
-            points=None,
-            status="accepted" if accepted else "rejected",
-        )
+        attempts = 1
+        if challenge_id in self._reset_challenges:
+            attempts += self.config.submission_retry_attempts
+        result: SubmitResult | None = None
+        for attempt in range(attempts):
+            response = await self.client.get(
+                self.config.endpoints.submit,
+                params=self._params(question_id=challenge_id, answer=flag),
+            )
+            self._raise_for_status(response, "answer submission")
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise TypeError("answer submission response must be a JSON object")
+            message = str(payload.get("message") or "")
+            accepted_message = any(
+                marker in message for marker in ("回答正确", "答案正确", "恭喜您")
+            )
+            accepted = accepted_message or (
+                str(payload.get("code")) == "0" and _truthy(payload.get("status"))
+            )
+            result = SubmitResult(
+                accepted=accepted,
+                message=message,
+                points=None,
+                status="accepted" if accepted else "rejected",
+            )
+            if accepted:
+                self._reset_challenges.discard(challenge_id)
+                return result
+            if attempt + 1 < attempts:
+                await asyncio.sleep(self.config.submission_retry_delay_seconds)
+        if result is None:  # pragma: no cover - attempts is always at least one
+            raise RuntimeError("answer submission did not run")
+        return result

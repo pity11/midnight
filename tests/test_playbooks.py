@@ -35,6 +35,12 @@ def test_playbook_selection_uses_observable_signals():
     assert find_playbooks(
         "pwn", "unsafe Rust arr_ptr.offset read_exact into a fixed stack array"
     )[0].key == "pwn-oversized-stack-write"
+    ret2libc = render_playbooks("pwn", "libc puts got plt system")
+    assert "post-input banner" in ret2libc
+    assert "recvline().rstrip()" in ret2libc
+    xxe = render_playbooks("web", "XML XXE external entity parser")
+    assert "root HTML and linked JavaScript" in xxe
+    assert "generic flag regex" in xxe
 
 
 def test_catalog_has_no_benchmark_specific_material():

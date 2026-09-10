@@ -7,6 +7,9 @@ timeout_seconds: 20
 max_attachment_bytes: 268435456
 include_solved: false
 reset_poll_seconds: 20
+# A newly reset instance may expose its flag before the answer oracle synchronizes.
+submission_retry_attempts: 1
+submission_retry_delay_seconds: 30
 user_agent: "Midnight-CTF-Agent/1.0"
 # Keep organizer traffic independent from ambient shell proxy variables.
 trust_env: false

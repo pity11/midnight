@@ -106,17 +106,25 @@ class SubmissionGate:
             )
 
     def _reserve_persistent(self, challenge_id: str, digest: str) -> bool:
-        """Atomically reserve a candidate across independent runner processes."""
+        """Atomically reserve a new candidate or promote a dry-run candidate."""
         if self.ledger_path is None:
             return True
         self._initialize_ledger()
         with sqlite3.connect(self.ledger_path, timeout=10) as connection:
             cursor = connection.execute(
-                """INSERT OR IGNORE INTO submissions
+                """INSERT INTO submissions
                    (namespace, challenge_id, candidate_digest, accepted, submitted,
                     status, message, points)
                    VALUES (?, ?, ?, 0, 0, 'duplicate',
-                           'submission reserved; previous verdict may be unknown', NULL)""",
+                           'submission reserved; previous verdict may be unknown', NULL)
+                   ON CONFLICT(namespace, challenge_id, candidate_digest) DO UPDATE SET
+                       accepted = 0,
+                       submitted = 0,
+                       status = 'duplicate',
+                       message = 'submission reserved; previous verdict may be unknown',
+                       points = NULL
+                   WHERE submissions.status = 'dry_run'
+                     AND submissions.submitted = 0""",
                 (self.namespace, challenge_id, digest),
             )
             return cursor.rowcount == 1
@@ -137,7 +145,13 @@ class SubmissionGate:
             prior = self._seen.get(key)
             if prior is None:
                 prior = self._read_persistent(challenge_id, digest)
-            if prior is not None:
+            promotable_dry_run = (
+                self.enabled
+                and prior is not None
+                and prior.status == "dry_run"
+                and not prior.submitted
+            )
+            if prior is not None and not promotable_dry_run:
                 return SubmitResult(
                     accepted=prior.accepted,
                     submitted=False,

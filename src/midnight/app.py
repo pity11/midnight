@@ -309,7 +309,10 @@ async def _amain(args: argparse.Namespace) -> int:
     else:
         challenges = await provider.list_challenges()
     if not challenges:
-        log.warning("no challenges found under %s", Path(args.challenges_dir).resolve())
+        if platform is not None:
+            log.info("platform reported no unsolved challenges")
+        else:
+            log.warning("no challenges found under %s", Path(args.challenges_dir).resolve())
         if platform is not None:
             await platform.close()
         return 0
