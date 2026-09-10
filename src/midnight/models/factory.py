@@ -33,7 +33,11 @@ def build_llm(role: str = "default", *, config: AppConfig | None = None) -> Base
         return StubReActModel()
 
     provider_id, provider = provider_spec_for(spec.provider, config=config)
-    model_name = _env_or_default(provider.model_env, spec.model or provider.model)
+    model_name = _env_or_default(
+        provider.model_env,
+        spec.model or provider.model,
+        universal_env="MIDNIGHT_LLM_MODEL" if provider.adapter == "openai_compatible" else None,
+    )
     if provider.adapter == "openai_compatible":
         model = _build_openai_compatible(provider_id, provider, model_name, spec)
     else:
@@ -45,15 +49,24 @@ def build_llm(role: str = "default", *, config: AppConfig | None = None) -> Base
     return model
 
 
-def _env_or_default(env_name: str | None, default: str | None) -> str:
+def _env_or_default(
+    env_name: str | None,
+    default: str | None,
+    *,
+    universal_env: str | None = None,
+) -> str:
+    universal = os.environ.get(universal_env, "").strip() if universal_env else ""
     value = os.environ.get(env_name, "").strip() if env_name else ""
-    resolved = value or (default or "").strip()
+    resolved = universal or value or (default or "").strip()
     if not resolved:
         raise RuntimeError("MODEL_CONFIGURATION_EMPTY")
     return resolved
 
 
-def _api_key(provider: ProviderSpec) -> str:
+def _api_key(provider: ProviderSpec, *, universal_env: str | None = None) -> str:
+    universal = os.environ.get(universal_env, "").strip() if universal_env else ""
+    if universal:
+        return universal
     if not provider.api_key_env:
         return ""
     value = os.environ.get(provider.api_key_env, "").strip()
@@ -67,11 +80,15 @@ def _build_openai_compatible(
 ) -> BaseChatModel:
     from langchain_openai import ChatOpenAI
 
-    base_url = _env_or_default(provider.base_url_env, provider.base_url)
+    base_url = _env_or_default(
+        provider.base_url_env,
+        provider.base_url,
+        universal_env="MIDNIGHT_LLM_BASE_URL",
+    )
     if provider.require_https and not base_url.startswith("https://"):
         raise RuntimeError(f"MODEL_BASE_URL_REQUIRES_HTTPS:{provider_id}")
     return ChatOpenAI(
-        api_key=SecretStr(_api_key(provider)),
+        api_key=SecretStr(_api_key(provider, universal_env="MIDNIGHT_LLM_API_KEY")),
         base_url=base_url.rstrip("/"),
         model=model_name,
         temperature=spec.temperature,

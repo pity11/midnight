@@ -184,8 +184,7 @@ def get_config() -> AppConfig:
         models={k: ModelSpec(**v) for k, v in models_raw.items()},
         images={k: ImageSpec(**v) for k, v in images_raw.items()},
         sandbox_profiles={
-            key: SandboxProfile(**value)
-            for key, value in sandbox_profiles_raw.items()
+            key: SandboxProfile(**value) for key, value in sandbox_profiles_raw.items()
         },
         tools=_flatten_tools(tools_raw),
         settings=_apply_env_overrides(Settings(**settings_raw)),
@@ -219,8 +218,13 @@ def effective_model_id(role: str, *, config: AppConfig | None = None) -> str:
     if spec.model and spec.model.startswith("stub:"):
         return spec.model
     provider_id, provider = provider_spec_for(spec.provider, config=cfg)
+    universal_model = (
+        os.environ.get("MIDNIGHT_LLM_MODEL", "").strip()
+        if provider.adapter == "openai_compatible"
+        else ""
+    )
     env_model = os.environ.get(provider.model_env, "").strip() if provider.model_env else ""
-    model = env_model or (spec.model or provider.model).strip()
+    model = universal_model or env_model or (spec.model or provider.model).strip()
     if not model:
         raise RuntimeError("MODEL_CONFIGURATION_EMPTY")
     return f"{provider_id}:{model}"

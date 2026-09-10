@@ -48,11 +48,11 @@ MIDNIGHT_MODELS_FILE=models.stub.yaml uv run midnight --id sanity_misc --run-id 
 ```
 
 Cloud model credentials are optional when using the bundled stub configuration.
-The default live provider is the CUC OpenAI-compatible gateway with a strict
-JSON tool-action protocol. Put `CUC_API_KEY` in a mode-600 `.env`; blank
-`CUC_BASE_URL` and `CUC_MODEL` values use the reviewed defaults in
-`config/providers.yaml`. Set `MIDNIGHT_ENV_FILE` to reuse an existing protected
-environment file without copying its credentials.
+The default live provider accepts venue-supplied OpenAI-compatible settings from
+`MIDNIGHT_LLM_API_KEY`, `MIDNIGHT_LLM_BASE_URL`, and `MIDNIGHT_LLM_MODEL`, using
+a strict JSON tool-action protocol. The previously tested `CUC_*` variables and
+reviewed defaults remain backward-compatible fallbacks. Set `MIDNIGHT_ENV_FILE`
+to reuse an existing protected environment file without copying credentials.
 Keep real credentials in `.env`; the file is excluded from version control.
 
 The short operational procedure used before a live competition is documented in

@@ -242,6 +242,34 @@ def test_cuc_factory_uses_registry_defaults_without_network(monkeypatch):
     assert model.delegate.extra_body == {"max_tokens": 1024}
 
 
+def test_competition_llm_environment_overrides_legacy_gateway(monkeypatch):
+    from midnight.config import ModelSpec, effective_model_id, get_config
+    from midnight.models import build_llm
+
+    monkeypatch.setenv("CUC_API_KEY", "legacy-test-key")
+    monkeypatch.setenv("CUC_BASE_URL", "https://legacy.invalid/v1")
+    monkeypatch.setenv("CUC_MODEL", "legacy-model")
+    monkeypatch.setenv("MIDNIGHT_LLM_API_KEY", "venue-test-key")
+    monkeypatch.setenv("MIDNIGHT_LLM_BASE_URL", "https://venue.invalid/v1")
+    monkeypatch.setenv("MIDNIGHT_LLM_MODEL", "venue-deepseek")
+    cfg = get_config()
+    cfg = cfg.model_copy(
+        update={
+            "active_provider": "competition",
+            "models": {**cfg.models, "classify": ModelSpec(max_tokens=1024)},
+        }
+    )
+
+    model = build_llm("classify", config=cfg)
+
+    assert isinstance(model, JsonProtocolChatModel)
+    assert model.provider_id == "competition"
+    assert model.delegate.model_name == "venue-deepseek"
+    assert str(model.delegate.openai_api_base) == "https://venue.invalid/v1"
+    assert model.delegate.openai_api_key.get_secret_value() == "venue-test-key"
+    assert effective_model_id("classify", config=cfg) == "competition:venue-deepseek"
+
+
 @pytest.mark.asyncio
 async def test_specialist_returns_tool_exceptions_as_observations():
     @tool

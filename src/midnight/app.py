@@ -116,6 +116,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="make one structured request to the configured default model and exit",
     )
     p.add_argument(
+        "--check-model-tools",
+        action="store_true",
+        help="require the configured model to emit one valid tool action and exit",
+    )
+    p.add_argument(
         "--check-sandboxes",
         action="store_true",
         help="build and validate every specialist image offline, then exit",
@@ -307,6 +312,28 @@ async def _amain(args: argparse.Namespace) -> int:
         if response.status != "PONG":
             raise RuntimeError("MODEL_PREFLIGHT_FAILED")
         log.info("model preflight OK: %s", effective_model_id("default", config=cfg))
+        return 0
+
+    if args.check_model_tools:
+        from langchain_core.tools import tool
+
+        from midnight.models.factory import build_llm
+
+        @tool
+        def midnight_connection_probe(value: str) -> str:
+            """A safe preflight tool that accepts the exact value PING."""
+            return value
+
+        probe = build_llm("default", config=cfg).bind_tools([midnight_connection_probe])
+        response = await probe.ainvoke(
+            "Preflight only. Call midnight_connection_probe exactly once with value PING."
+        )
+        calls = list(getattr(response, "tool_calls", None) or [])
+        if len(calls) != 1 or calls[0].get("name") != "midnight_connection_probe":
+            raise RuntimeError("MODEL_TOOL_PREFLIGHT_FAILED")
+        if (calls[0].get("args") or {}).get("value") != "PING":
+            raise RuntimeError("MODEL_TOOL_PREFLIGHT_FAILED")
+        log.info("model tool protocol preflight OK")
         return 0
 
     if args.check_sandboxes:

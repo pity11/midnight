@@ -18,6 +18,7 @@ Usage: scripts/competition COMMAND [ARG]
 
 Commands:
   local-preflight       Check configuration, organizer model, and local sandboxes
+  model-preflight       Check model connection, structured JSON, and tool actions
   platform-preflight    Read and normalize the official challenge inventory
   dry-run ID            Solve one organizer test task without submitting
   submit-test ID        Solve and submit one organizer-authorized test task
@@ -144,7 +145,14 @@ case "$command" in
     docker info >/dev/null
     run_midnight --check-config
     run_midnight --check-model
+    run_midnight --check-model-tools
     run_midnight --check-sandboxes
+    ;;
+  model-preflight)
+    require_runtime
+    run_midnight --check-config
+    run_midnight --check-model
+    run_midnight --check-model-tools
     ;;
   platform-preflight)
     require_runtime

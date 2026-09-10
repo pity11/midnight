@@ -25,17 +25,19 @@ cp config/platform.ichunqiu.example.yaml config/platform.local.yaml
 `.env` 的最小内容为：
 
 ```dotenv
-CUC_API_KEY=主办方发放的大模型密钥
-CUC_BASE_URL=
-CUC_MODEL=
+MIDNIGHT_LLM_API_KEY=主办方发放的大模型APIKey
+MIDNIGHT_LLM_BASE_URL=主办方提供的OpenAI兼容API地址
+MIDNIGHT_LLM_MODEL=主办方指定的模型名
 MIDNIGHT_PLATFORM_TOKEN=队伍Token
 ```
 
-`CUC_BASE_URL` 和 `CUC_MODEL` 留空时使用项目中已经核验的默认值。只有主办方明确给出新地址或新模型名时才填写，不能把说明文字或占位符写成配置值。队伍 Token 只用于赛事平台；`CUC_API_KEY` 只用于模型网关，两者不能互换。
+`MIDNIGHT_LLM_BASE_URL` 应完整保留主办方要求的路径（通常包含 `/v1`），`MIDNIGHT_LLM_MODEL` 必须使用主办方给出的精确模型标识。队伍 Token 只用于题目查询、环境重置和 Flag 提交；模型 APIKey 只用于模型网关，两者不能互换。现有 `CUC_*` 变量仅作为赛前测试网关的兼容回退；现场填写的 `MIDNIGHT_LLM_*` 优先级更高。
 
 不要通过 Git、聊天记录或公开文件传递 `.env`。同一轮只在比赛指定的单台电脑上运行正式命令，避免多个进程使用相同 Token 重复取题或提交。
 
 ## 2. 赛前冻结与离线准备
+
+`scripts/competition` 不会启动 Docker Desktop。可以在 Docker Desktop 设置中启用登录时启动，也可以在准备阶段手工启动；必须等待 `docker info` 成功后再运行 Agent。
 
 启动 Docker Desktop，并在项目根目录执行：
 
@@ -44,7 +46,47 @@ scripts/competition local-preflight
 scripts/competition platform-preflight
 ```
 
-`local-preflight` 会检查项目配置、真实模型连通性，以及 Pwn、Reverse、Web、Crypto、Forensics、Misc 和兜底沙箱的工具能力。第一次运行可能构建镜像，必须在赛前联网完成。`platform-preflight` 只查询题目，不重置环境、不解题、不提交。
+`local-preflight` 会检查项目配置、真实模型连通性、结构化 JSON、工具动作协议，以及 Pwn、Reverse、Web、Crypto、Forensics、Misc 和兜底沙箱的工具能力。第一次运行可能构建镜像，必须在赛前联网完成。`platform-preflight` 只查询题目，不重置环境、不解题、不提交。
+
+## 3. 现场 30 分钟准备阶段
+
+现场领取模型 APIKey、Base URL、模型名和新队伍 Token 后，打开本地凭据文件：
+
+```bash
+nano .env
+```
+
+将 `MIDNIGHT_LLM_API_KEY`、`MIDNIGHT_LLM_BASE_URL`、`MIDNIGHT_LLM_MODEL` 和 `MIDNIGHT_PLATFORM_TOKEN` 替换为现场值。Nano 中按 `Ctrl-O`、回车保存，再按 `Ctrl-X` 退出。不要修改变量名，不要在等号两侧添加空格，不要给值添加说明文字。
+
+如果主办方只更换 Token 和模型参数，`config/platform.local.yaml` 不需要修改；如果现场下发了新的题目查询、重置或提交地址，必须按新接口文档更新该文件的 `base_url` 和三个 endpoint。
+
+先用快速模型预检验证现场模型，而不启动解题：
+
+```bash
+scripts/competition model-preflight
+```
+
+成功时必须同时出现：
+
+```text
+configuration OK
+model preflight OK: competition:现场模型名
+model tool protocol preflight OK
+```
+
+这证明 Base URL、APIKey、模型名、结构化 JSON 和工具动作协议均可用。随后执行：
+
+```bash
+scripts/competition platform-preflight
+```
+
+最后再运行一次完整本地检查，确认 Docker 和镜像正常：
+
+```bash
+scripts/competition local-preflight
+```
+
+如果 `model-preflight` 失败，不能进入正式挑战。优先核对现场提供的 Base URL 是否包含正确路径、模型名是否精确、APIKey 是否属于模型网关；如果主办方接口不是 OpenAI `chat/completions` 兼容格式，需要在准备阶段向裁判索取对应调用范式。
 
 若主办方提供联调题，再按顺序执行：
 
@@ -87,7 +129,7 @@ unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
 
 如果确实需要本机代理，先确认代理程序和端口可用。模型客户端可能读取这些环境变量；赛事平台适配器默认不读取环境代理。
 
-## 3. 正式比赛启动
+## 4. 正式比赛启动
 
 在裁判允许启动 Agent 后，第二环节只执行：
 
@@ -116,7 +158,7 @@ scripts/competition round3
 
 启动后保持终端、Docker Desktop 和赛事网络正常。规则要求自主运行的阶段不要触碰设备；所有操作以现场裁判指令为准。
 
-## 4. 如何判断运行正常
+## 5. 如何判断运行正常
 
 正常启动会看到：
 
@@ -154,7 +196,7 @@ logs/round3/
 
 其中 `events.jsonl` 是事件日志，`report.json` 是结果摘要，`checkpoints.sqlite` 是断点，`submissions.sqlite` 防止同一 run ID 重复提交，`artifacts/` 保存附件，`workspaces/` 保存解题脚本和证据。工作目录可能包含 Flag，不要公开上传 `logs/`。
 
-## 5. 中断与恢复
+## 6. 中断与恢复
 
 如果进程意外中断，只能在规则和裁判允许再次操作时重跑同一命令：
 
@@ -178,24 +220,26 @@ scripts/competition round3
 
 第三环节将 `round2` 改为 `round3`。不要执行会删除全部 Docker 镜像、容器或卷的命令。
 
-## 6. 常见故障
+## 7. 常见故障
 
 - `Missing local Python environment`：`.venv` 未提前安装；回到可联网准备阶段执行 `uv sync --extra dev`。
 - Docker 连接失败：启动 Docker Desktop，再运行 `docker info`。
 - `required credential is missing: MIDNIGHT_PLATFORM_TOKEN`：检查 `.env` 的变量名和值。
-- 模型返回 401/403：检查 `CUC_API_KEY`；不要使用平台 Token。
+- 模型返回 401/403：检查 `MIDNIGHT_LLM_API_KEY`；不要使用平台 Token。
+- 模型返回 404：重点检查 `MIDNIGHT_LLM_BASE_URL` 是否缺少或重复 `/v1`，以及 `MIDNIGHT_LLM_MODEL` 是否为精确名称。
 - 平台返回 401/403：检查 `MIDNIGHT_PLATFORM_TOKEN`；不要使用模型密钥。
 - `platform reported no unsolved challenges`：只读预检下通常表示题未开放或已经解完；正式命令会先等待 5 分钟。
 - Apple Silicon 上 Pwn/Reverse 较慢：amd64 镜像仿真会增加开销，因此 Pwn/Reverse 已被单独限制为一个本地重型分析槽。
 
-## 7. 现场最短清单
+## 8. 现场最短清单
 
 准备阶段：
 
 ```bash
 cd /path/to/midnight
-scripts/competition local-preflight
+scripts/competition model-preflight
 scripts/competition platform-preflight
+scripts/competition local-preflight
 ```
 
 第二环节：

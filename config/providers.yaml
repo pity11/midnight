@@ -1,6 +1,22 @@
-active_provider: cuc
+active_provider: competition
 
 providers:
+  # Primary competition provider. MIDNIGHT_LLM_* overrides are preferred at
+  # runtime; the CUC_* fields remain as a backward-compatible tested fallback.
+  competition:
+    adapter: openai_compatible
+    base_url: https://openai.cuc.edu.cn/v1
+    base_url_env: CUC_BASE_URL
+    api_key_env: CUC_API_KEY
+    model: cuc/deepseek
+    model_env: CUC_MODEL
+    connect_timeout: 10
+    timeout: 120
+    max_retries: 0
+    tool_mode: json_protocol
+    require_https: true
+
+  # Legacy explicit selector retained for existing local configurations.
   cuc:
     adapter: openai_compatible
     base_url: https://openai.cuc.edu.cn/v1
