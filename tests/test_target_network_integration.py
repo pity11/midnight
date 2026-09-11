@@ -9,6 +9,7 @@ import uuid
 
 import pytest
 
+from midnight.config import ImageSpec, SandboxProfile, get_config
 from midnight.env.container_manager import ContainerManager
 from midnight.env.ctf_environment import CTFEnvironment
 
@@ -56,7 +57,17 @@ def test_target_only_relay_allows_declared_target_and_blocks_other_egress():
     ).strip()
 
     async def exercise() -> None:
-        manager = ContainerManager(run_id=f"relay-test-{suffix}")
+        config = get_config().model_copy(deep=True)
+        config.images["misc"] = ImageSpec(
+            image="midnight/smoke-integration:latest",
+            dockerfile="docker/smoke.Dockerfile",
+            platform="linux/amd64",
+            network="none",
+        )
+        config.sandbox_profiles["misc"] = SandboxProfile(
+            required_commands=["python3"]
+        )
+        manager = ContainerManager(config=config, run_id=f"relay-test-{suffix}")
         try:
             relay = await manager.prepare_target_relay(f"{target_ip}:8000")
             solver_id = await manager.create(
