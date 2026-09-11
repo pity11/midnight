@@ -89,6 +89,26 @@ def test_scanner_rejects_unsafe_archive_member(tmp_path):
     assert any(item.rule == "archive-path" for item in caught.value.findings)
 
 
+def test_scanner_reports_encrypted_archive_member_instead_of_crashing(tmp_path, monkeypatch):
+    source = tmp_path / "upstream"
+    (source / "dist").mkdir(parents=True)
+    archive = source / "dist" / "chall"
+    with zipfile.ZipFile(archive, "w") as handle:
+        handle.writestr("evidence.bin", "player data")
+
+    original_open = zipfile.ZipFile.open
+
+    def encrypted_open(self, name, *args, **kwargs):
+        if getattr(name, "filename", name) == "evidence.bin":
+            raise RuntimeError("File is encrypted, password required for extraction")
+        return original_open(self, name, *args, **kwargs)
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", encrypted_open)
+    with pytest.raises(ContaminationError) as caught:
+        BenchmarkStager(source).stage(_spec(), tmp_path / "clean")
+    assert any(item.rule == "archive-encrypted" for item in caught.value.findings)
+
+
 def test_stager_rejects_symlink_source(tmp_path):
     source = tmp_path / "upstream"
     (source / "dist").mkdir(parents=True)

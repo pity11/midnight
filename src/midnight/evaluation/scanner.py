@@ -86,8 +86,19 @@ def _scan_zip(path: Path, patterns: list[re.Pattern[bytes]]) -> list[Finding]:
                         Finding.create(path=logical, rule="archive-limit", detail="scan size exceeded")
                     )
                     break
-                with archive.open(member) as stream:
-                    findings.extend(_scan_bytes(logical, stream.read(), patterns))
+                try:
+                    with archive.open(member) as stream:
+                        findings.extend(_scan_bytes(logical, stream.read(), patterns))
+                except RuntimeError as exc:
+                    if "encrypted" not in str(exc).lower() and "password" not in str(exc).lower():
+                        raise
+                    findings.append(
+                        Finding.create(
+                            path=logical,
+                            rule="archive-encrypted",
+                            detail="encrypted archive member could not be contamination-scanned",
+                        )
+                    )
     except (OSError, zipfile.BadZipFile):
         return []
     return findings
