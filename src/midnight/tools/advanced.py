@@ -5,10 +5,51 @@ from __future__ import annotations
 import base64
 import re
 import shlex
+from pathlib import PurePosixPath
 
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.tools.category import _challenge_url, _result_text
 from midnight.tools.registry import register_tool
+
+
+@register_tool(name="archive_extract", groups=["misc", "forensics"])
+def make_archive_extract(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def archive_extract(
+        archive: str, output_dir: str = "/ctf/extracted", password: str = ""
+    ) -> str:
+        """Extract one local archive into a dedicated directory and inventory it.
+
+        Supports formats handled by 7-Zip, including ZIP, 7z, RAR, tar and
+        compressed tar variants. Supply a known or recovered password when
+        required. The dedicated destination is recreated for each call.
+        """
+        output_path = PurePosixPath(output_dir)
+        if (
+            not output_dir
+            or output_dir in {".", "/", "/ctf"}
+            or ".." in output_path.parts
+            or (output_path.is_absolute() and not str(output_path).startswith("/ctf/"))
+        ):
+            raise ValueError("output_dir must be a dedicated path within the challenge workspace")
+        source = shlex.quote(archive)
+        destination = shlex.quote(output_dir)
+        password_arg = shlex.quote(f"-p{password}") if password else "-p-"
+        command = (
+            f"test -f {source} || {{ echo '[error] archive not found' >&2; exit 2; }}; "
+            f"rm -rf -- {destination}; mkdir -p -- {destination}; "
+            f"7z x -y -bd -bb0 {password_arg} -o{destination} -- {source}; "
+            "code=$?; test \"$code\" -eq 0 || exit \"$code\"; "
+            f"echo '[files]'; find {destination} -xdev -maxdepth 8 -type f "
+            "-printf '%s\t%p\n' 2>/dev/null | sort -n | head -240; "
+            f"echo '[symlinks]'; find {destination} -xdev -maxdepth 8 -type l "
+            "-printf '%p -> %l\n' 2>/dev/null | head -80"
+        )
+        return _result_text(await env.exec(command, timeout=600))
+
+    return archive_extract
 
 
 @register_tool(name="qr_decode", groups=["misc", "forensics"])

@@ -7,7 +7,12 @@ from types import SimpleNamespace
 import pytest
 
 from midnight.interfaces.submitter import SubmitResult
-from midnight.orchestrator.scheduler import Result, Scheduler, _transcript_metrics
+from midnight.orchestrator.scheduler import (
+    Result,
+    Scheduler,
+    _checkpoint_progress,
+    _transcript_metrics,
+)
 
 
 class FixtureProvider:
@@ -134,6 +139,27 @@ def test_transcript_metrics_count_usage_repeats_and_errors():
     }
 
 
+def test_checkpoint_progress_deduplicates_nested_messages():
+    message = SimpleNamespace(
+        id="message-1",
+        type="ai",
+        usage_metadata={"input_tokens": 12, "output_tokens": 3},
+        additional_kwargs={},
+        tool_calls=[{"name": "pcap_triage", "args": {"path": "capture.pcap"}}],
+        content="",
+    )
+    progress = _checkpoint_progress(
+        [
+            {"attempt": 1, "messages": [message]},
+            {"attempt": 2, "messages": [message]},
+        ]
+    )
+    assert progress["attempts"] == 2
+    assert progress["input_tokens"] == 12
+    assert progress["output_tokens"] == 3
+    assert progress["tool_calls"] == 1
+
+
 def test_scheduler_rejects_unknown_agent_mode(tmp_path):
     source = tmp_path / "source.bin"
     source.write_bytes(b"fixture")
@@ -198,6 +224,46 @@ async def test_global_run_timeout_is_shared_by_all_tasks(tmp_path):
     elapsed = asyncio.get_running_loop().time() - started
     assert elapsed < 0.3
     assert [result.status for result in results] == ["timeout", "timeout"]
+
+
+@pytest.mark.asyncio
+async def test_task_timeout_recovers_durable_checkpoint_metrics(tmp_path):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"fixture")
+    message = SimpleNamespace(
+        id="durable-message",
+        type="ai",
+        usage_metadata={"input_tokens": 7, "output_tokens": 2},
+        additional_kwargs={},
+        tool_calls=[{"name": "log_triage", "args": {"path": "."}}],
+        content="",
+    )
+
+    class DurableStore:
+        def latest_channel_values(self, thread_id):
+            assert thread_id.startswith("timed-run:pwn-1:")
+            return [{"attempt": 2, "messages": [message]}]
+
+    scheduler = Scheduler(
+        provider=FixtureProvider(source),
+        submitter=NoopSubmitter(),
+        artifacts_root=tmp_path / "artifacts",
+        run_id="timed-run",
+        per_task_timeout=0.01,
+        checkpoint_store=DurableStore(),
+    )
+
+    async def slow_solve(challenge):
+        await asyncio.sleep(1)
+        return Result(challenge["id"], "failed")
+
+    scheduler._solve_one = slow_solve
+    result = (await scheduler.solve_all([{"id": "pwn-1"}]))[0]
+    assert result.status == "timeout"
+    assert result.attempts == 2
+    assert result.input_tokens == 7
+    assert result.output_tokens == 2
+    assert result.tool_calls == 1
 
 
 @pytest.mark.asyncio

@@ -1438,6 +1438,139 @@ def make_log_triage(*, env: CTFEnvironment, **_) -> object:
     return log_triage
 
 
+@register_tool(name="linux_ir_triage", groups=["forensics"])
+def make_linux_ir_triage(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    program = r'''import collections
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1]).resolve()
+output = pathlib.Path(sys.argv[2])
+if not root.is_dir():
+    print("[error] root directory not found", file=sys.stderr)
+    raise SystemExit(2)
+
+skip_dirs = {".git", "dev", "proc", "sys", "run", "snap"}
+high_value = ("etc/", "var/log/", "var/www/", "home/", "root/", "tmp/",
+              "opt/", "usr/local/", "var/spool/cron/")
+text_suffixes = {"", ".log", ".txt", ".conf", ".cfg", ".ini", ".service",
+                 ".timer", ".socket", ".sh", ".php", ".jsp", ".jspx",
+                 ".py", ".pl", ".rb", ".sql", ".history", ".json", ".xml"}
+patterns = {
+    "email": re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
+    "reverse-shell": re.compile(r"/dev/tcp/|\bnc\b.{0,80}\s-e\s|\bsocat\b.{0,100}(EXEC|TCP)|bash\s+-[ci]", re.I),
+    "network-endpoint": re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}:\d{2,5}\b"),
+    "webshell": re.compile(r"eval\s*\(|assert\s*\(|base64_decode|shell_exec|passthru\s*\(|Runtime\.getRuntime|ProcessBuilder", re.I),
+    "download-exec": re.compile(r"\b(curl|wget|certutil|bitsadmin)\b.{0,180}(https?://|ftp://)|chmod\s+\+x", re.I),
+    "persistence": re.compile(r"authorized_keys|crontab|systemctl\s+enable|/etc/rc\.local|LD_PRELOAD", re.I),
+    "mysql-udf": re.compile(r"CREATE\s+(AGGREGATE\s+)?FUNCTION|sys_exec|sys_eval|plugin_dir|lib_mysqludf", re.I),
+}
+
+accounts = []
+passwd = root / "etc/passwd"
+if passwd.is_file():
+    for line in passwd.read_text(errors="replace").splitlines():
+        parts = line.split(":")
+        if len(parts) >= 7 and parts[2].isdigit():
+            uid = int(parts[2])
+            shell = parts[6]
+            if uid == 0 or (uid >= 1000 and not shell.endswith(("nologin", "false"))):
+                accounts.append({"user": parts[0], "uid": uid, "gid": parts[3],
+                                 "home": parts[5], "shell": shell})
+
+special_files = []
+indicators = []
+scanned = 0
+for base, dirs, files in os.walk(root, followlinks=False):
+    dirs[:] = [name for name in dirs if name not in skip_dirs]
+    for name in files:
+        scanned += 1
+        if scanned > 30000:
+            break
+        path = pathlib.Path(base) / name
+        try:
+            relative = path.relative_to(root).as_posix()
+            info = path.lstat()
+        except (OSError, ValueError):
+            continue
+        mode = info.st_mode
+        reasons = []
+        if mode & stat.S_ISUID:
+            reasons.append("setuid")
+        if mode & stat.S_ISGID:
+            reasons.append("setgid")
+        try:
+            if "security.capability" in os.listxattr(path, follow_symlinks=False):
+                reasons.append("file-capability")
+        except OSError:
+            pass
+        if stat.S_ISREG(mode) and mode & 0o111 and relative.startswith(("tmp/", "var/tmp/", "var/www/")):
+            reasons.append("executable-in-writable-or-web-path")
+        if reasons:
+            special_files.append({"path": relative, "mode": oct(stat.S_IMODE(mode)),
+                                  "reasons": reasons, "size": info.st_size})
+        if not stat.S_ISREG(mode) or info.st_size > 4 * 1024 * 1024:
+            continue
+        if not relative.startswith(high_value) and path.suffix.lower() not in text_suffixes:
+            continue
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            continue
+        if raw[:8192].count(b"\x00") > 8:
+            continue
+        text = raw.decode("utf-8", errors="replace")
+        for number, line in enumerate(text.splitlines(), 1):
+            for kind, pattern in patterns.items():
+                if pattern.search(line):
+                    indicators.append({"kind": kind, "path": relative,
+                                       "line": number, "text": line.strip()[:300]})
+                    if len(indicators) >= 400:
+                        break
+            if len(indicators) >= 400:
+                break
+        if len(indicators) >= 400:
+            break
+    if scanned > 30000 or len(indicators) >= 400:
+        break
+
+report = {"root": root.as_posix(), "files_scanned": scanned, "accounts": accounts,
+          "special_files": special_files[:300], "indicators": indicators}
+output.parent.mkdir(parents=True, exist_ok=True)
+output.write_text(json.dumps(report, ensure_ascii=False, indent=2))
+print(json.dumps({"report": output.as_posix(), "files_scanned": scanned,
+                  "accounts": accounts, "special_files": special_files[:120],
+                  "indicator_counts": collections.Counter(item["kind"] for item in indicators),
+                  "indicators": indicators[:120]}, ensure_ascii=False, indent=2))
+'''
+
+    @tool
+    async def linux_ir_triage(
+        root: str, output: str = "/ctf/linux-ir-report.json"
+    ) -> str:
+        """Inventory a recovered Linux host tree for incident-response pivots.
+
+        Reports interactive and UID-0 accounts, setuid/setgid or capability
+        files, suspicious executables, webshell/reverse-shell traces, network
+        endpoints, persistence hints, email addresses, and MySQL UDF evidence.
+        It reads at most 30,000 files and retains a machine-readable JSON report.
+        """
+        encoded = base64.b64encode(program.encode()).decode()
+        command = (
+            f"python3 -c \"import base64;exec(base64.b64decode('{encoded}'))\" "
+            f"{shlex.quote(root)} {shlex.quote(output)}"
+        )
+        return _result_text(await env.exec(command, timeout=600))
+
+    return linux_ir_triage
+
+
 @register_tool(name="memory_analyze", groups=["forensics"])
 def make_memory_analyze(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool

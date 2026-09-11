@@ -92,6 +92,24 @@ def _transcript_metrics(messages: list) -> dict[str, int]:
     }
 
 
+def _checkpoint_progress(states: list[dict]) -> dict[str, int]:
+    """Merge nested checkpoint state into deduplicated timeout metrics."""
+    messages: list = []
+    seen: set[str] = set()
+    attempts = 0
+    for state in states:
+        attempts = max(attempts, int(state.get("attempt", 0) or 0))
+        for message in state.get("messages") or []:
+            identity = getattr(message, "id", None)
+            if not identity:
+                identity = hashlib.sha256(repr(message).encode()).hexdigest()
+            if identity in seen:
+                continue
+            seen.add(identity)
+            messages.append(message)
+    return {"attempts": attempts, **_transcript_metrics(messages)}
+
+
 class Scheduler:
     def __init__(
         self,
@@ -214,6 +232,17 @@ class Scheduler:
                     )
                     return result
                 except TimeoutError:
+                    progress: dict[str, int] = {}
+                    if self.checkpoint_store is not None and hydrated is not None:
+                        thread_id = CheckpointStore.thread_id(
+                            self.run_id,
+                            challenge_id,
+                            hydrated.get("source_hash") or hydrated.get("round_id"),
+                        )
+                        states = await asyncio.to_thread(
+                            self.checkpoint_store.latest_channel_values, thread_id
+                        )
+                        progress = _checkpoint_progress(states)
                     self._event("challenge_finished", challenge_id, status="timeout")
                     return Result(
                         challenge_id,
@@ -222,6 +251,7 @@ class Scheduler:
                         or (hydrated or ch).get("round_id"),
                         category=(hydrated or ch).get("category_hint"),
                         duration_seconds=round(time.monotonic() - started, 3),
+                        **progress,
                     )
                 except Exception as exc:  # noqa: BLE001
                     self._event(

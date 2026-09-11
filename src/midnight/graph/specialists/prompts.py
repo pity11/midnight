@@ -162,7 +162,10 @@ a reproducible timeline before drawing a conclusion. Use artifact_triage for an
 unknown bundle before selecting a parser.
 For incident-response bundles, call log_triage to identify high-value events and
 then correlate timestamps, users, hosts, processes, network endpoints, and file
-changes. For EVTX inputs, use evtx_triage and correlate event IDs, providers,
+changes. Extract supplied archives with archive_extract. If they contain a Linux
+host tree or backup, run linux_ir_triage on its root before manually following
+the reported accounts, special permissions, persistence, web, network, or MySQL
+pivots. For EVTX inputs, use evtx_triage and correlate event IDs, providers,
 logon IDs, process IDs, and timestamps; use hayabusa_timeline for a broader event
 timeline. For memory images, start with memory_analyze and an OS information
 plugin before process, network, handle, or injected-code plugins. For disk images,

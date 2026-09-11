@@ -66,6 +66,7 @@ misc:
   - pickle_policy_audit
   - pickle_build
   - artifact_triage
+  - archive_extract
   - stego_scan
   - archive_password
   - qr_decode
@@ -78,7 +79,9 @@ forensics:
   - pickle_policy_audit
   - pickle_build
   - artifact_triage
+  - archive_extract
   - log_triage
+  - linux_ir_triage
   - stego_scan
   - memory_analyze
   - evtx_triage

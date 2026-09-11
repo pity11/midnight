@@ -28,6 +28,8 @@ tool layer:
 | Forensics | Sleuthkit | `disk_image_triage` | A disk image needs partition discovery and filesystem enumeration |
 | Forensics | tshark | `pcap_triage` | A capture needs protocol/conversation triage or an exact TCP stream transcript |
 | Forensics | Hayabusa | `hayabusa_timeline` | One or many EVTX logs need a normalized Sigma-enriched incident timeline |
+| Forensics | Linux IR triage | `linux_ir_triage` | A recovered Linux host tree needs bounded account, permission, persistence, web, network, or MySQL UDF pivots |
+| Misc/Forensics | 7-Zip | `archive_extract` | A supplied archive needs deterministic extraction and a bounded file inventory |
 | Misc/Forensics | ZBar | `qr_decode` | A reconstructed PBM/PNG or suspicious image contains QR finder patterns or a module grid |
 | Misc/Forensics | fcrackzip / 7-Zip | `archive_password` | A protected archive should be tested against a small or challenge-derived local candidate list |
 

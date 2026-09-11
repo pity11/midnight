@@ -7,6 +7,7 @@ import pytest
 
 from midnight.config import get_config
 from midnight.tools.advanced import (
+    make_archive_extract,
     make_archive_password,
     make_hayabusa_timeline,
     make_jwt_analyze,
@@ -27,6 +28,7 @@ from midnight.tools.category import (
     make_fmtstr_write_scan,
     make_image_compare,
     make_image_ocr,
+    make_linux_ir_triage,
     make_memory_analyze,
     make_one_gadget,
     make_pcap_artifact_extract,
@@ -601,11 +603,43 @@ async def test_image_ocr_quotes_source_and_bounds_work() -> None:
     assert "tesseract" in command
     assert timeout == 300
 
+
+@pytest.mark.asyncio
+async def test_archive_extract_quotes_paths_and_password() -> None:
+    env = _Env()
+    action = make_archive_extract(env=env)
+    await action.ainvoke(
+        {"archive": "host backup.zip", "output_dir": "host tree", "password": "known pass"}
+    )
+    command, timeout = env.calls[0]
+    assert "'-pknown pass'" in command
+    assert "'host backup.zip'" in command
+    assert "-o'host tree'" in command
+    assert timeout == 600
+    with pytest.raises(ValueError, match="dedicated path"):
+        await action.ainvoke({"archive": "host.zip", "output_dir": "/ctf"})
+    with pytest.raises(ValueError, match="dedicated path"):
+        await action.ainvoke({"archive": "host.zip", "output_dir": "../escape"})
+
+
+@pytest.mark.asyncio
+async def test_linux_ir_triage_quotes_root_and_report() -> None:
+    env = _Env()
+    action = make_linux_ir_triage(env=env)
+    await action.ainvoke({"root": "host tree", "output": "ir report.json"})
+    command, timeout = env.calls[0]
+    assert "'host tree' 'ir report.json'" in command
+    assert timeout == 600
+
+
+@pytest.mark.asyncio
+async def test_image_compare_quotes_inputs_and_output() -> None:
+    env = _Env()
     compare = make_image_compare(env=env)
     await compare.ainvoke(
         {"left": "before image.png", "right": "after image.png", "output_dir": "diff out"}
     )
-    command, timeout = env.calls[1]
+    command, timeout = env.calls[0]
     assert "'before image.png' 'after image.png' 'diff out'" in command
     assert timeout == 180
 

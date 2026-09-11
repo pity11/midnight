@@ -657,6 +657,7 @@ PLAYBOOKS: tuple[Playbook, ...] = (
         ("log", "incident", "access.log", "auth.log", "event", "powershell", "webshell"),
         "Build a short incident timeline that connects entry point, execution, persistence, and flag-bearing evidence.",
         (
+            "Extract supplied archives with archive_extract and run linux_ir_triage on any recovered Linux host tree.",
             "Inventory timestamps, hosts, users, source addresses, event types, and available time zones.",
             "Find rare errors, authentication anomalies, encoded commands, uploads, process launches, and outbound connections.",
             "Normalize high-value events into chronological order and correlate identifiers across log sources.",
