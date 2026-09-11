@@ -21,3 +21,35 @@ jobs:
       - run: ruff check src tests
       - run: mypy src/midnight
       - run: pytest -q
+
+  windows-controller-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Parse PowerShell launcher
+        shell: powershell
+        run: |
+          $Tokens = $null
+          $Errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path ".\scripts\competition.ps1"),
+            [ref]$Tokens,
+            [ref]$Errors
+          ) | Out-Null
+          if ($Errors.Count -ne 0) {
+            $Errors | Format-List | Out-String | Write-Error
+            exit 1
+          }
+      - name: Install Windows controller environment
+        run: |
+          python -m pip install uv
+          uv sync --extra dev
+      - name: Verify PowerShell entry point and stub configuration
+        shell: powershell
+        run: |
+          .\scripts\competition.ps1 help
+          $Env:MIDNIGHT_MODELS_FILE = "models.stub.yaml"
+          & .\.venv\Scripts\python.exe -m midnight.app --check-config

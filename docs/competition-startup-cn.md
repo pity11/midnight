@@ -2,6 +2,8 @@
 
 本指南用于允许自主 CTF Agent 取题、解题和提交的线下比赛。正式运行前必须完成一次完整预检；比赛现场只使用已经安装、已经构建并已经验证的冻结版本。
 
+Windows 10/11 队员请改用 [Windows PowerShell 部署与启动指南](competition-startup-windows-cn.md)。
+
 ## 1. 首次安装（必须在赛前联网完成）
 
 在每台准备使用的电脑上分别执行：

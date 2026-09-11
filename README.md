@@ -63,6 +63,10 @@ The mapping from organizer challenge labels to specialist tools and sandboxes is
 documented in [competition-routing.md](docs/competition-routing.md).
 The latest frozen-build evidence is recorded in
 [docs/readiness-2026-09-10.md](docs/readiness-2026-09-10.md).
+Windows teammates should use the dedicated
+[PowerShell deployment and competition guide](docs/competition-startup-windows-cn.md),
+which provides setup, preflight, rehearsal, monitoring, and round commands without
+requiring Bash or WSL command-line use.
 
 ## Project layout
 
