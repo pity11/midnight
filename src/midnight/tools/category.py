@@ -1629,3 +1629,161 @@ def make_pcap_export_objects(*, env: CTFEnvironment, **_) -> object:
         return _result_text(await env.exec(command, timeout=300))
 
     return pcap_export_objects
+
+
+@register_tool(name="pcap_artifact_extract", groups=["forensics"])
+def make_pcap_artifact_extract(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    program = r'''import hashlib
+import json
+import pathlib
+import shutil
+import subprocess
+import sys
+
+capture, protocol, output = sys.argv[1:]
+root = pathlib.Path(output).resolve()
+shutil.rmtree(root, ignore_errors=True)
+raw = root / "raw"
+normalized = root / "normalized"
+raw.mkdir(parents=True)
+normalized.mkdir()
+subprocess.run(
+    ["tshark", "-r", capture, "-q", "--export-objects", f"{protocol},{raw}"],
+    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=240, check=False,
+)
+records = []
+for index, source in enumerate(sorted(path for path in raw.iterdir() if path.is_file())):
+    suffix = source.suffix if len(source.suffix) <= 12 else ""
+    safe = normalized / f"artifact-{index:03d}{suffix}"
+    shutil.copyfile(source, safe)
+    data = safe.read_bytes()
+    records.append({"path": safe.as_posix(), "original_name": source.name,
+                    "size": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+print(json.dumps(records, ensure_ascii=False, indent=2))
+'''
+
+    @tool
+    async def pcap_artifact_extract(
+        capture: str, protocol: str = "http", output_dir: str = "/ctf/pcap_artifacts"
+    ) -> str:
+        """Export PCAP objects to safe numbered paths with names, sizes, and hashes."""
+        allowed = {"http", "smb", "tftp", "ftp-data", "dicom", "imf"}
+        if protocol not in allowed:
+            raise ValueError(f"protocol must be one of {sorted(allowed)}")
+        encoded = base64.b64encode(program.encode()).decode()
+        command = (
+            f"python3 -c \"import base64;exec(base64.b64decode('{encoded}'))\" "
+            f"{shlex.quote(capture)} {shlex.quote(protocol)} {shlex.quote(output_dir)}; "
+            f"find {shlex.quote(output_dir)}/normalized -maxdepth 1 -type f -exec file {{}} \\;"
+        )
+        return _result_text(await env.exec(command, timeout=360))
+
+    return pcap_artifact_extract
+
+
+@register_tool(name="pcap_tls_recover", groups=["forensics"])
+def make_pcap_tls_recover(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    program = r'''import hashlib
+import json
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+
+capture = pathlib.Path(sys.argv[1]).resolve()
+root = pathlib.Path(sys.argv[2]).resolve()
+shutil.rmtree(root, ignore_errors=True)
+clear = root / "clear-http"
+decrypted = root / "decrypted-http"
+normalized = root / "normalized"
+for directory in (clear, decrypted, normalized):
+    directory.mkdir(parents=True, exist_ok=True)
+subprocess.run(
+    ["tshark", "-r", str(capture), "-q", "--export-objects", f"http,{clear}"],
+    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180, check=False,
+)
+secret = re.compile(
+    rb"(?m)^(?:CLIENT_RANDOM|CLIENT_EARLY_TRAFFIC_SECRET|CLIENT_HANDSHAKE_TRAFFIC_SECRET|"
+    rb"SERVER_HANDSHAKE_TRAFFIC_SECRET|CLIENT_TRAFFIC_SECRET_0|SERVER_TRAFFIC_SECRET_0) "
+    rb"[0-9A-Fa-f]+ [0-9A-Fa-f]+\s*$"
+)
+keylogs = [path for path in clear.rglob("*")
+           if path.is_file() and secret.search(path.read_bytes()[:8 * 1024 * 1024])]
+http_rows = []
+for keylog in keylogs:
+    subprocess.run(
+        ["tshark", "-r", str(capture), "-o", f"tls.keylog_file:{keylog}", "-q",
+         "--export-objects", f"http,{decrypted}"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180, check=False,
+    )
+    result = subprocess.run(
+        ["tshark", "-r", str(capture), "-o", f"tls.keylog_file:{keylog}",
+         "-Y", "http", "-T", "fields", "-e", "tcp.stream", "-e", "http.request.method",
+         "-e", "http.host", "-e", "http.request.uri", "-e", "http.file_data"],
+        capture_output=True, text=True, errors="replace", timeout=180, check=False,
+    )
+    http_rows.extend(result.stdout.splitlines()[:240])
+records = []
+sources = [("clear", path) for path in clear.iterdir() if path.is_file()]
+sources += [("decrypted", path) for path in decrypted.iterdir() if path.is_file()]
+for index, (layer, source) in enumerate(sorted(sources, key=lambda item: (item[0], item[1].name))):
+    suffix = source.suffix if len(source.suffix) <= 12 else ""
+    safe = normalized / f"artifact-{index:03d}{suffix}"
+    shutil.copyfile(source, safe)
+    data = safe.read_bytes()
+    records.append({"path": safe.as_posix(), "layer": layer,
+                    "original_name": source.name, "size": len(data),
+                    "sha256": hashlib.sha256(data).hexdigest()})
+print(f"keylog_candidates={len(keylogs)}")
+print("[http-fields]")
+print("\n".join(http_rows))
+print("[artifact-manifest]")
+print(json.dumps(records, ensure_ascii=False, indent=2))
+'''
+
+    @tool
+    async def pcap_tls_recover(
+        capture: str, output_dir: str = "/ctf/pcap_tls_recovered"
+    ) -> str:
+        """Use an HTTP-leaked SSLKEYLOGFILE to recover TLS-carried HTTP artifacts."""
+        encoded = base64.b64encode(program.encode()).decode()
+        command = (
+            f"python3 -c \"import base64;exec(base64.b64decode('{encoded}'))\" "
+            f"{shlex.quote(capture)} {shlex.quote(output_dir)}"
+        )
+        return _result_text(await env.exec(command, timeout=600))
+
+    return pcap_tls_recover
+
+
+@register_tool(name="image_ocr", groups=["misc", "forensics"])
+def make_image_ocr(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def image_ocr(image: str, output_dir: str = "/ctf/ocr_variants") -> str:
+        """OCR an image across rotations and grayscale thresholds."""
+        source = shlex.quote(image)
+        destination = shlex.quote(output_dir)
+        command = (
+            f"test -f {source} || {{ echo '[error] image not found' >&2; exit 2; }}; "
+            f"rm -rf -- {destination}; mkdir -p -- {destination}; "
+            "for rotation in 0 90 180 270; do "
+            f"convert {source} -rotate \"$rotation\" -resize '250%' "
+            f"{destination}/r-$rotation.png; "
+            "for threshold in 35 50 65; do "
+            f"convert {destination}/r-$rotation.png -colorspace Gray "
+            f"-threshold \"$threshold%\" {destination}/r-$rotation-t-$threshold.png; "
+            "done; done; "
+            f"for candidate in {destination}/*.png; do "
+            "echo \"[ocr:$candidate]\"; tesseract \"$candidate\" stdout 2>/dev/null | head -80; "
+            "done"
+        )
+        return _result_text(await env.exec(command, timeout=300))
+
+    return image_ocr

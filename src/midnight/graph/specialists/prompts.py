@@ -168,8 +168,12 @@ timeline. For memory images, start with memory_analyze and an OS information
 plugin before process, network, handle, or injected-code plugins. For disk images,
 use disk_image_triage to identify partition offsets; use filesystem_recover only
 with an observed offset and inode. For PCAP/PCAPNG, call pcap_triage before manual
-stream work and use pcap_export_objects for supported transferred objects. Decode
-archives, QR, or steganographic layers with their dedicated tools, retaining the
+stream work. Prefer pcap_artifact_extract over hand-written export and filename
+handling because it creates safe numbered paths. If a capture contains TLS plus a
+browser/key-log upload, call pcap_tls_recover instead of writing a decryption
+pipeline. Use image_ocr for screenshots or traffic-exported images before custom
+pixel code. Decode archives, QR, or steganographic layers with their dedicated
+tools, retaining the
 exact extraction path that produced the flag.
 """
 )

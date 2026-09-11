@@ -69,6 +69,7 @@ misc:
   - stego_scan
   - archive_password
   - qr_decode
+  - image_ocr
 
 forensics:
   - *common
@@ -85,8 +86,11 @@ forensics:
   - filesystem_recover
   - pcap_triage
   - pcap_export_objects
+  - pcap_artifact_extract
+  - pcap_tls_recover
   - archive_password
   - qr_decode
+  - image_ocr
 
 unknown:
   - *common

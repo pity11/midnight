@@ -25,9 +25,12 @@ from midnight.tools.category import (
     make_filesystem_recover,
     make_fmtstr_probe,
     make_fmtstr_write_scan,
+    make_image_ocr,
     make_memory_analyze,
     make_one_gadget,
+    make_pcap_artifact_extract,
     make_pcap_export_objects,
+    make_pcap_tls_recover,
     make_pcap_triage,
     make_pickle_build,
     make_pickle_policy_audit,
@@ -564,6 +567,38 @@ async def test_pcap_object_export_is_protocol_bounded() -> None:
     assert timeout == 300
     with pytest.raises(ValueError, match="protocol must be"):
         await action.ainvoke({"capture": "x.pcap", "protocol": "tls;id"})
+
+
+@pytest.mark.asyncio
+async def test_pcap_normalized_and_tls_recovery_tools_quote_paths() -> None:
+    env = _Env()
+    normalized = make_pcap_artifact_extract(env=env)
+    await normalized.ainvoke(
+        {"capture": "traffic sample.pcap", "protocol": "http", "output_dir": "safe out"}
+    )
+    command, timeout = env.calls[0]
+    assert "'traffic sample.pcap' http 'safe out'" in command
+    assert "artifact-" not in command
+    assert timeout == 360
+    with pytest.raises(ValueError, match="protocol must be"):
+        await normalized.ainvoke({"capture": "x.pcap", "protocol": "tls;id"})
+
+    tls = make_pcap_tls_recover(env=env)
+    await tls.ainvoke({"capture": "tls sample.pcap", "output_dir": "tls out"})
+    command, timeout = env.calls[1]
+    assert "'tls sample.pcap' 'tls out'" in command
+    assert timeout == 600
+
+
+@pytest.mark.asyncio
+async def test_image_ocr_quotes_source_and_bounds_work() -> None:
+    env = _Env()
+    action = make_image_ocr(env=env)
+    await action.ainvoke({"image": "screen shot.png", "output_dir": "ocr out"})
+    command, timeout = env.calls[0]
+    assert "test -f 'screen shot.png'" in command
+    assert "tesseract" in command
+    assert timeout == 300
 
 
 @pytest.mark.asyncio
