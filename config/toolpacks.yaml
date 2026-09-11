@@ -142,6 +142,12 @@ forensics:
     license: VSL-1.0
     command: vol
     purpose: Extract process, registry, network and kernel evidence from memory images
+  - name: pyzipper
+    version: 0.3.6
+    source: https://github.com/danifus/pyzipper
+    license: MIT
+    command: python3
+    purpose: Inspect and extract AES-encrypted ZIP challenge artifacts
 
   - name: zsteg
     version: 0.2.14

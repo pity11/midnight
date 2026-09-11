@@ -1739,6 +1739,8 @@ for index, (layer, source) in enumerate(sorted(sources, key=lambda item: (item[0
     records.append({"path": safe.as_posix(), "layer": layer,
                     "original_name": source.name, "size": len(data),
                     "sha256": hashlib.sha256(data).hexdigest()})
+shutil.rmtree(clear, ignore_errors=True)
+shutil.rmtree(decrypted, ignore_errors=True)
 print(f"keylog_candidates={len(keylogs)}")
 print("[http-fields]")
 print("\n".join(http_rows))
@@ -1787,3 +1789,53 @@ def make_image_ocr(*, env: CTFEnvironment, **_) -> object:
         return _result_text(await env.exec(command, timeout=300))
 
     return image_ocr
+
+
+@register_tool(name="image_compare", groups=["misc", "forensics"])
+def make_image_compare(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    program = r'''import json
+import pathlib
+import sys
+from PIL import Image, ImageChops, ImageEnhance
+
+left_path, right_path, output = sys.argv[1:]
+left = Image.open(left_path).convert("RGBA")
+right = Image.open(right_path).convert("RGBA")
+if left.size != right.size:
+    print(json.dumps({"left_size": left.size, "right_size": right.size,
+                      "comparable": False}))
+    raise SystemExit(3)
+diff = ImageChops.difference(left, right)
+gray = diff.convert("L")
+bbox = gray.getbbox()
+histogram = gray.histogram()
+changed_pixels = sum(histogram[1:])
+root = pathlib.Path(output)
+root.mkdir(parents=True, exist_ok=True)
+diff_path = root / "difference-enhanced.png"
+mask_path = root / "difference-mask.png"
+ImageEnhance.Contrast(diff).enhance(8).save(diff_path)
+gray.point(lambda value: 255 if value else 0).save(mask_path)
+print(json.dumps({"left_size": left.size, "right_size": right.size,
+                  "comparable": True, "difference_bbox": bbox,
+                  "changed_pixels": changed_pixels,
+                  "total_pixels": left.width * left.height,
+                  "difference_image": diff_path.as_posix(),
+                  "mask_image": mask_path.as_posix()}, indent=2))
+'''
+
+    @tool
+    async def image_compare(
+        left: str, right: str, output_dir: str = "/ctf/image_difference"
+    ) -> str:
+        """Compare two same-sized images and emit enhanced difference artifacts."""
+        encoded = base64.b64encode(program.encode()).decode()
+        command = (
+            f"python3 -c \"import base64;exec(base64.b64decode('{encoded}'))\" "
+            f"{shlex.quote(left)} {shlex.quote(right)} {shlex.quote(output_dir)}"
+        )
+        return _result_text(await env.exec(command, timeout=180))
+
+    return image_compare

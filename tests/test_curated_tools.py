@@ -25,6 +25,7 @@ from midnight.tools.category import (
     make_filesystem_recover,
     make_fmtstr_probe,
     make_fmtstr_write_scan,
+    make_image_compare,
     make_image_ocr,
     make_memory_analyze,
     make_one_gadget,
@@ -599,6 +600,14 @@ async def test_image_ocr_quotes_source_and_bounds_work() -> None:
     assert "test -f 'screen shot.png'" in command
     assert "tesseract" in command
     assert timeout == 300
+
+    compare = make_image_compare(env=env)
+    await compare.ainvoke(
+        {"left": "before image.png", "right": "after image.png", "output_dir": "diff out"}
+    )
+    command, timeout = env.calls[1]
+    assert "'before image.png' 'after image.png' 'diff out'" in command
+    assert timeout == 180
 
 
 @pytest.mark.asyncio

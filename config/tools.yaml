@@ -70,6 +70,7 @@ misc:
   - archive_password
   - qr_decode
   - image_ocr
+  - image_compare
 
 forensics:
   - *common
@@ -91,6 +92,7 @@ forensics:
   - archive_password
   - qr_decode
   - image_ocr
+  - image_compare
 
 unknown:
   - *common

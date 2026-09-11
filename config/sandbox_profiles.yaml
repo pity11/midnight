@@ -101,7 +101,7 @@ forensics:
     - crunch
     - yara
     - python3
-  required_python_modules: [PIL, volatility3, Evtx]
+  required_python_modules: [PIL, numpy, pyzipper, volatility3, Evtx]
   optional_commands: []
 
 unknown:

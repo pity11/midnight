@@ -10,7 +10,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     && apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=10 install -y --fix-missing --no-install-recommends \
         bash coreutils file xxd binutils \
-        python3 python3-pip python3-venv python3-pil \
+        python3 python3-pip python3-venv python3-pil python3-numpy \
         ruby binwalk foremost exiftool steghide yara \
         sleuthkit testdisk xfsprogs tshark tcpdump \
         imagemagick tesseract-ocr ffmpeg sox \
@@ -19,7 +19,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --no-cache-dir --retries 10 --timeout 120 \
-        volatility3==2.28.0 python-evtx==0.8.1
+        volatility3==2.28.0 python-evtx==0.8.1 pyzipper==0.3.6
 RUN gem install zsteg -v 0.2.14 --no-document
 
 # QR codes frequently appear after document or image reconstruction. Keep the
