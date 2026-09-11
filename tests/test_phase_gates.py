@@ -32,6 +32,66 @@ def test_pwn_phase_gate_requires_inventory_then_binary_triage():
     assert "PHASE_GATE:TRIAGE" in update["messages"][0].content
 
 
+def test_forensics_phase_gate_starts_with_inventory_without_forcing_solver():
+    gate = ArtifactPhaseGateMiddleware(category="forensics", artifact_gate=1, target="target:1")
+    assert gate.constrained_tool_names([]) == {"list_dir"}
+    update = gate.before_model({"messages": []}, None)
+    assert update is not None
+    assert "PHASE_GATE:FORENSICS_LIST_DIR" in update["messages"][0].content
+
+    messages = [_tool_message(1, "list_dir"), HumanMessage("/ctf/readme.txt")]
+    assert gate.constrained_tool_names(messages) is None
+    assert gate.before_model({"messages": messages}, None) is None
+
+
+def test_forensics_archive_gate_triages_then_extracts():
+    gate = ArtifactPhaseGateMiddleware(category="forensics")
+    messages = [_tool_message(1, "list_dir"), HumanMessage("/ctf/evidence.tar.gz")]
+    assert gate.constrained_tool_names(messages) == {"artifact_triage"}
+
+    messages.append(_tool_message(2, "artifact_triage", {"path": "/ctf/evidence.tar.gz"}))
+    assert gate.constrained_tool_names(messages) == {"archive_extract"}
+
+    messages.append(_tool_message(3, "archive_extract", {"path": "/ctf/evidence.tar.gz"}))
+    assert gate.constrained_tool_names(messages) is None
+
+
+def test_forensics_discovered_logs_force_log_audit():
+    gate = ArtifactPhaseGateMiddleware(category="forensics")
+    messages = [_tool_message(1, "list_dir"), HumanMessage("/ctf/auth.log")]
+    assert gate.constrained_tool_names(messages) == {"log_audit"}
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "PHASE_GATE:FORENSICS_LOG_AUDIT" in update["messages"][0].content
+
+
+def test_forensics_capture_gate_triages_then_extracts():
+    gate = ArtifactPhaseGateMiddleware(category="forensics")
+    messages = [_tool_message(1, "list_dir"), HumanMessage("/ctf/traffic.pcapng")]
+    assert gate.constrained_tool_names(messages) == {"pcap_triage"}
+
+    messages.append(_tool_message(2, "pcap_triage", {"path": "/ctf/traffic.pcapng"}))
+    assert gate.constrained_tool_names(messages) == {"pcap_artifact_extract"}
+
+
+def test_forensics_prior_tool_names_survive_outer_retry_truncation():
+    gate = ArtifactPhaseGateMiddleware(
+        category="forensics",
+        prior_tool_names=frozenset({"list_dir", "pcap_triage"}),
+    )
+    messages = [HumanMessage("Continue analysis of /ctf/traffic.pcap")]
+    assert gate.constrained_tool_names(messages) == {"pcap_artifact_extract"}
+
+
+def test_forensics_detects_capture_path_from_tool_arguments():
+    gate = ArtifactPhaseGateMiddleware(
+        category="forensics",
+        prior_tool_names=frozenset({"list_dir"}),
+    )
+    messages = [_tool_message(1, "read_file", {"path": "/ctf/network.pcapng"})]
+    assert gate.constrained_tool_names(messages) == {"pcap_triage"}
+
+
 def test_pwn_retry_reads_existing_solver_before_retriage():
     gate = ArtifactPhaseGateMiddleware(category="pwn")
     messages = [

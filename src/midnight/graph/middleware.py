@@ -25,6 +25,43 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
     # the artifact can still be refined with later evidence.
     artifact_gate: int = 5
     target_gate: int = 10
+    # Outer retries build a fresh specialist and retain only a bounded message
+    # tail. Keep the completed phase names separately so deterministic gates do
+    # not send the model back to the start when an older call falls off the tail.
+    prior_tool_names: frozenset[str] = frozenset()
+
+    def _called(self, calls: list[dict], name: str) -> bool:
+        return name in self.prior_tool_names or any(call.get("name") == name for call in calls)
+
+    @staticmethod
+    def _forensics_evidence_types(messages: list) -> tuple[bool, bool, bool]:
+        """Return whether archive, log, and packet-capture paths are visible."""
+        observations = [str(getattr(message, "content", "")) for message in messages]
+        observations.extend(str(call.get("args") or {}) for call in _calls(messages))
+        text = "\n".join(observations).lower()
+        archive = bool(
+            re.search(r"\.(?:zip|tar|tgz|tbz2?|txz|7z|rar|gz|bz2|xz)(?:\b|$)", text)
+        )
+        logs = bool(re.search(r"\.(?:log|evtx)(?:\b|$)", text))
+        captures = bool(re.search(r"\.pcap(?:ng)?(?:\b|$)", text))
+        return archive, logs, captures
+
+    def _forensics_lane(self, messages: list, calls: list[dict]) -> set[str] | None:
+        if not self._called(calls, "list_dir"):
+            return {"list_dir"}
+
+        archive, logs, captures = self._forensics_evidence_types(messages)
+        if archive and not self._called(calls, "artifact_triage"):
+            return {"artifact_triage"}
+        if archive and not self._called(calls, "archive_extract"):
+            return {"archive_extract"}
+        if logs and not self._called(calls, "log_audit"):
+            return {"log_audit"}
+        if captures and not self._called(calls, "pcap_triage"):
+            return {"pcap_triage"}
+        if captures and not self._called(calls, "pcap_artifact_extract"):
+            return {"pcap_artifact_extract"}
+        return None
 
     @staticmethod
     def _made_artifact(calls: list[dict]) -> bool:
@@ -189,6 +226,10 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
     def constrained_tool_names(self, messages: list) -> set[str] | None:
         """Return the deterministic tool lane for the current phase, if any."""
         calls = _calls(messages)
+        if self.category == "forensics":
+            # Forensics produces extracted evidence and timelines rather than a
+            # mandatory solve.py, and generally has no exploit target to run.
+            return self._forensics_lane(messages, calls)
         if self.category == "pwn" and not calls:
             return {"list_dir"}
         if (
@@ -312,6 +353,34 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         messages = list(state.get("messages") or [])
         calls = _calls(messages)
         text = "\n".join(str(getattr(message, "content", "")) for message in messages)
+
+        if self.category == "forensics":
+            allowed = self._forensics_lane(messages, calls)
+            phase = next(iter(allowed), "") if allowed else ""
+            marker = f"[PHASE_GATE:FORENSICS_{phase.upper()}]"
+            if phase and marker not in text:
+                instructions = {
+                    "list_dir": "List /ctf first and identify the supplied evidence by filename and type.",
+                    "artifact_triage": (
+                        "Run artifact_triage on the discovered archive before extracting it."
+                    ),
+                    "archive_extract": (
+                        "Run archive_extract on the triaged archive and inspect its extracted inventory."
+                    ),
+                    "log_audit": (
+                        "Run log_audit on the discovered log evidence and use its normalized findings."
+                    ),
+                    "pcap_triage": (
+                        "Run pcap_triage on the discovered capture before stream or object extraction."
+                    ),
+                    "pcap_artifact_extract": (
+                        "Run pcap_artifact_extract on the triaged capture to recover protocol artifacts."
+                    ),
+                }
+                return {"messages": [HumanMessage(f"{marker} {instructions[phase]}")]}
+            # Do not fall through to exploit-artifact or target gates: forensic
+            # work may close directly from a log, archive member, or capture.
+            return None
 
         if self.category == "pwn" and not calls and "[PHASE_GATE:TRIAGE]" not in text:
             return {

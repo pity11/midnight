@@ -107,6 +107,118 @@ def make_log_audit(*, env: CTFEnvironment, **_) -> object:
     return log_audit
 
 
+@register_tool(name="pcap_stream_payload", groups=["forensics"])
+def make_pcap_stream_payload(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    program = r'''import hashlib
+import json
+import pathlib
+import re
+import resource
+import shutil
+import subprocess
+import sys
+
+capture = pathlib.Path(sys.argv[1]).resolve()
+stream = int(sys.argv[2])
+root = pathlib.Path(sys.argv[3]).resolve()
+packet_limit = int(sys.argv[4])
+workspace = pathlib.Path('/ctf').resolve()
+if not capture.is_relative_to(workspace) or not capture.is_file():
+    raise SystemExit('capture must be a file inside /ctf')
+if root == workspace or not root.is_relative_to(workspace):
+    raise SystemExit('output must resolve to a dedicated directory inside /ctf')
+shutil.rmtree(root, ignore_errors=True)
+root.mkdir(parents=True)
+raw = root / 'tshark.tsv'
+env = {'PATH': '/usr/bin:/bin', 'HOME': '/tmp', 'XDG_CONFIG_HOME': '/tmp/midnight-tshark'}
+args = [
+    '/usr/bin/tshark', '-n', '-r', str(capture), '-Y', f'tcp.stream == {stream}',
+    '-T', 'fields', '-E', 'separator=/t', '-E', 'occurrence=f',
+    '-e', 'frame.number', '-e', 'ip.src', '-e', 'ipv6.src',
+    '-e', 'tcp.srcport', '-e', 'ip.dst', '-e', 'ipv6.dst',
+    '-e', 'tcp.dstport', '-e', 'tcp.payload',
+]
+def limits():
+    resource.setrlimit(resource.RLIMIT_FSIZE, (64 * 1024 * 1024, 64 * 1024 * 1024))
+with raw.open('wb') as output:
+    result = subprocess.run(
+        args, stdout=output, stderr=subprocess.PIPE, env=env, timeout=240,
+        check=False, preexec_fn=limits,
+    )
+if result.returncode not in {0, -25, 153}:
+    raise SystemExit(f'tshark failed with status {result.returncode}')
+directions = {}
+buffers = [bytearray(), bytearray()]
+total = 0
+record_count = 0
+with raw.open(encoding='utf-8', errors='replace') as source, (root / 'packets.jsonl').open(
+    'w', encoding='utf-8'
+) as packet_output:
+    for line in source:
+        fields = (line.rstrip('\n').split('\t') + [''] * 8)[:8]
+        frame, src4, src6, sport, dst4, dst6, dport, payload_hex = fields
+        payload_hex = re.sub(r'[^0-9A-Fa-f]', '', payload_hex)
+        if not payload_hex or len(payload_hex) % 2:
+            continue
+        payload = bytes.fromhex(payload_hex)
+        if total + len(payload) > 32 * 1024 * 1024:
+            break
+        endpoint = (src4 or src6, sport, dst4 or dst6, dport)
+        reverse = (endpoint[2], endpoint[3], endpoint[0], endpoint[1])
+        if endpoint not in directions:
+            directions[endpoint] = 1 - directions[reverse] if reverse in directions else 0
+        direction = directions[endpoint]
+        buffers[direction].extend(payload)
+        packet_output.write(json.dumps({
+            'frame': int(frame or 0), 'direction': direction,
+            'src': endpoint[0], 'sport': endpoint[1], 'dst': endpoint[2], 'dport': endpoint[3],
+            'length': len(payload), 'payload_hex': payload_hex.lower(),
+        }, ensure_ascii=False) + '\n')
+        total += len(payload)
+        record_count += 1
+        if record_count >= packet_limit:
+            break
+manifest = {'stream': stream, 'packets': record_count, 'total_payload_bytes': total, 'directions': []}
+for index, data in enumerate(buffers):
+    path = root / f'direction-{index}.bin'
+    path.write_bytes(data)
+    manifest['directions'].append({
+        'path': str(path), 'size': len(data), 'sha256': hashlib.sha256(data).hexdigest(),
+    })
+(root / 'manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+raw.unlink(missing_ok=True)
+print(json.dumps(manifest, indent=2))
+'''
+
+    @tool
+    async def pcap_stream_payload(
+        capture: str,
+        stream: int,
+        output_dir: str = "/ctf/pcap_stream",
+        packet_limit: int = 5000,
+    ) -> str:
+        """Export one TCP stream as directional bytes and packet-level hex JSONL.
+
+        Use after ``pcap_triage`` identifies an opaque or binary TCP stream.
+        Output includes a bounded manifest, two direction files, and packet
+        records so a decoder can preserve framing and direction.
+        """
+        if stream < 0:
+            raise ValueError("stream must be non-negative")
+        if packet_limit < 1 or packet_limit > 20000:
+            raise ValueError("packet_limit must be between 1 and 20000")
+        encoded = base64.b64encode(program.encode()).decode()
+        command = (
+            f"python3 -c \"import base64;exec(base64.b64decode('{encoded}'))\" "
+            f"{shlex.quote(capture)} {stream} {shlex.quote(output_dir)} {packet_limit}"
+        )
+        return _result_text(await env.exec(command, timeout=300))
+
+    return pcap_stream_payload
+
+
 @register_tool(name="qr_decode", groups=["misc", "forensics"])
 def make_qr_decode(*, env: CTFEnvironment, **_) -> object:
     from langchain_core.tools import tool

@@ -9,7 +9,6 @@ common: &common
   - write_file
   - list_dir
   - summarize_output
-  - run_exploit        # target-bound solve.py execution with provenance capture
   - lookup_playbook     # evidence-triggered procedural knowledge; no challenge answers
   - record_evidence     # append-only structured observations/hypotheses/artifacts
   - read_evidence       # durable context across retries and future solver lanes
@@ -18,6 +17,7 @@ common: &common
 
 pwn:
   - *common
+  - run_exploit        # target-bound solve.py execution with provenance capture
   - binary_triage
   - source_audit
   - pwn_rop_inventory
@@ -34,6 +34,7 @@ pwn:
 
 reverse:
   - *common
+  - run_exploit
   - binary_triage
   - source_audit
   - upx_unpack
@@ -46,6 +47,7 @@ reverse:
 
 web:
   - *common
+  - run_exploit
   - connect_tool
   - http_request
   - source_audit
@@ -56,12 +58,14 @@ web:
 
 crypto:
   - *common
+  - run_exploit
   - xor_analyze
   - rsa_quickcheck
   - rsa_attack
 
 misc:
   - *common
+  - run_exploit
   - pickle_disassemble
   - pickle_policy_audit
   - pickle_build
@@ -90,6 +94,7 @@ forensics:
   - disk_image_triage
   - filesystem_recover
   - pcap_triage
+  - pcap_stream_payload
   - pcap_export_objects
   - pcap_artifact_extract
   - pcap_tls_recover

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import re
 from dataclasses import dataclass
 
 import pytest
@@ -13,6 +14,7 @@ from midnight.tools.advanced import (
     make_jwt_analyze,
     make_kaitai_compile,
     make_log_audit,
+    make_pcap_stream_payload,
     make_qr_decode,
     make_rsa_attack,
     make_tinja_ssti,
@@ -66,10 +68,11 @@ class _Env:
         return _Result()
 
 
-def test_run_exploit_is_shared_across_specialists() -> None:
+def test_run_exploit_is_limited_to_solver_specialists() -> None:
     config = get_config()
-    for expert in ("pwn", "reverse", "web", "crypto", "misc", "forensics"):
+    for expert in ("pwn", "reverse", "web", "crypto", "misc"):
         assert "run_exploit" in config.tools[expert]
+    assert "run_exploit" not in config.tools["forensics"]
 
 
 def test_pwn_and_pickle_deterministic_auditors_are_configured() -> None:
@@ -652,6 +655,33 @@ async def test_log_audit_quotes_source_and_dedicated_output() -> None:
     assert timeout == 900
     with pytest.raises(ValueError, match="dedicated path"):
         await action.ainvoke({"path": "logs", "output_dir": "/ctf"})
+
+
+@pytest.mark.asyncio
+async def test_pcap_stream_payload_is_bounded_and_quotes_paths() -> None:
+    env = _Env()
+    action = make_pcap_stream_payload(env=env)
+    await action.ainvoke(
+        {
+            "capture": "capture file.pcapng",
+            "stream": 7,
+            "output_dir": "/ctf/stream output",
+            "packet_limit": 9000,
+        }
+    )
+    command, timeout = env.calls[0]
+    assert "'capture file.pcapng' 7 '/ctf/stream output' 9000" in command
+    encoded = re.search(r"b64decode\('([^']+)'\)", command)
+    assert encoded is not None
+    program = base64.b64decode(encoded.group(1)).decode()
+    assert "'separator=/t'" in program
+    assert "1 - directions[reverse]" in program
+    assert "for line in source" in program
+    assert timeout == 300
+    with pytest.raises(ValueError, match="non-negative"):
+        await action.ainvoke({"capture": "capture.pcap", "stream": -1})
+    with pytest.raises(ValueError, match="between 1 and 20000"):
+        await action.ainvoke({"capture": "capture.pcap", "stream": 0, "packet_limit": 20001})
 
 
 @pytest.mark.asyncio

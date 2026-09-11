@@ -183,8 +183,18 @@ def build_main_graph(
             from midnight.graph.middleware import ArtifactPhaseGateMiddleware
 
             target = str((state.get("challenge") or {}).get("remote") or "")
+            prior_tool_names = frozenset(
+                call.get("name", "")
+                for message in (state.get("messages") or [])
+                for call in (getattr(message, "tool_calls", None) or [])
+                if call.get("name")
+            )
             middleware = [
-                ArtifactPhaseGateMiddleware(category=expert, target=target),
+                ArtifactPhaseGateMiddleware(
+                    category=expert,
+                    target=target,
+                    prior_tool_names=prior_tool_names,
+                ),
                 # Middleware makes each model+tool cycle consume several graph
                 # transitions. The model-call limit is the semantic bound; the
                 # larger recursion limit only prevents infrastructure cutoffs.
@@ -201,6 +211,10 @@ def build_main_graph(
                     ToolCallLimitMiddleware(tool_name="connect_tool", run_limit=5),
                     ToolCallLimitMiddleware(tool_name="fmtstr_write_scan", run_limit=2),
                 ])
+            if expert == "forensics":
+                middleware.append(
+                    ToolCallLimitMiddleware(tool_name="run_shell", run_limit=4)
+                )
             agent = make_specialist(
                 llm=llm,
                 tools=tools,

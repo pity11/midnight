@@ -16,6 +16,14 @@ _FINAL_CRITIC = (
     "it with one experiment, then run the smallest complete solution artifact."
 )
 
+_FORENSICS_FINAL_CRITIC = (
+    "Act as a forensic-evidence critic before continuing. Audit the inventory, file-type "
+    "identification, archive extraction, hashes, log timeline, capture protocol summary, "
+    "recovered objects, and flag provenance. Name the weakest evidentiary assumption and "
+    "test it with the smallest missing structured forensic action. Reuse existing extracted "
+    "artifacts and do not restart with broad shell reconnaissance."
+)
+
 
 def strategy_for_attempt(category: str, attempt: int) -> str:
     """Return a materially distinct route for retries after the primary lane."""
@@ -26,4 +34,6 @@ def strategy_for_attempt(category: str, attempt: int) -> str:
             category,
             "Change representation and use a deterministic tool or executable model of the challenge.",
         )
+    if category == "forensics":
+        return _FORENSICS_FINAL_CRITIC
     return _FINAL_CRITIC

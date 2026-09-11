@@ -176,7 +176,9 @@ plugin before process, network, handle, or injected-code plugins. For disk image
 use disk_image_triage to identify partition offsets; use filesystem_recover only
 with an observed offset and inode. For PCAP/PCAPNG, call pcap_triage before manual
 stream work. Prefer pcap_artifact_extract over hand-written export and filename
-handling because it creates safe numbered paths. If a capture contains TLS plus a
+handling because it creates safe numbered paths. When triage identifies an opaque
+or binary TCP stream, use pcap_stream_payload to preserve packet framing and both
+traffic directions before writing a decoder. If a capture contains TLS plus a
 browser/key-log upload, call pcap_tls_recover instead of writing a decryption
 pipeline; only use its normalized artifact paths. Use image_compare for two
 same-sized source/recovered images and image_ocr on the resulting mask before
