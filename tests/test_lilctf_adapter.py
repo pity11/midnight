@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 import yaml
 
 from midnight.evaluation.adapters.lilctf import LilCTF2025Adapter
 from midnight.evaluation.stager import VisibleFile
+from midnight.utils.flag import extract_flags
 
 
 def _task(tmp_path, *, category="Crypto", container=None):
@@ -35,6 +38,10 @@ def test_lilctf_stages_only_declared_attachments_and_separates_flag(tmp_path):
     assert manifest.category == "crypto"
     assert manifest.agent_visible == ["task.json", "files/public.py"]
     assert not (tmp_path / "clean" / "build").exists()
+    task = json.loads((tmp_path / "clean" / "task.json").read_text())
+    assert extract_flags("LILCTF{candidate}", flag_format=task["flag_format"]) == [
+        "LILCTF{candidate}"
+    ]
     evaluator = adapter.evaluator_manifest(["crypto-example"])
     assert evaluator.tasks["crypto-example"].points == 500
 

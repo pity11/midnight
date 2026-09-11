@@ -107,7 +107,7 @@ class LilCTF2025Adapter:
             description=self._description(root),
             category=self._category(payload),
             remote=target,
-            flag_format="LILCTF prefix with a braced payload",
+            flag_format=r"LILCTF\{[^}\r\n]+\}",
             internet_policy="target_only" if target else "disabled",
             allowed_targets=[target] if target else [],
             visible_files=visible,
