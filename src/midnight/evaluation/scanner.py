@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import re
 import tarfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import IO
 
 _NAME_MARKERS = re.compile(
     r"(?i)(?:^|[._-])(solution|writeup|answer|grader|expected[_-]?flag)(?:[._-]|$)"
@@ -17,8 +19,10 @@ _CONTENT_MARKERS = re.compile(
 )
 _DEFAULT_FLAG = re.compile(rb"(?i)\b[A-Za-z0-9_]{0,32}(?:flag|ctf)[A-Za-z0-9_]*\{[^}\r\n]{2,}\}")
 _TEXT_LIMIT = 4 * 1024 * 1024
-_ARCHIVE_MEMBER_LIMIT = 16 * 1024 * 1024
+_ARCHIVE_MEMBER_LIMIT = 32 * 1024 * 1024
 _ARCHIVE_TOTAL_LIMIT = 128 * 1024 * 1024
+_ARCHIVE_MEMBER_COUNT_LIMIT = 4096
+_ARCHIVE_DEPTH_LIMIT = 3
 
 
 @dataclass(frozen=True)
@@ -34,9 +38,30 @@ class Finding:
         return cls(hashlib.sha256(raw).hexdigest()[:16], path, rule, detail)
 
 
+@dataclass
+class _ArchiveBudget:
+    members: int = 0
+    decompressed_bytes: int = 0
+
+
 def _unsafe_archive_name(name: str) -> bool:
-    path = PurePosixPath(name)
-    return path.is_absolute() or any(part == ".." for part in path.parts)
+    path = PurePosixPath(name.replace("\\", "/"))
+    return (
+        path.is_absolute()
+        or any(part == ".." for part in path.parts)
+        or bool(path.parts and path.parts[0].endswith(":"))
+    )
+
+
+def _name_finding(path: str, name: str) -> Finding | None:
+    marker = _NAME_MARKERS.search(PurePosixPath(name.replace("\\", "/")).name)
+    if marker is None:
+        return None
+    return Finding.create(
+        path=path,
+        rule="sensitive-filename",
+        detail=f"filename contains {marker.group(1).lower()!r}",
+    )
 
 
 def _scan_bytes(path: str, data: bytes, patterns: list[re.Pattern[bytes]]) -> list[Finding]:
@@ -66,13 +91,77 @@ def _scan_bytes(path: str, data: bytes, patterns: list[re.Pattern[bytes]]) -> li
     return findings
 
 
-def _scan_zip(path: Path, patterns: list[re.Pattern[bytes]]) -> list[Finding]:
-    findings: list[Finding] = []
-    total = 0
+def _limit_finding(path: str, detail: str) -> Finding:
+    return Finding.create(path=path, rule="archive-limit", detail=detail)
+
+
+def _read_archive_member(
+    stream: IO[bytes],
+    *,
+    path: str,
+    declared_size: int,
+    budget: _ArchiveBudget,
+) -> tuple[bytes | None, list[Finding], bool]:
+    if declared_size > _ARCHIVE_MEMBER_LIMIT:
+        return None, [_limit_finding(path, "archive member size exceeded")], False
+    remaining = _ARCHIVE_TOTAL_LIMIT - budget.decompressed_bytes
+    if declared_size > remaining:
+        return None, [_limit_finding(path, "archive total size exceeded")], False
+
+    read_limit = min(_ARCHIVE_MEMBER_LIMIT, remaining)
+    data = stream.read(read_limit + 1)
+    budget.decompressed_bytes += min(len(data), read_limit)
+    if len(data) > read_limit:
+        return None, [_limit_finding(path, "archive decompressed size exceeded")], True
+    return data, [], False
+
+
+def _archive_kind(data: bytes) -> str | None:
+    source = io.BytesIO(data)
+    if zipfile.is_zipfile(source):
+        return "zip"
+    source.seek(0)
     try:
-        with zipfile.ZipFile(path) as archive:
+        with tarfile.open(fileobj=source, mode="r:*"):
+            return "tar"
+    except (OSError, tarfile.TarError):
+        return None
+
+
+def _scan_nested_archive(
+    path: str,
+    data: bytes,
+    patterns: list[re.Pattern[bytes]],
+    budget: _ArchiveBudget,
+    depth: int,
+) -> list[Finding]:
+    kind = _archive_kind(data)
+    if kind is None:
+        return []
+    if depth > _ARCHIVE_DEPTH_LIMIT:
+        return [_limit_finding(path, "archive nesting depth exceeded")]
+    source = io.BytesIO(data)
+    if kind == "zip":
+        return _scan_zip(source, path, patterns, budget, depth)
+    return _scan_tar(source, path, patterns, budget, depth)
+
+
+def _scan_zip(
+    source: Path | IO[bytes],
+    logical_root: str,
+    patterns: list[re.Pattern[bytes]],
+    budget: _ArchiveBudget,
+    depth: int,
+) -> list[Finding]:
+    findings: list[Finding] = []
+    try:
+        with zipfile.ZipFile(source) as archive:
             for member in archive.infolist():
-                logical = f"{path.name}!/{member.filename}"
+                logical = f"{logical_root}!/{member.filename}"
+                if budget.members >= _ARCHIVE_MEMBER_COUNT_LIMIT:
+                    findings.append(_limit_finding(logical, "archive member count exceeded"))
+                    break
+                budget.members += 1
                 if _unsafe_archive_name(member.filename):
                     findings.append(
                         Finding.create(path=logical, rule="archive-path", detail="unsafe member path")
@@ -80,15 +169,26 @@ def _scan_zip(path: Path, patterns: list[re.Pattern[bytes]]) -> list[Finding]:
                     continue
                 if member.is_dir():
                     continue
-                total += member.file_size
-                if member.file_size > _ARCHIVE_MEMBER_LIMIT or total > _ARCHIVE_TOTAL_LIMIT:
-                    findings.append(
-                        Finding.create(path=logical, rule="archive-limit", detail="scan size exceeded")
-                    )
-                    break
+                name_finding = _name_finding(logical, member.filename)
+                if name_finding is not None:
+                    findings.append(name_finding)
                 try:
                     with archive.open(member) as stream:
-                        findings.extend(_scan_bytes(logical, stream.read(), patterns))
+                        data, limit_findings, exhausted = _read_archive_member(
+                            stream,
+                            path=logical,
+                            declared_size=member.file_size,
+                            budget=budget,
+                        )
+                    findings.extend(limit_findings)
+                    if exhausted:
+                        break
+                    if data is None:
+                        continue
+                    findings.extend(_scan_bytes(logical, data, patterns))
+                    findings.extend(
+                        _scan_nested_archive(logical, data, patterns, budget, depth + 1)
+                    )
                 except RuntimeError as exc:
                     if "encrypted" not in str(exc).lower() and "password" not in str(exc).lower():
                         raise
@@ -100,17 +200,30 @@ def _scan_zip(path: Path, patterns: list[re.Pattern[bytes]]) -> list[Finding]:
                         )
                     )
     except (OSError, zipfile.BadZipFile):
-        return []
+        return findings
     return findings
 
 
-def _scan_tar(path: Path, patterns: list[re.Pattern[bytes]]) -> list[Finding]:
+def _scan_tar(
+    source: Path | IO[bytes],
+    logical_root: str,
+    patterns: list[re.Pattern[bytes]],
+    budget: _ArchiveBudget,
+    depth: int,
+) -> list[Finding]:
     findings: list[Finding] = []
-    total = 0
     try:
-        with tarfile.open(path, mode="r:*") as archive:
+        with (
+            tarfile.open(source, mode="r:*")
+            if isinstance(source, Path)
+            else tarfile.open(fileobj=source, mode="r:*")
+        ) as archive:
             for member in archive:
-                logical = f"{path.name}!/{member.name}"
+                logical = f"{logical_root}!/{member.name}"
+                if budget.members >= _ARCHIVE_MEMBER_COUNT_LIMIT:
+                    findings.append(_limit_finding(logical, "archive member count exceeded"))
+                    break
+                budget.members += 1
                 if _unsafe_archive_name(member.name) or member.issym() or member.islnk():
                     findings.append(
                         Finding.create(path=logical, rule="archive-path", detail="unsafe member type/path")
@@ -118,17 +231,29 @@ def _scan_tar(path: Path, patterns: list[re.Pattern[bytes]]) -> list[Finding]:
                     continue
                 if not member.isfile():
                     continue
-                total += member.size
-                if member.size > _ARCHIVE_MEMBER_LIMIT or total > _ARCHIVE_TOTAL_LIMIT:
-                    findings.append(
-                        Finding.create(path=logical, rule="archive-limit", detail="scan size exceeded")
-                    )
-                    break
+                name_finding = _name_finding(logical, member.name)
+                if name_finding is not None:
+                    findings.append(name_finding)
                 stream = archive.extractfile(member)
                 if stream is not None:
-                    findings.extend(_scan_bytes(logical, stream.read(), patterns))
+                    with stream:
+                        data, limit_findings, exhausted = _read_archive_member(
+                            stream,
+                            path=logical,
+                            declared_size=member.size,
+                            budget=budget,
+                        )
+                    findings.extend(limit_findings)
+                    if exhausted:
+                        break
+                    if data is None:
+                        continue
+                    findings.extend(_scan_bytes(logical, data, patterns))
+                    findings.extend(
+                        _scan_nested_archive(logical, data, patterns, budget, depth + 1)
+                    )
     except (OSError, tarfile.TarError):
-        return []
+        return findings
     return findings
 
 
@@ -161,19 +286,14 @@ def scan_bundle(root: str | Path, *, flag_patterns: list[str] | None = None) -> 
                 Finding.create(path=relative, rule="file-type", detail="non-regular file")
             )
             continue
-        marker = _NAME_MARKERS.search(path.name)
-        if marker:
-            findings.append(
-                Finding.create(
-                    path=relative,
-                    rule="sensitive-filename",
-                    detail=f"filename contains {marker.group(1).lower()!r}",
-                )
-            )
+        name_finding = _name_finding(relative, path.name)
+        if name_finding is not None:
+            findings.append(name_finding)
         data = path.read_bytes()
         findings.extend(_scan_bytes(relative, data, patterns))
+        budget = _ArchiveBudget()
         if zipfile.is_zipfile(path):
-            findings.extend(_scan_zip(path, patterns))
+            findings.extend(_scan_zip(path, relative, patterns, budget, 0))
         elif tarfile.is_tarfile(path):
-            findings.extend(_scan_tar(path, patterns))
+            findings.extend(_scan_tar(path, relative, patterns, budget, 0))
     return sorted(findings, key=lambda item: (item.path, item.rule, item.finding_id))

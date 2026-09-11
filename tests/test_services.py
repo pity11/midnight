@@ -39,6 +39,8 @@ def _manifest(tmp_path):
 @pytest.mark.asyncio
 async def test_service_manager_builds_and_records_digest(tmp_path, monkeypatch):
     calls: list[tuple[str, ...]] = []
+    monkeypatch.setenv("MIDNIGHT_BUILD_PROXY", "http://127.0.0.1:7890")
+    monkeypatch.setenv("MIDNIGHT_APT_MIRROR", "http://mirrors.example.test/ubuntu")
 
     async def fake_run(*args: str, timeout=None):
         calls.append(args)
@@ -53,7 +55,13 @@ async def test_service_manager_builds_and_records_digest(tmp_path, monkeypatch):
     manager = BenchmarkServiceManager(_manifest(tmp_path))
     digests = await manager.ensure_images()
     assert digests == {"_target/task-1": "sha256:1234"}
-    assert any(call[1] == "build" for call in calls)
+    build = next(call for call in calls if call[1] == "build")
+    no_proxy = next(
+        build[index + 1]
+        for index, value in enumerate(build)
+        if value == "--build-arg" and build[index + 1].startswith("NO_PROXY=")
+    )
+    assert "mirrors.example.test" in no_proxy
     assert manager.targets == {"task-1": "target_one:1337"}
 
 

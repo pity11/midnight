@@ -81,6 +81,7 @@ forensics:
   - artifact_triage
   - archive_extract
   - log_triage
+  - log_audit
   - linux_ir_triage
   - stego_scan
   - memory_analyze

@@ -162,7 +162,11 @@ a reproducible timeline before drawing a conclusion. Use artifact_triage for an
 unknown bundle before selecting a parser.
 For incident-response bundles, call log_triage to identify high-value events and
 then correlate timestamps, users, hosts, processes, network endpoints, and file
-changes. Extract supplied archives with archive_extract. If they contain a Linux
+changes. For Web, authentication, application or database logs, use log_audit on
+one file or one same-format directory at a time; enumerate nested or mixed trees
+and analyze each relevant family separately. Then verify answer-bearing fields in
+the original source lines. Extract supplied archives with
+archive_extract. If they contain a Linux
 host tree or backup, run linux_ir_triage on its root before manually following
 the reported accounts, special permissions, persistence, web, network, or MySQL
 pivots. For EVTX inputs, use evtx_triage and correlate event IDs, providers,

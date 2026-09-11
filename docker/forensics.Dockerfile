@@ -47,5 +47,20 @@ RUN curl -fsSL --retry 5 \
     && chmod 0755 /usr/local/bin/hayabusa \
     && rm /tmp/hayabusa.zip
 
+# Deterministic multi-format log normalization and attack-rule detection.
+# Keep the upstream source and MIT license in the image and pin the exact
+# reviewed revision so offline competition runs see a stable implementation.
+ARG LOG_AUDIT_REV=cb70687578945bad4dd814baa645c308d89ffd80
+RUN git clone --filter=blob:none https://github.com/chu0119/log-audit.git /opt/log-audit \
+    && git -C /opt/log-audit checkout "$LOG_AUDIT_REV" \
+    && rm -rf /opt/log-audit/.git \
+    && python3 -m pip install --no-cache-dir --retries 10 --timeout 120 \
+        PyYAML==6.0.2 defusedxml==0.7.1 \
+    && printf '%s\n' '#!/bin/sh' 'cd /opt/log-audit || exit 1' \
+        'exec python3 -m scripts.log_parser "$@"' > /usr/local/bin/log-audit-parse \
+    && printf '%s\n' '#!/bin/sh' 'cd /opt/log-audit || exit 1' \
+        'exec python3 -m scripts.analyze "$@"' > /usr/local/bin/log-audit-analyze \
+    && chmod 0755 /usr/local/bin/log-audit-parse /usr/local/bin/log-audit-analyze
+
 WORKDIR /ctf
 CMD ["sleep", "infinity"]

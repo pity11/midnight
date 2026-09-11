@@ -302,6 +302,9 @@ class ContainerManager:
         if apt_mirror:
             mirror = _apt_mirror(apt_mirror)
             build_args += ["--build-arg", f"APT_MIRROR={mirror}"]
+            mirror_host = urlsplit(mirror).hostname
+            if mirror_host:
+                direct_hosts.add(mirror_host)
         if build_proxy:
             no_proxy = ",".join(sorted(direct_hosts))
             build_args += ["--build-arg", f"NO_PROXY={no_proxy}"]

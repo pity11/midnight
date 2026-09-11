@@ -39,17 +39,72 @@ def make_archive_extract(*, env: CTFEnvironment, **_) -> object:
         password_arg = shlex.quote(f"-p{password}") if password else "-p-"
         command = (
             f"test -f {source} || {{ echo '[error] archive not found' >&2; exit 2; }}; "
-            f"rm -rf -- {destination}; mkdir -p -- {destination}; "
-            f"7z x -y -bd -bb0 {password_arg} -o{destination} -- {source}; "
+            f"dst=$(realpath -m -- {destination}) || exit 2; "
+            "case \"$dst\" in /ctf/*) ;; *) echo '[error] output resolves outside /ctf' >&2; exit 2 ;; esac; "
+            "rm -rf -- \"$dst\"; mkdir -p -- \"$dst\"; "
+            f"7z x -y -bd -bb0 {password_arg} -o\"$dst\" -- {source}; "
             "code=$?; test \"$code\" -eq 0 || exit \"$code\"; "
-            f"echo '[files]'; find {destination} -xdev -maxdepth 8 -type f "
+            "echo '[files]'; find \"$dst\" -xdev -maxdepth 8 -type f "
             "-printf '%s\t%p\n' 2>/dev/null | sort -n | head -240; "
-            f"echo '[symlinks]'; find {destination} -xdev -maxdepth 8 -type l "
+            "echo '[symlinks]'; find \"$dst\" -xdev -maxdepth 8 -type l "
             "-printf '%p -> %l\n' 2>/dev/null | head -80"
         )
         return _result_text(await env.exec(command, timeout=600))
 
     return archive_extract
+
+
+@register_tool(name="log_audit", groups=["forensics"])
+def make_log_audit(*, env: CTFEnvironment, **_) -> object:
+    from langchain_core.tools import tool
+
+    @tool
+    async def log_audit(
+        path: str, output_dir: str = "/ctf/log-audit"
+    ) -> str:
+        """Normalize and detect attacks in one log file or one same-format directory.
+
+        Produces events, parser metadata, rule detections, profiles and IOC
+        correlations. The normalized copy is redacted by the upstream tool;
+        use its source line numbers to verify answer-bearing evidence against
+        the original local logs. For mixed or nested trees, call this once per
+        relevant file or per directory whose immediate files share a format.
+        """
+        output_path = PurePosixPath(output_dir)
+        if (
+            not output_dir
+            or output_dir in {".", "/", "/ctf"}
+            or ".." in output_path.parts
+            or (output_path.is_absolute() and not str(output_path).startswith("/ctf/"))
+        ):
+            raise ValueError("output_dir must be a dedicated path within the challenge workspace")
+        source = shlex.quote(path)
+        destination = shlex.quote(output_dir)
+        program = (
+            "import json,pathlib,sys; root=pathlib.Path(sys.argv[1]); "
+            "names=('meta.json','profile.json','iocs.json'); "
+            "print(json.dumps({n:json.loads((root/n).read_text()) for n in names "
+            "if (root/n).is_file()},ensure_ascii=False,indent=2)); "
+            "d=root/'detections.jsonl'; "
+            "print('[detections]'); print('\\n'.join(d.read_text().splitlines()[:160]) "
+            "if d.is_file() else '')"
+        )
+        encoded = base64.b64encode(program.encode()).decode()
+        command = (
+            f"src=$(realpath -- {source}) || exit 2; "
+            f"dst=$(realpath -m -- {destination}) || exit 2; "
+            "case \"$dst\" in /ctf/*) ;; *) echo '[error] output resolves outside /ctf' >&2; exit 2 ;; esac; "
+            "rm -rf -- \"$dst\"; mkdir -p -- \"$dst\"; "
+            "log-audit-parse \"$src\" -o \"$dst\" && "
+            "log-audit-analyze detect -e \"$dst\" -r /opt/log-audit/rules "
+            "-o \"$dst/detections.jsonl\" && "
+            "log-audit-analyze profile -e \"$dst\" -o \"$dst/profile.json\" && "
+            "log-audit-analyze ioc -e \"$dst\" -o \"$dst/iocs.json\" && "
+            f"python3 -c \"import base64;exec(base64.b64decode('{encoded}'))\" \"$dst\""
+        )
+        return _result_text(await env.exec(command, timeout=900))
+
+    return log_audit
 
 
 @register_tool(name="qr_decode", groups=["misc", "forensics"])

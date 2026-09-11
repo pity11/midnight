@@ -304,12 +304,12 @@ async def _amain(args: argparse.Namespace) -> int:
             status: Literal["PONG"]
 
         probe = build_llm("default", config=cfg).with_structured_output(HealthResponse)
-        response = HealthResponse.model_validate(
+        health_response = HealthResponse.model_validate(
             await probe.ainvoke(
                 "Connection check. Return exactly the requested structured response with status PONG."
             )
         )
-        if response.status != "PONG":
+        if health_response.status != "PONG":
             raise RuntimeError("MODEL_PREFLIGHT_FAILED")
         log.info("model preflight OK: %s", effective_model_id("default", config=cfg))
         return 0
@@ -325,10 +325,10 @@ async def _amain(args: argparse.Namespace) -> int:
             return value
 
         probe = build_llm("default", config=cfg).bind_tools([midnight_connection_probe])
-        response = await probe.ainvoke(
+        tool_response = await probe.ainvoke(
             "Preflight only. Call midnight_connection_probe exactly once with value PING."
         )
-        calls = list(getattr(response, "tool_calls", None) or [])
+        calls = list(getattr(tool_response, "tool_calls", None) or [])
         if len(calls) != 1 or calls[0].get("name") != "midnight_connection_probe":
             raise RuntimeError("MODEL_TOOL_PREFLIGHT_FAILED")
         if (calls[0].get("args") or {}).get("value") != "PING":

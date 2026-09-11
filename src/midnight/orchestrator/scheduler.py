@@ -251,7 +251,13 @@ class Scheduler:
                         or (hydrated or ch).get("round_id"),
                         category=(hydrated or ch).get("category_hint"),
                         duration_seconds=round(time.monotonic() - started, 3),
-                        **progress,
+                        attempts=progress.get("attempts", 0),
+                        input_tokens=progress.get("input_tokens", 0),
+                        output_tokens=progress.get("output_tokens", 0),
+                        tool_calls=progress.get("tool_calls", 0),
+                        repeated_tool_calls=progress.get("repeated_tool_calls", 0),
+                        tool_errors=progress.get("tool_errors", 0),
+                        protocol_recoveries=progress.get("protocol_recoveries", 0),
                     )
                 except Exception as exc:  # noqa: BLE001
                     self._event(

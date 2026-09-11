@@ -12,6 +12,7 @@ from midnight.tools.advanced import (
     make_hayabusa_timeline,
     make_jwt_analyze,
     make_kaitai_compile,
+    make_log_audit,
     make_qr_decode,
     make_rsa_attack,
     make_tinja_ssti,
@@ -614,7 +615,9 @@ async def test_archive_extract_quotes_paths_and_password() -> None:
     command, timeout = env.calls[0]
     assert "'-pknown pass'" in command
     assert "'host backup.zip'" in command
-    assert "-o'host tree'" in command
+    assert "realpath -m -- 'host tree'" in command
+    assert '-o"$dst"' in command
+    assert "output resolves outside /ctf" in command
     assert timeout == 600
     with pytest.raises(ValueError, match="dedicated path"):
         await action.ainvoke({"archive": "host.zip", "output_dir": "/ctf"})
@@ -630,6 +633,25 @@ async def test_linux_ir_triage_quotes_root_and_report() -> None:
     command, timeout = env.calls[0]
     assert "'host tree' 'ir report.json'" in command
     assert timeout == 600
+
+
+@pytest.mark.asyncio
+async def test_log_audit_quotes_source_and_dedicated_output() -> None:
+    env = _Env()
+    action = make_log_audit(env=env)
+    await action.ainvoke({"path": "access log", "output_dir": "/ctf/audit output"})
+    command, timeout = env.calls[0]
+    assert "realpath -- 'access log'" in command
+    assert "realpath -m -- '/ctf/audit output'" in command
+    assert "output resolves outside /ctf" in command
+    assert "log-audit-parse" in command
+    assert "&& log-audit-analyze detect" in command
+    assert "&& log-audit-analyze profile" in command
+    assert "&& log-audit-analyze ioc" in command
+    assert "'/ctf/audit output'" in command
+    assert timeout == 900
+    with pytest.raises(ValueError, match="dedicated path"):
+        await action.ainvoke({"path": "logs", "output_dir": "/ctf"})
 
 
 @pytest.mark.asyncio

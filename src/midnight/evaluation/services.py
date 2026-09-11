@@ -8,6 +8,7 @@ import json
 import os
 import re
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -130,6 +131,9 @@ class BenchmarkServiceManager:
             if mirror_value:
                 mirror = _apt_mirror(mirror_value)
                 args += ["--build-arg", f"APT_MIRROR={mirror}"]
+                mirror_host = urlsplit(mirror).hostname
+                if mirror_host:
+                    direct_hosts.add(mirror_host)
             if proxy_value:
                 no_proxy = ",".join(sorted(direct_hosts))
                 args += ["--build-arg", f"NO_PROXY={no_proxy}"]

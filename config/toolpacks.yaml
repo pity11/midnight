@@ -168,6 +168,12 @@ forensics:
     command: hayabusa
     artifact_sha256: 04d4daf91ad0cc576654e985315f15e412a3ad460f2702f2a9dde3fbd1104a8b
     purpose: Build fast EVTX timelines and apply bundled Sigma detection rules offline
+  - name: log-audit
+    version: cb70687578945bad4dd814baa645c308d89ffd80
+    source: https://github.com/chu0119/log-audit
+    license: MIT
+    command: log-audit-parse
+    purpose: Normalize Web, application, authentication and database logs for deterministic profiling and attack-rule detection
   - name: John the Ripper
     version: ubuntu-22.04
     source: https://www.openwall.com/john/
