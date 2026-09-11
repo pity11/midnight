@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
@@ -29,9 +29,35 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
     # tail. Keep the completed phase names separately so deterministic gates do
     # not send the model back to the start when an older call falls off the tail.
     prior_tool_names: frozenset[str] = frozenset()
+    prior_tool_counts: tuple[tuple[str, int], ...] = ()
+    prior_tool_call_ids: frozenset[str] = frozenset()
+    forensics_shell_limit: int = 12
+    _observed_tool_names: set[str] = field(init=False, repr=False)
+    _observed_tool_counts: dict[str, int] = field(init=False, repr=False)
+    _observed_tool_call_ids: set[str] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._observed_tool_names = set(self.prior_tool_names)
+        self._observed_tool_counts = dict(self.prior_tool_counts)
+        self._observed_tool_call_ids = set(self.prior_tool_call_ids)
+
+    def _observe_calls(self, calls: list[dict]) -> None:
+        """Retain phase and budget state across bounded transcript continuations."""
+        for call in calls:
+            name = str(call.get("name") or "")
+            if not name:
+                continue
+            self._observed_tool_names.add(name)
+            call_id = str(call.get("id") or "")
+            if call_id and call_id in self._observed_tool_call_ids:
+                continue
+            if call_id:
+                self._observed_tool_call_ids.add(call_id)
+            self._observed_tool_counts[name] = self._observed_tool_counts.get(name, 0) + 1
 
     def _called(self, calls: list[dict], name: str) -> bool:
-        return name in self.prior_tool_names or any(call.get("name") == name for call in calls)
+        self._observe_calls(calls)
+        return name in self._observed_tool_names
 
     @staticmethod
     def _forensics_evidence_types(messages: list) -> tuple[bool, bool, bool]:
@@ -226,6 +252,7 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
     def constrained_tool_names(self, messages: list) -> set[str] | None:
         """Return the deterministic tool lane for the current phase, if any."""
         calls = _calls(messages)
+        self._observe_calls(calls)
         if self.category == "forensics":
             # Forensics produces extracted evidence and timelines rather than a
             # mandatory solve.py, and generally has no exploit target to run.
@@ -332,12 +359,16 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             }
         return None
 
-    @staticmethod
-    def _constrain_request(request: Any, allowed: set[str] | None):
-        if not allowed:
-            return request
-        selected = [tool for tool in request.tools if getattr(tool, "name", "") in allowed]
-        return request.override(tools=selected) if selected else request
+    def _constrain_request(self, request: Any, allowed: set[str] | None):
+        tools = list(request.tools)
+        if allowed:
+            tools = [tool for tool in tools if getattr(tool, "name", "") in allowed]
+        if (
+            self.category == "forensics"
+            and self._observed_tool_counts.get("run_shell", 0) >= self.forensics_shell_limit
+        ):
+            tools = [tool for tool in tools if getattr(tool, "name", "") != "run_shell"]
+        return request.override(tools=tools) if tools != list(request.tools) else request
 
     def wrap_model_call(self, request, handler):
         """Make a phase gate enforceable by exposing only phase-valid tools."""

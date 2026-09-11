@@ -83,6 +83,46 @@ def test_forensics_prior_tool_names_survive_outer_retry_truncation():
     assert gate.constrained_tool_names(messages) == {"pcap_artifact_extract"}
 
 
+def test_forensics_observed_tool_names_survive_inner_continuation_truncation():
+    gate = ArtifactPhaseGateMiddleware(category="forensics")
+    first = [_tool_message(1, "list_dir"), HumanMessage("/ctf/access.log")]
+    assert gate.constrained_tool_names(first) == {"log_audit"}
+    completed = [*first, _tool_message(2, "log_audit", {"path": "/ctf/access.log"})]
+    assert gate.constrained_tool_names(completed) is None
+    assert gate.constrained_tool_names([HumanMessage("continue /ctf/access.log")]) is None
+
+
+def test_forensics_shell_budget_counts_prior_and_current_unique_calls():
+    gate = ArtifactPhaseGateMiddleware(
+        category="forensics",
+        prior_tool_counts=(("run_shell", 10),),
+        prior_tool_call_ids=frozenset({"old-1"}),
+        forensics_shell_limit=12,
+    )
+    calls = [
+        _tool_message(1, "run_shell"),
+        _tool_message(2, "run_shell"),
+    ]
+    gate.constrained_tool_names(calls)
+    assert gate._observed_tool_counts["run_shell"] == 12
+
+    class Tool:
+        def __init__(self, name: str):
+            self.name = name
+
+    class Request:
+        def __init__(self, tools: list[Tool]):
+            self.tools = tools
+
+        def override(self, *, tools: list[Tool]):
+            return Request(tools)
+
+    constrained = gate._constrain_request(Request([Tool("run_shell"), Tool("read_file")]), None)
+    assert [tool.name for tool in constrained.tools] == ["read_file"]
+    gate.constrained_tool_names(calls)
+    assert gate._observed_tool_counts["run_shell"] == 12
+
+
 def test_forensics_detects_capture_path_from_tool_arguments():
     gate = ArtifactPhaseGateMiddleware(
         category="forensics",

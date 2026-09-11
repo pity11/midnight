@@ -19,6 +19,7 @@ CTFEnvironment, runs it on the shared ``messages``, then returns control.
 from __future__ import annotations
 
 import time
+from collections import Counter
 
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
@@ -183,17 +184,24 @@ def build_main_graph(
             from midnight.graph.middleware import ArtifactPhaseGateMiddleware
 
             target = str((state.get("challenge") or {}).get("remote") or "")
-            prior_tool_names = frozenset(
-                call.get("name", "")
+            prior_tool_calls = [
+                call
                 for message in (state.get("messages") or [])
                 for call in (getattr(message, "tool_calls", None) or [])
                 if call.get("name")
+            ]
+            prior_tool_names = frozenset(str(call["name"]) for call in prior_tool_calls)
+            prior_tool_counts = Counter(str(call["name"]) for call in prior_tool_calls)
+            prior_tool_call_ids = frozenset(
+                str(call["id"]) for call in prior_tool_calls if call.get("id")
             )
             middleware = [
                 ArtifactPhaseGateMiddleware(
                     category=expert,
                     target=target,
                     prior_tool_names=prior_tool_names,
+                    prior_tool_counts=tuple(sorted(prior_tool_counts.items())),
+                    prior_tool_call_ids=prior_tool_call_ids,
                 ),
                 # Middleware makes each model+tool cycle consume several graph
                 # transitions. The model-call limit is the semantic bound; the
@@ -253,12 +261,20 @@ def build_main_graph(
                         f" These flags were already tried and REJECTED as wrong: "
                         f"{', '.join(rejected)}. Do NOT submit them again."
                     )
-                feedback += (
-                    " Continue from existing artifacts in /ctf instead of restarting. "
-                    "First inspect solve.py and progress.md if present. Identify the last "
-                    "phase reached, record the failed assumption, then choose a materially "
-                    "different next experiment. Do not repeat prior probes or payloads."
-                )
+                if expert == "forensics":
+                    feedback += (
+                        " Continue from existing evidence and extracted artifacts in /ctf. "
+                        "Review evidence.jsonl and tool-generated manifests or timelines, "
+                        "identify the last evidentiary gap, then choose one materially different "
+                        "structured action. Do not repeat completed inventory or broad shell probes."
+                    )
+                else:
+                    feedback += (
+                        " Continue from existing artifacts in /ctf instead of restarting. "
+                        "First inspect solve.py and progress.md if present. Identify the last "
+                        "phase reached, record the failed assumption, then choose a materially "
+                        "different next experiment. Do not repeat prior probes or payloads."
+                    )
                 if evidence_tail:
                     feedback += f"\n\n[DURABLE EVIDENCE]\n{evidence_tail}"
                 if state.get("error"):
