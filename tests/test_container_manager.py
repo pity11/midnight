@@ -249,8 +249,9 @@ async def test_image_preflight_runs_offline(monkeypatch):
 
     invocation = calls[-1]
     assert invocation[:5] == ("docker", "run", "--rm", "--network", "none")
-    assert invocation[5:7] in ((), ("--platform", "linux/amd64"))
-    assert "midnight/pwn:latest" in invocation
+    image_index = invocation.index("midnight/pwn:latest")
+    assert invocation[5:image_index] in ((), ("--platform", "linux/amd64"))
+    assert invocation[image_index + 1] == "bash"
 
 
 def test_sandbox_profile_rejects_shell_fragments():
