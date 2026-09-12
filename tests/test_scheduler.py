@@ -267,6 +267,45 @@ async def test_task_timeout_recovers_durable_checkpoint_metrics(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_solver_failure_recovers_durable_checkpoint_metrics(tmp_path):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"fixture")
+    message = SimpleNamespace(
+        id="durable-failure-message",
+        type="ai",
+        usage_metadata={"input_tokens": 11, "output_tokens": 4},
+        additional_kwargs={},
+        tool_calls=[{"name": "run_exploit", "args": {"mode": "target"}}],
+        content="",
+    )
+
+    class DurableStore:
+        def latest_channel_values(self, thread_id):
+            assert thread_id.startswith("failed-run:pwn-1:")
+            return [{"attempt": 2, "messages": [message]}]
+
+    scheduler = Scheduler(
+        provider=FixtureProvider(source),
+        submitter=NoopSubmitter(),
+        artifacts_root=tmp_path / "artifacts",
+        run_id="failed-run",
+        checkpoint_store=DurableStore(),
+    )
+
+    async def failed_solve(challenge):
+        raise RuntimeError("Request timed out.")
+
+    scheduler._solve_one = failed_solve
+    result = (await scheduler.solve_all([{"id": "pwn-1"}]))[0]
+    assert result.status == "failed"
+    assert result.error == "Request timed out."
+    assert result.attempts == 2
+    assert result.input_tokens == 11
+    assert result.output_tokens == 4
+    assert result.tool_calls == 1
+
+
+@pytest.mark.asyncio
 async def test_managed_provider_instance_is_always_stopped(tmp_path):
     class ManagedProvider(FixtureProvider):
         def __init__(self, source):

@@ -256,6 +256,11 @@ prompt and configuration hashes, Docker image IDs, budgets, network policy,
 attempt, and seed. Reusing the same identity resumes that attempt; changing the
 attempt creates an independent run.
 
+The competition CUC provider uses one bounded transport retry so a single
+gateway timeout does not discard an otherwise healthy challenge run. If the
+request still fails, the report recovers redacted attempt, token, and tool
+counters from the durable checkpoint instead of reporting zero activity.
+
 Mixed offline and target-only suites use `bundle_enforced`: every task retains
 its own immutable network policy, and the run manifest records the complete
 task-to-policy mapping. Open-world access is rejected in this mode.

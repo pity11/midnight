@@ -97,6 +97,8 @@ notepad config\platform.local.yaml
 预检分别验证模型 JSON/工具协议、平台只读取题接口，以及 Docker 中全部工具。
 `platform-preflight` 不启动靶场、不解题、不提交。
 
+CUC provider 对单次网关超时执行一次有界传输重试，且始终受整题截止时间约束。若重试后仍失败，脱敏报告会从持久化 checkpoint 恢复尝试次数、Token 和工具计数，避免把已经发生的活动错误记录为 0。
+
 若主办方提供联调环境，可以让 Agent 自动获取全部测试题并提交：
 
 ```powershell

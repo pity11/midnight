@@ -12,7 +12,9 @@ providers:
     model_env: CUC_MODEL
     connect_timeout: 10
     timeout: 120
-    max_retries: 0
+    # One bounded transport retry prevents an isolated 120-second gateway stall
+    # from aborting the entire challenge. The outer task deadline still wins.
+    max_retries: 1
     tool_mode: json_protocol
     require_https: true
     # The CUC VPN advertises IPv4 campus routes while the public AAAA address
@@ -29,7 +31,7 @@ providers:
     model_env: CUC_MODEL
     connect_timeout: 10
     timeout: 120
-    max_retries: 0
+    max_retries: 1
     tool_mode: json_protocol
     require_https: true
     network_mode: direct_ipv4

@@ -163,6 +163,29 @@ class Scheduler:
                 )
             )
 
+    async def _durable_progress(
+        self,
+        challenge_id: str,
+        hydrated: Challenge | None,
+    ) -> dict[str, int]:
+        """Recover redacted counters when a graph invocation exits exceptionally."""
+        if self.checkpoint_store is None or hydrated is None:
+            return {}
+        thread_id = CheckpointStore.thread_id(
+            self.run_id,
+            challenge_id,
+            hydrated.get("source_hash") or hydrated.get("round_id"),
+        )
+        try:
+            states = await asyncio.to_thread(
+                self.checkpoint_store.latest_channel_values,
+                thread_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("could not recover checkpoint metrics for %s: %s", challenge_id, exc)
+            return {}
+        return _checkpoint_progress(states)
+
     async def solve_all(self, challenges: list[Challenge]) -> list[Result]:
         run_deadline = time.time() + self.run_timeout if self.run_timeout else None
         ordered = sorted(challenges, key=self._priority_key)
@@ -232,17 +255,7 @@ class Scheduler:
                     )
                     return result
                 except TimeoutError:
-                    progress: dict[str, int] = {}
-                    if self.checkpoint_store is not None and hydrated is not None:
-                        thread_id = CheckpointStore.thread_id(
-                            self.run_id,
-                            challenge_id,
-                            hydrated.get("source_hash") or hydrated.get("round_id"),
-                        )
-                        states = await asyncio.to_thread(
-                            self.checkpoint_store.latest_channel_values, thread_id
-                        )
-                        progress = _checkpoint_progress(states)
+                    progress = await self._durable_progress(challenge_id, hydrated)
                     self._event("challenge_finished", challenge_id, status="timeout")
                     return Result(
                         challenge_id,
@@ -260,6 +273,7 @@ class Scheduler:
                         protocol_recoveries=progress.get("protocol_recoveries", 0),
                     )
                 except Exception as exc:  # noqa: BLE001
+                    progress = await self._durable_progress(challenge_id, hydrated)
                     self._event(
                         "challenge_finished",
                         challenge_id,
@@ -274,6 +288,13 @@ class Scheduler:
                         or (hydrated or ch).get("round_id"),
                         category=(hydrated or ch).get("category_hint"),
                         duration_seconds=round(time.monotonic() - started, 3),
+                        attempts=progress.get("attempts", 0),
+                        input_tokens=progress.get("input_tokens", 0),
+                        output_tokens=progress.get("output_tokens", 0),
+                        tool_calls=progress.get("tool_calls", 0),
+                        repeated_tool_calls=progress.get("repeated_tool_calls", 0),
+                        tool_errors=progress.get("tool_errors", 0),
+                        protocol_recoveries=progress.get("protocol_recoveries", 0),
                     )
                 finally:
                     if instance_started:
