@@ -85,6 +85,7 @@ tests/           Offline tests and local challenge fixtures
 - [x] Project scaffold and typed configuration
 - [x] Single-challenge solve loop
 - [x] Category router and specialist graphs
+- [x] Trusted bundle-category fast path with live-platform classifier fallback
 - [x] Isolated execution environments
 - [x] Offline sandbox capability preflight
 - [x] Interactive tool sessions

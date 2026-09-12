@@ -93,6 +93,7 @@ class ValidatedBundleProvider:
             file_destinations=file_destinations,
             remote=task.get("remote"),
             category_hint=manifest.category,
+            category_hint_trusted=True,
             flag_format=task.get("flag_format"),
             round_id=manifest.suite_version,
             source_hash=manifest.bundle_sha256,

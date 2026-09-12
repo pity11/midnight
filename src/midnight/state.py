@@ -26,6 +26,7 @@ class Challenge(TypedDict, total=False):
     remote: str | None  # "host:port" for pwn/web, if any
     interactive: bool  # whether solving occupies an organizer target instance
     category_hint: str | None  # platform-provided category hint (optional)
+    category_hint_trusted: bool  # validated metadata may bypass model classification
     flag_format: str | None  # per-challenge flag regex override (optional)
     round_id: str | None  # platform round/version identifier
     file_hashes: dict[str, str]  # attachment name -> SHA-256

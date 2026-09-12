@@ -201,6 +201,9 @@ must remain identical across controlled comparisons.
 When a specialist exhausts its bounded transport retry, the graph records a
 normalized transient model error and advances through the ordinary bounded
 specialist retry path instead of failing the entire task immediately.
+The validated bundle provider marks manifest categories as trusted; formal
+benchmarks route directly from that immutable metadata and do not spend model
+latency on redundant category classification.
 
 ## Required measurements
 

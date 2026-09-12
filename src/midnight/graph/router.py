@@ -53,11 +53,19 @@ Respond with the category and a one-sentence reason."""
 
 def make_classify_node():
     """Build the classify node (LLM structured output)."""
-    llm = build_llm("classify")
-    structured = llm.with_structured_output(Classification)
+    structured = None
 
     async def classify(state: CTFState) -> dict:
+        nonlocal structured
         ch = state["challenge"]
+        hint = cast(ChallengeType, ch.get("category_hint") or "unknown")
+        if ch.get("category_hint_trusted") and hint in _SPECIALIST_NODE and hint != "unknown":
+            reason = "trusted validated category hint"
+            log.info("classified %s -> %s (%s)", ch.get("id"), hint, reason)
+            return {"challenge_type": hint, "classify_reason": reason}
+        if structured is None:
+            llm = build_llm("classify")
+            structured = llm.with_structured_output(Classification)
         prompt = _CLASSIFY_PROMPT.format(
             name=ch.get("name", ""),
             hint=ch.get("category_hint") or "(none)",

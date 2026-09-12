@@ -36,6 +36,7 @@ def test_validated_provider_exposes_clean_bundle(tmp_path):
     assert len(challenges) == 1
     assert challenges[0]["id"] == "rev-1"
     assert challenges[0]["category_hint"] == "reverse"
+    assert challenges[0]["category_hint_trusted"] is True
     assert challenges[0]["source_hash"]
     assert [path.rsplit("/", 1)[-1] for path in challenges[0]["files"]] == ["chall.bin"]
     source = challenges[0]["files"][0]

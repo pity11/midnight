@@ -91,7 +91,10 @@ use atomic temporary files.
 
 The classifier routes each task to a bounded specialist for pwn, reverse, web,
 crypto, forensics, or misc work. Specialists use a shared tool registry but
-receive category-specific prompts and tool lists. `ask_expert` permits bounded
+receive category-specific prompts and tool lists. Immutable evaluator
+bundles mark their manifest category as trusted, so benchmark runs route from
+that validated hint without spending a model request; untrusted live-platform
+hints still pass through the classifier. `ask_expert` permits bounded
 cross-category help inside the same challenge container and rejects cyclic or
 over-depth delegation. Candidate rejection feeds back into the next attempt,
 with a fixed maximum attempt count. Retry routes are deliberately diverse: the
