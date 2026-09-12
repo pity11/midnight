@@ -194,6 +194,11 @@ private `pwn-executions.jsonl` record redacts flag-shaped output and is injected
 into retry memory as a bounded failure history; it is never copied into the
 published evaluation report.
 
+The CUC JSON-protocol roles use bounded per-response generation limits: 512
+tokens for classification, 1024 for the default/preflight role, and 1536 for
+specialists. These limits are part of the immutable configuration revision and
+must remain identical across controlled comparisons.
+
 ## Required measurements
 
 Each run records:

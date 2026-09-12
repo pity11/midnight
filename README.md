@@ -260,6 +260,9 @@ The competition CUC provider uses one bounded transport retry so a single
 gateway timeout does not discard an otherwise healthy challenge run. If the
 request still fails, the report recovers redacted attempt, token, and tool
 counters from the durable checkpoint instead of reporting zero activity.
+CUC role output limits are intentionally bounded (512 for classification, 1024
+for connection/default requests, and 1536 for specialists) because each JSON
+protocol turn should emit one action rather than reserve a long prose response.
 
 Mixed offline and target-only suites use `bundle_enforced`: every task retains
 its own immutable network policy, and the run manifest records the complete

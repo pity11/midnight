@@ -91,6 +91,7 @@ scripts/competition local-preflight
 如果 `model-preflight` 失败，不能进入正式挑战。优先核对现场提供的 Base URL 是否包含正确路径、模型名是否精确、APIKey 是否属于模型网关；如果主办方接口不是 OpenAI `chat/completions` 兼容格式，需要在准备阶段向裁判索取对应调用范式。
 
 CUC provider 对单次网关超时执行一次有界传输重试，且始终受整题截止时间约束。若重试后仍失败，脱敏报告会从持久化 checkpoint 恢复尝试次数、Token 和工具计数，避免把已经发生的活动错误记录为 0。
+CUC 的输出上限按职责限制为分类 512、默认连接检查 1024、解题专家 1536 Token。JSON 工具协议每轮只应产生一个动作，这能减少拥塞时的排队与无效长输出。
 
 若主办方提供联调题，再按顺序执行：
 

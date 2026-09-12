@@ -1,8 +1,8 @@
 # Role policy. Provider connection details live in providers.yaml.
-default:  { temperature: 0.0, max_tokens: 4096 }
-classify: { temperature: 0.0, max_tokens: 1024 }
-pwn:      { temperature: 0.2, max_tokens: 4096 }
-reverse:  { temperature: 0.2, max_tokens: 4096 }
-web:      { temperature: 0.2, max_tokens: 4096 }
-crypto:   { temperature: 0.0, max_tokens: 4096 }
-misc:     { temperature: 0.2, max_tokens: 4096 }
+default:  { temperature: 0.0, max_tokens: 1024 }
+classify: { temperature: 0.0, max_tokens: 512 }
+pwn:      { temperature: 0.2, max_tokens: 1536 }
+reverse:  { temperature: 0.2, max_tokens: 1536 }
+web:      { temperature: 0.2, max_tokens: 1536 }
+crypto:   { temperature: 0.0, max_tokens: 1536 }
+misc:     { temperature: 0.2, max_tokens: 1536 }
