@@ -69,6 +69,33 @@ _NODE_EXPERT = {
     "misc_specialist": "misc",
 }
 
+_TRANSIENT_MODEL_ERROR_NAMES = frozenset(
+    {
+        "APIConnectionError",
+        "APITimeoutError",
+        "ConnectError",
+        "ConnectTimeout",
+        "InternalServerError",
+        "OpenAIConnectionError",
+        "OpenAITimeoutError",
+        "RateLimitError",
+        "ReadError",
+        "ReadTimeout",
+    }
+)
+
+
+def _is_transient_model_error(exc: BaseException) -> bool:
+    """Recognize provider transport failures without coupling to one SDK."""
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if type(current).__name__ in _TRANSIENT_MODEL_ERROR_NAMES:
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
 
 def _compact_continuation_messages(messages: list, *, tool_cycles: int = 4) -> list:
     """Keep coherent recent tool exchanges while bounding returned content."""
@@ -319,15 +346,18 @@ def build_main_graph(
                         {"messages": invocation_messages},
                         config={"recursion_limit": cfg.settings.specialist_step_limit},
                     )
-                except RuntimeError as exc:
-                    if not str(exc).startswith("MODEL_"):
+                except Exception as exc:
+                    if isinstance(exc, RuntimeError) and str(exc).startswith("MODEL_"):
+                        protocol_error = str(exc)
+                    elif _is_transient_model_error(exc):
+                        protocol_error = f"MODEL_TRANSIENT_{type(exc).__name__.upper()}"
+                    else:
                         raise
-                    protocol_error = str(exc)
                     log.warning(
-                        "specialist %s model protocol failed on attempt %d: %s",
+                        "specialist %s model call failed on attempt %d: %s",
                         expert,
                         attempt,
-                        exc,
+                        protocol_error,
                     )
                     break
 

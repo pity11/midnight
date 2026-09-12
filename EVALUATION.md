@@ -198,6 +198,9 @@ The CUC JSON-protocol roles use bounded per-response generation limits: 512
 tokens for classification, 1024 for the default/preflight role, and 1536 for
 specialists. These limits are part of the immutable configuration revision and
 must remain identical across controlled comparisons.
+When a specialist exhausts its bounded transport retry, the graph records a
+normalized transient model error and advances through the ordinary bounded
+specialist retry path instead of failing the entire task immediately.
 
 ## Required measurements
 

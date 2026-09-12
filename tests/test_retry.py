@@ -76,6 +76,22 @@ class ProtocolFailingModel(BaseChatModel):
         raise RuntimeError("MODEL_TOOL_ACTION_INVALID")
 
 
+class OpenAITimeoutError(Exception):
+    pass
+
+
+class TransientFailingModel(BaseChatModel):
+    @property
+    def _llm_type(self) -> str:
+        return "transient-failure"
+
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
+        raise OpenAITimeoutError("Request timed out.")
+
+
 def test_model_protocol_failure_uses_bounded_specialist_retries(monkeypatch):
     import midnight.graph.main_graph as graph_module
     from midnight.config import get_config
@@ -85,3 +101,14 @@ def test_model_protocol_failure_uses_bounded_specialist_retries(monkeypatch):
     assert final.get("status") == "failed"
     assert final.get("attempt") == get_config().settings.max_attempts
     assert final.get("error") == "MODEL_TOOL_ACTION_INVALID"
+
+
+def test_transient_model_failure_uses_bounded_specialist_retries(monkeypatch):
+    import midnight.graph.main_graph as graph_module
+    from midnight.config import get_config
+
+    monkeypatch.setattr(graph_module, "build_llm", lambda role: TransientFailingModel())
+    final = _run_challenge("sanity_misc")
+    assert final.get("status") == "failed"
+    assert final.get("attempt") == get_config().settings.max_attempts
+    assert final.get("error") == "MODEL_TRANSIENT_OPENAITIMEOUTERROR"
