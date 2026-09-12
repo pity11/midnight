@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import pytest
 
 from midnight.tools.forensic_memory import forensic_record, render_retry_memory
+from midnight.tools.pwn_memory import pwn_execution_record
 from midnight.tools.shell import make_read_file, make_write_file
 
 
@@ -126,3 +127,30 @@ def test_forensic_record_and_retry_memory_are_bounded_and_structured() -> None:
     assert "[EXCLUDED ROUTES]" in memory
     assert "[NORMALIZED FORENSIC RECORDS]" in memory
     assert len(memory) <= 6000
+
+
+def test_pwn_execution_record_classifies_and_redacts_target_output() -> None:
+    digest = "a" * 64
+    private_candidate = "flag" + "{" + "must-not-enter-retry-memory" + "}"
+    result = _Result(
+        exit_code=1,
+        stdout=(
+            f"[MIDNIGHT_EXPLOIT_META] mode=target script_sha256={digest}\n"
+            f"service returned {private_candidate}\n"
+        ),
+        stderr="EOFError: target closed before the second stage",
+    )
+
+    record = pwn_execution_record(script="solve.py", mode="local", result=result)
+
+    assert record["schema"] == "midnight-pwn-execution/v1"
+    assert record["mode"] == "target"
+    assert record["script_sha256"] == digest
+    assert record["status"] == "io_error"
+    assert private_candidate not in json.dumps(record)
+    assert "<redacted-flag>" in json.dumps(record)
+
+    memory = render_retry_memory(json.dumps(record))
+    assert "[PWN EXECUTION HISTORY]" in memory
+    assert digest in memory
+    assert private_candidate not in memory

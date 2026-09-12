@@ -188,6 +188,12 @@ limited to tool names/counts, errors, usage, and submission status. Workspace
 read/write ledgers and normalized evidence are private run artifacts and are not
 published with reports.
 
+For Pwn regressions, compare locally and target-verified script versions by hash,
+execution status, repeated unchanged executions, and time to new evidence. The
+private `pwn-executions.jsonl` record redacts flag-shaped output and is injected
+into retry memory as a bounded failure history; it is never copied into the
+published evaluation report.
+
 ## Required measurements
 
 Each run records:

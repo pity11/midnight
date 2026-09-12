@@ -9,6 +9,7 @@ session.
 from __future__ import annotations
 
 import base64
+import json
 import re
 import shlex
 from urllib.parse import urlsplit
@@ -16,6 +17,7 @@ from urllib.parse import urlsplit
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.tools.forensic_memory import compact_forensic_result
 from midnight.tools.interactive.session import DockerInteractiveSession
+from midnight.tools.pwn_memory import persist_pwn_execution
 from midnight.tools.registry import register_tool
 from midnight.tools.summarizer import summarize
 
@@ -844,7 +846,14 @@ def make_one_gadget(*, env: CTFEnvironment, **_) -> object:
 
 
 @register_tool(name="run_exploit", groups=["pwn", "reverse", "web", "crypto", "misc", "forensics"])
-def make_run_exploit(*, env: CTFEnvironment, state=None, observe_target_output=None, **_) -> object:
+def make_run_exploit(
+    *,
+    env: CTFEnvironment,
+    state=None,
+    observe_target_output=None,
+    current_expert: str = "",
+    **_,
+) -> object:
     from langchain_core.tools import tool
 
     remote = str(((state or {}).get("challenge") or {}).get("remote") or "")
@@ -881,13 +890,50 @@ def make_run_exploit(*, env: CTFEnvironment, state=None, observe_target_output=N
             environment += ["REMOTE=1", f"HOST={host}", f"PORT={raw_port}"]
             args += ["REMOTE=1", f"HOST={host}", f"PORT={raw_port}"]
         quoted_script = shlex.quote(script)
+        preflight = ""
+        if current_expert == "pwn":
+            workdir = str(getattr(env, "workdir", "/ctf")).rstrip("/")
+            ledger = shlex.quote(f"{workdir}/pwn-executions.jsonl")
+            repeat_probe = shlex.quote(
+                "import json,pathlib,sys\n"
+                "p=pathlib.Path(sys.argv[1]); h=sys.argv[2]; m=sys.argv[3]; count=0\n"
+                "rows=p.read_text(errors='replace').splitlines()[-64:] if p.is_file() else []\n"
+                "for row in rows:\n"
+                " try: item=json.loads(row)\n"
+                " except ValueError: continue\n"
+                " count += int(item.get('schema')=='midnight-pwn-execution/v1' and "
+                "item.get('script_sha256')==h and item.get('mode')==m and "
+                "item.get('status')!='duplicate_blocked')\n"
+                "print(count)"
+            )
+            preflight = (
+                f"script_sha=$(sha256sum {quoted_script} | awk '{{print $1}}') || exit 2; "
+                f"printf '[MIDNIGHT_EXPLOIT_META] mode={mode} script_sha256=%s\\n' "
+                '"$script_sha"; '
+                f"repeat_count=$(python3 -c {repeat_probe} {ledger} \"$script_sha\" {mode}); "
+                "if test \"$repeat_count\" -ge 2; then "
+                "echo '[MIDNIGHT_DUPLICATE_EXPLOIT] This unchanged script and mode already "
+                "ran twice. Revise solve.py from the recorded failure or change verification "
+                "mode before another execution.'; exit 86; fi; "
+            )
         command = (
-            f"python3 -m py_compile {quoted_script} && "
+            preflight
+            + f"python3 -m py_compile {quoted_script} && "
             f"timeout {timeout_seconds}s "
             + " ".join(shlex.quote(part) for part in environment + args)
         )
         result = await env.exec(command, timeout=timeout_seconds + 15)
         rendered = _result_text(result)
+        if current_expert == "pwn":
+            record = await persist_pwn_execution(
+                env=env, script=script, mode=mode, result=result
+            )
+            rendered = (
+                "[MIDNIGHT_PWN_EXECUTION]\n"
+                + json.dumps(record, ensure_ascii=False, sort_keys=True)
+                + "\n[BOUNDED_OUTPUT]\n"
+                + rendered
+            )
         if mode == "target" and observe_target_output is not None:
             observe_target_output(f"{result.stdout}\n{result.stderr}")
         return rendered

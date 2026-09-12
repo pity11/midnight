@@ -209,6 +209,29 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         ))
 
     @staticmethod
+    def _duplicate_exploit_blocked(messages: list) -> bool:
+        """Return whether the latest unchanged exploit run requires a revision."""
+        last_write = max(
+            (
+                index
+                for index, message in enumerate(messages)
+                for call in (getattr(message, "tool_calls", None) or [])
+                if call.get("name") == "write_file"
+            ),
+            default=-1,
+        )
+        last_block = max(
+            (
+                index
+                for index, message in enumerate(messages)
+                if "[MIDNIGHT_DUPLICATE_EXPLOIT]"
+                in str(getattr(message, "content", ""))
+            ),
+            default=-1,
+        )
+        return last_block > last_write
+
+    @staticmethod
     def _ret2libc_artifact(calls: list[dict]) -> bool:
         writes = [
             call
@@ -308,6 +331,8 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
         if self._pickle_tuple_failure(messages):
             return {"pickle_build"}
         if self.category == "pwn" and self._interactive_solver(calls):
+            return {"write_file"}
+        if self.category == "pwn" and self._duplicate_exploit_blocked(messages):
             return {"write_file"}
         if (
             self.category == "pwn"
@@ -497,6 +522,20 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                     "io.interactive(). Rewrite solve.py to send a bounded post-exploitation "
                     "flag retrieval command, receive until EOF or timeout, and print the full "
                     "response so the target-bound verifier can observe the flag."
+                )]
+            }
+
+        if (
+            self.category == "pwn"
+            and self._duplicate_exploit_blocked(messages)
+            and "[PHASE_GATE:REVISE_EXPLOIT]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[PHASE_GATE:REVISE_EXPLOIT] The same solve.py hash and execution mode "
+                    "already ran twice without closing the challenge. Read the latest PWN "
+                    "EXECUTION HISTORY, name the failed assumption, and revise solve.py before "
+                    "another run. A timeout or crash is not new evidence by itself."
                 )]
             }
 

@@ -546,6 +546,29 @@ async def test_run_exploit_binds_target_and_checks_script() -> None:
 
 
 @pytest.mark.asyncio
+async def test_pwn_run_exploit_hashes_versions_and_persists_bounded_result() -> None:
+    env = _Env()
+    action = make_run_exploit(
+        env=env,
+        state={"challenge": {}},
+        current_expert="pwn",
+    )
+
+    rendered = await action.ainvoke({"script": "solve.py", "mode": "local"})
+
+    assert len(env.calls) == 2
+    execution, execution_timeout = env.calls[0]
+    persistence, persistence_timeout = env.calls[1]
+    assert "sha256sum solve.py" in execution
+    assert "pwn-executions.jsonl" in execution
+    assert "MIDNIGHT_DUPLICATE_EXPLOIT" in execution
+    assert execution_timeout == 135
+    assert "pwn-executions.jsonl" in persistence
+    assert persistence_timeout == 15
+    assert "MIDNIGHT_PWN_EXECUTION" in rendered
+
+
+@pytest.mark.asyncio
 async def test_pcap_triage_and_follow_stream_quote_inputs() -> None:
     env = _Env()
     action = make_pcap_triage(env=env)

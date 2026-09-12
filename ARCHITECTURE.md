@@ -113,9 +113,12 @@ verification, and target phases. Observable evidence selects a small curated
 playbook on demand; repeated identical observations produce a stagnation signal;
 retries continue from saved artifacts and structured evidence; and stateful
 GDB/network sessions recover once before directing the solver to a batch or
-scripted fallback. Tool images declare fail-closed capability contracts and
-include pinned capabilities needed offline, such as radare2, angr, UPX,
-Volatility 3, JADX, Fenjing, pwninit, and Pickora.
+scripted fallback. Pwn verification records the solve script hash, execution
+mode, exit status, and a flag-redacted failure summary in the private workspace;
+the same hash and mode can run twice, after which the specialist must revise the
+artifact before another execution. Tool images declare fail-closed capability
+contracts and include pinned capabilities needed offline, such as radare2, angr,
+UPX, Volatility 3, JADX, Fenjing, pwninit, and Pickora.
 - **LangGraph** provides bounded state transitions and durable checkpoints.
 
 Midnight uses these projects as design references. Their platform assumptions,

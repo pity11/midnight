@@ -91,6 +91,7 @@ def render_retry_memory(raw: str, *, char_limit: int = 6000) -> str:
         "artifacts": [],
         "next_questions": [],
         "forensic_records": [],
+        "pwn_executions": [],
     }
     seen: set[str] = set()
 
@@ -126,6 +127,16 @@ def render_retry_memory(raw: str, *, char_limit: int = 6000) -> str:
                 f"{item.get('tool', '?')} on {item.get('source', '?')} "
                 f"({item.get('status', '?')}, sha256={item.get('output_sha256', '?')}): {excerpt}",
             )
+        elif schema == "midnight-pwn-execution/v1":
+            findings = item.get("findings") or []
+            excerpt = "; ".join(str(value) for value in findings[:4])
+            add(
+                "pwn_executions",
+                f"{item.get('mode', '?')} {item.get('script', '?')} "
+                f"script_sha256={item.get('script_sha256', '?')} "
+                f"status={item.get('status', '?')} exit={item.get('exit_code', '?')}: "
+                f"{excerpt}",
+            )
 
     headings = (
         ("CONFIRMED OBSERVATIONS", "observations"),
@@ -134,6 +145,7 @@ def render_retry_memory(raw: str, *, char_limit: int = 6000) -> str:
         ("VERIFIED ARTIFACTS", "artifacts"),
         ("OPEN QUESTIONS / NEXT CHECKS", "next_questions"),
         ("NORMALIZED FORENSIC RECORDS", "forensic_records"),
+        ("PWN EXECUTION HISTORY", "pwn_executions"),
     )
     sections = []
     for heading, bucket in headings:
@@ -147,7 +159,7 @@ async def read_retry_memory(env: CTFEnvironment) -> str:
     """Read bounded durable evidence and convert it to retry-only memory."""
     workdir = shlex.quote(str(getattr(env, "workdir", "/ctf")).rstrip("/"))
     result = await env.exec(
-        "for name in evidence.jsonl forensic-evidence.jsonl; do "
+        "for name in evidence.jsonl forensic-evidence.jsonl pwn-executions.jsonl; do "
         f"test -f {workdir}/$name && tail -n 24 {workdir}/$name; "
         "done",
         timeout=15,

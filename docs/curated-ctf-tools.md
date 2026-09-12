@@ -17,7 +17,7 @@ tool layer:
 | Pwn | pwninit | `pwninit_setup` | A challenge supplies an ELF plus libc and optionally its loader |
 | Pwn | one_gadget | `one_gadget` | A libc leak/control-flow primitive exists and gadget constraints can be satisfied |
 | Pwn | pwntools | `fmtstr_probe` | An uncontrolled printf needs one bounded positional leak pass |
-| Pwn | pwntools | `run_exploit` | A complete solve.py must be checked and exercised locally or on the bound target |
+| Pwn | pwntools | `run_exploit` | A complete solve.py must be checked and exercised locally or on the bound target; mode, script hash, status, and redacted failure evidence persist across retries, and a third unchanged run is blocked |
 | Crypto | xortool | `xor_analyze` | Repeating-key XOR is suspected and frequency or known plaintext is available |
 | Crypto | RsaCtfTool | `rsa_attack` | Supplied RSA key files imply a known local key-recovery family beyond the fast raw-integer checks |
 | Reverse | pyinstxtractor-ng | `pyinstaller_extract` | An ELF/PE is a PyInstaller bundle |

@@ -19,6 +19,7 @@ The benchmark policy and capability-claim criteria are defined in
 - Bounded retries and rejected-candidate tracking.
 - Range-aware file reads, duplicate-write guards, and whole-task forensic I/O budgets.
 - Deterministic forensic evidence compaction; retries receive facts and open questions instead of raw tool dumps.
+- Hash-addressed Pwn execution history; unchanged local/target exploits are bounded across retries.
 - Platform-neutral provider and submission interfaces.
 - A configurable JSON-over-HTTP competition adapter.
 - A dedicated organizer adapter for query, reset, attachment, and answer APIs.

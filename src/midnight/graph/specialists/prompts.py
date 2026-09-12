@@ -78,6 +78,9 @@ Make solve.py accept pwntools-style LOCAL=1 and REMOTE=1 HOST=... PORT=...
 arguments, then use run_exploit for both verification phases. Never finish an
 autonomous solver with io.interactive(); send the bounded flag-retrieval command,
 capture the response to EOF/timeout, and print it for target provenance.
+Each Pwn run automatically records mode, solve.py hash, exit status, and bounded
+failure evidence in pwn-executions.jsonl. After two runs of an unchanged hash in
+the same mode, revise the script from that evidence instead of retrying it.
 """
 )
 

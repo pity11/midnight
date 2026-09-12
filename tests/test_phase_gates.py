@@ -454,6 +454,26 @@ def test_repeated_exploit_requires_revision_or_different_tool():
     assert "run_exploit" not in allowed
 
 
+def test_persistent_duplicate_exploit_block_forces_script_revision() -> None:
+    gate = ArtifactPhaseGateMiddleware(category="pwn", artifact_gate=99, target_gate=99)
+    messages = [
+        _tool_message(1, "run_exploit", {"script": "solve.py", "mode": "target"}),
+        HumanMessage(
+            "[MIDNIGHT_DUPLICATE_EXPLOIT] This unchanged script and mode already ran twice."
+        ),
+    ]
+
+    assert gate.constrained_tool_names(messages) == {"write_file"}
+    update = gate.before_model({"messages": messages}, None)
+    assert update is not None
+    assert "PHASE_GATE:REVISE_EXPLOIT" in update["messages"][0].content
+
+    messages.append(
+        _tool_message(2, "write_file", {"path": "/ctf/solve.py", "content": "revised"})
+    )
+    assert gate.constrained_tool_names(messages) is None
+
+
 def test_network_candidate_requires_target_provenance():
     found: list[str] = []
     tool = make_submit_flag(
