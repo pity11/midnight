@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from midnight.tools.category import make_run_exploit
 from midnight.tools.forensic_memory import forensic_record, render_retry_memory
 from midnight.tools.pwn_memory import pwn_execution_record
 from midnight.tools.shell import make_read_file, make_write_file
@@ -90,6 +91,27 @@ async def test_forensic_write_requires_new_evidence_and_skips_identical_content(
     assert target.read_text() == "print(2)\n"
 
 
+@pytest.mark.asyncio
+async def test_pwn_write_requires_new_execution_or_analysis_evidence(tmp_path) -> None:
+    env = _LocalEnv(str(tmp_path))
+    action = make_write_file(env=env, current_expert="pwn")
+    target = tmp_path / "solve.py"
+
+    first = await action.ainvoke({"path": str(target), "content": "print(1)\n"})
+    assert '"status": "written"' in first
+    blocked = await action.ainvoke({"path": str(target), "content": "print(2)\n"})
+    assert "MIDNIGHT_WRITE_BLOCKED" in blocked
+    assert target.read_text() == "print(1)\n"
+
+    (tmp_path / "pwn-executions.jsonl").write_text(
+        '{"schema":"midnight-pwn-execution/v1","status":"compile_error"}\n',
+        encoding="utf-8",
+    )
+    revised = await action.ainvoke({"path": str(target), "content": "print(2)\n"})
+    assert '"status": "written"' in revised
+    assert target.read_text() == "print(2)\n"
+
+
 def test_forensic_record_and_retry_memory_are_bounded_and_structured() -> None:
     result = _Result(
         exit_code=0,
@@ -154,3 +176,57 @@ def test_pwn_execution_record_classifies_and_redacts_target_output() -> None:
     assert "[PWN EXECUTION HISTORY]" in memory
     assert digest in memory
     assert private_candidate not in memory
+
+
+def test_pwn_execution_record_requires_explicit_local_control_marker() -> None:
+    unverified = pwn_execution_record(
+        script="solve.py",
+        mode="local",
+        result=_Result(exit_code=0, stdout="finished", stderr=""),
+    )
+    verified = pwn_execution_record(
+        script="solve.py",
+        mode="local",
+        result=_Result(
+            exit_code=0,
+            stdout="assertion passed\n[MIDNIGHT_LOCAL_CONTROL_OK]",
+            stderr="",
+        ),
+    )
+    assert unverified["status"] == "completed_unverified"
+    assert verified["status"] == "local_verified"
+
+
+@pytest.mark.asyncio
+async def test_attached_pwn_target_requires_same_hash_local_verification(tmp_path) -> None:
+    env = _LocalEnv(str(tmp_path))
+    script = tmp_path / "solve.py"
+    script.write_text(
+        "import os\n"
+        "if os.getenv('LOCAL'):\n"
+        "    assert 2 + 2 == 4\n"
+        "    print('[MIDNIGHT_LOCAL_CONTROL_OK]')\n"
+        "else:\n"
+        "    print('bounded target run')\n",
+        encoding="utf-8",
+    )
+    action = make_run_exploit(
+        env=env,
+        state={
+            "challenge": {
+                "files": [str(tmp_path / "chall")],
+                "remote": "relay:31337",
+            }
+        },
+        current_expert="pwn",
+    )
+
+    blocked = await action.ainvoke({"script": "solve.py", "mode": "target"})
+    assert "MIDNIGHT_LOCAL_VERIFICATION_REQUIRED" in blocked
+
+    local = await action.ainvoke({"script": "solve.py", "mode": "local"})
+    assert '"status": "local_verified"' in local
+
+    target = await action.ainvoke({"script": "solve.py", "mode": "target"})
+    assert "MIDNIGHT_LOCAL_VERIFICATION_REQUIRED" not in target
+    assert "bounded target run" in target

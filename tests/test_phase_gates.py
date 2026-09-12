@@ -152,6 +152,37 @@ def test_forensics_read_and_write_budgets_span_prior_attempts():
     assert update is not None
     assert "TASK_BUDGET:READ_FILE" in update["messages"][0].content
 
+
+def test_pwn_read_and_write_budgets_span_prior_attempts():
+    gate = ArtifactPhaseGateMiddleware(
+        category="pwn",
+        prior_tool_counts=(("read_file", 12), ("write_file", 6)),
+        prior_tool_names=frozenset({"list_dir", "binary_triage"}),
+        pwn_read_limit=12,
+        pwn_write_limit=6,
+    )
+
+    class Tool:
+        def __init__(self, name: str):
+            self.name = name
+
+    class Request:
+        def __init__(self, tools: list[Tool]):
+            self.tools = tools
+
+        def override(self, *, tools: list[Tool]):
+            return Request(tools)
+
+    constrained = gate._constrain_request(
+        Request([Tool("read_file"), Tool("write_file"), Tool("run_exploit")]),
+        None,
+    )
+    assert [tool.name for tool in constrained.tools] == ["run_exploit"]
+
+    update = gate.before_model({"messages": [_tool_message(1, "run_shell")]}, None)
+    assert update is not None
+    assert "TASK_BUDGET:PWN_READ_FILE" in update["messages"][0].content
+
 def test_forensics_detects_capture_path_from_tool_arguments():
     gate = ArtifactPhaseGateMiddleware(
         category="forensics",

@@ -267,6 +267,12 @@ protocol turn should emit one action rather than reserve a long prose response.
 If both transport attempts fail inside a specialist, Midnight records a bounded
 model failure for that specialist attempt and continues through the normal
 retry strategy while the whole-task deadline permits.
+Pwn tasks also carry whole-task file budgets (12 reads and 6 writes). A changed
+solver cannot overwrite its previous revision until a new read range,
+structured observation, or Pwn execution record provides revision evidence.
+For attached Pwn artifacts, target execution is admitted only after the exact
+solver hash locally asserts its control effect and emits
+`[MIDNIGHT_LOCAL_CONTROL_OK]`; remote-only tasks remain compatible.
 
 Mixed offline and target-only suites use `bundle_enforced`: every task retains
 its own immutable network policy, and the run manifest records the complete

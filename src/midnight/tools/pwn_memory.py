@@ -29,7 +29,7 @@ _FAILURE = re.compile(
 )
 
 
-def _status(exit_code: object, raw: str) -> str:
+def _status(exit_code: object, raw: str, *, mode: str) -> str:
     lowered = raw.lower()
     if "[midnight_duplicate_exploit]" in lowered:
         return "duplicate_blocked"
@@ -43,6 +43,12 @@ def _status(exit_code: object, raw: str) -> str:
         return "io_error"
     if "no flag" in lowered:
         return "no_flag"
+    if mode == "local" and exit_code == 0:
+        if "[midnight_local_control_ok]" in lowered:
+            return "local_verified"
+        return "completed_unverified"
+    if mode == "target" and exit_code == 0 and _FLAG.search(raw):
+        return "target_flag_observed"
     return "completed" if exit_code == 0 else "error"
 
 
@@ -80,7 +86,7 @@ def pwn_execution_record(*, script: str, mode: str, result: Any) -> dict[str, An
         "script": simple_truncate(" ".join(script.split()), limit=300),
         "script_sha256": script_sha256,
         "mode": effective_mode,
-        "status": _status(exit_code, raw),
+        "status": _status(exit_code, raw, mode=effective_mode),
         "exit_code": exit_code,
         "output_sha256": hashlib.sha256(raw.encode()).hexdigest(),
         "output_chars": len(raw),

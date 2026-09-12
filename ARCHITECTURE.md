@@ -100,6 +100,12 @@ over-depth delegation. Candidate rejection feeds back into the next attempt,
 with a fixed maximum attempt count. Retry routes are deliberately diverse: the
 second route changes representation and favors bounded automation, while the
 final route critiques the current artifact and repairs its weakest assumption.
+For Pwn, file-operation counters survive outer retries. Solver rewrites are
+evidence-gated by new file ranges, structured observations, or exploit execution
+records, which ties each revision to a changed fact rather than model churn.
+Attached Pwn tasks add a hash-bound transition between VERIFY and TARGET: a
+local execution must assert the intended control effect before that exact solver
+revision can run against the evaluator relay. Remote-only tasks skip this gate.
 
 ## Engineering references
 

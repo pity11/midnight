@@ -856,7 +856,9 @@ def make_run_exploit(
 ) -> object:
     from langchain_core.tools import tool
 
-    remote = str(((state or {}).get("challenge") or {}).get("remote") or "")
+    challenge = (state or {}).get("challenge") or {}
+    remote = str(challenge.get("remote") or "")
+    require_local_verification = bool(current_expert == "pwn" and challenge.get("files"))
 
     @tool
     async def run_exploit(
@@ -866,7 +868,9 @@ def make_run_exploit(
 
         The script should accept pwntools-style ``LOCAL=1`` and
         ``REMOTE=1 HOST=<host> PORT=<port>`` arguments. Target mode is bound to
-        the evaluator-provided endpoint and records output provenance. Scripts
+        the evaluator-provided endpoint and records output provenance. For Pwn
+        tasks with local attachments, the same script hash must first assert its
+        local control effect and print ``[MIDNIGHT_LOCAL_CONTROL_OK]``. Scripts
         may use pwntools, sockets, or HTTP clients.
         """
         mode = {"remote": "target", "local_process": "local"}.get(
@@ -906,11 +910,34 @@ def make_run_exploit(
                 "item.get('status')!='duplicate_blocked')\n"
                 "print(count)"
             )
+            local_probe = shlex.quote(
+                "import json,pathlib,sys\n"
+                "p=pathlib.Path(sys.argv[1]); h=sys.argv[2]; found=False\n"
+                "rows=p.read_text(errors='replace').splitlines()[-64:] if p.is_file() else []\n"
+                "for row in rows:\n"
+                " try: item=json.loads(row)\n"
+                " except ValueError: continue\n"
+                " found = found or (item.get('schema')=='midnight-pwn-execution/v1' and "
+                "item.get('script_sha256')==h and item.get('mode')=='local' and "
+                "item.get('status')=='local_verified')\n"
+                "print(int(found))"
+            )
+            local_gate = ""
+            if mode == "target" and require_local_verification:
+                local_gate = (
+                    f"local_verified=$(python3 -c {local_probe} {ledger} \"$script_sha\"); "
+                    "if test \"$local_verified\" != 1; then "
+                    "echo '[MIDNIGHT_LOCAL_VERIFICATION_REQUIRED] This exact solve.py hash has "
+                    "not produced [MIDNIGHT_LOCAL_CONTROL_OK] in local mode. Run it locally, "
+                    "assert the observed control effect, and print that marker only after the "
+                    "assertion succeeds.'; exit 87; fi; "
+                )
             preflight = (
                 f"script_sha=$(sha256sum {quoted_script} | awk '{{print $1}}') || exit 2; "
                 f"printf '[MIDNIGHT_EXPLOIT_META] mode={mode} script_sha256=%s\\n' "
                 '"$script_sha"; '
-                f"repeat_count=$(python3 -c {repeat_probe} {ledger} \"$script_sha\" {mode}); "
+                + local_gate
+                + f"repeat_count=$(python3 -c {repeat_probe} {ledger} \"$script_sha\" {mode}); "
                 "if test \"$repeat_count\" -ge 2; then "
                 "echo '[MIDNIGHT_DUPLICATE_EXPLOIT] This unchanged script and mode already "
                 "ran twice. Revise solve.py from the recorded failure or change verification "

@@ -161,7 +161,7 @@ def make_write_file(*, env: CTFEnvironment, current_expert: str = "", **_) -> ob
 
     @tool
     async def write_file(path: str, content: str) -> str:
-        """Write text content, suppressing unchanged or evidence-free forensic rewrites."""
+        """Write text, suppressing unchanged or evidence-free forensic/Pwn rewrites."""
         # use a heredoc-safe approach via base64 to avoid quoting issues
         b64 = base64.b64encode(content.encode()).decode()
         program = r'''import hashlib
@@ -186,10 +186,12 @@ write_ledger = meta_dir / 'write-ledger.jsonl'
 read_ledger = meta_dir / 'read-ledger.jsonl'
 evidence = workspace / 'forensic-evidence.jsonl'
 manual_evidence = workspace / 'evidence.jsonl'
+pwn_evidence = workspace / 'pwn-executions.jsonl'
 evidence_fingerprint = hashlib.sha256(
     ((read_ledger.read_text(errors='replace') if read_ledger.is_file() else '') +
      (evidence.read_text(errors='replace') if evidence.is_file() else '') +
-     (manual_evidence.read_text(errors='replace') if manual_evidence.is_file() else '')).encode()
+     (manual_evidence.read_text(errors='replace') if manual_evidence.is_file() else '') +
+     (pwn_evidence.read_text(errors='replace') if pwn_evidence.is_file() else '')).encode()
 ).hexdigest()
 prior = []
 if write_ledger.is_file():
@@ -202,8 +204,9 @@ last = next((item for item in reversed(prior) if item.get('realpath') == str(pat
 if old_hash == new_hash:
     print(f'[MIDNIGHT_DUPLICATE_WRITE] unchanged; no write performed; realpath={path}; sha256={new_hash}')
     raise SystemExit(0)
-if expert == 'forensics' and last and last.get('evidence_fingerprint') == evidence_fingerprint:
-    print('[MIDNIGHT_WRITE_BLOCKED] No new read range or structured forensic evidence exists '
+if expert in {'forensics', 'pwn'} and last and last.get('evidence_fingerprint') == evidence_fingerprint:
+    evidence_kind = 'forensic evidence' if expert == 'forensics' else 'Pwn execution or analysis evidence'
+    print(f'[MIDNIGHT_WRITE_BLOCKED] No new read range or structured {evidence_kind} exists '
           'since the previous write to this path. Gather new evidence before revising it.')
     raise SystemExit(0)
 path.parent.mkdir(parents=True, exist_ok=True)

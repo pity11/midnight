@@ -34,6 +34,8 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
     forensics_shell_limit: int = 12
     forensics_read_limit: int = 18
     forensics_write_limit: int = 6
+    pwn_read_limit: int = 12
+    pwn_write_limit: int = 6
     _observed_tool_names: set[str] = field(init=False, repr=False)
     _observed_tool_counts: dict[str, int] = field(init=False, repr=False)
     _observed_tool_call_ids: set[str] = field(init=False, repr=False)
@@ -405,6 +407,16 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             and self._observed_tool_counts.get("write_file", 0) >= self.forensics_write_limit
         ):
             tools = [tool for tool in tools if getattr(tool, "name", "") != "write_file"]
+        if (
+            self.category == "pwn"
+            and self._observed_tool_counts.get("read_file", 0) >= self.pwn_read_limit
+        ):
+            tools = [tool for tool in tools if getattr(tool, "name", "") != "read_file"]
+        if (
+            self.category == "pwn"
+            and self._observed_tool_counts.get("write_file", 0) >= self.pwn_write_limit
+        ):
+            tools = [tool for tool in tools if getattr(tool, "name", "") != "write_file"]
         return request.override(tools=tools) if tools != list(request.tools) else request
 
     def wrap_model_call(self, request, handler):
@@ -471,6 +483,31 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             # Do not fall through to exploit-artifact or target gates: forensic
             # work may close directly from a log, archive member, or capture.
             return None
+
+        if (
+            self.category == "pwn"
+            and self._observed_tool_counts.get("read_file", 0) >= self.pwn_read_limit
+            and "[TASK_BUDGET:PWN_READ_FILE]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[TASK_BUDGET:PWN_READ_FILE] The whole-task bounded Pwn read budget is "
+                    "exhausted. Do not request another file read. Use recorded offsets, "
+                    "execution history, targeted debugger/tool output, and the existing solver."
+                )]
+            }
+        if (
+            self.category == "pwn"
+            and self._observed_tool_counts.get("write_file", 0) >= self.pwn_write_limit
+            and "[TASK_BUDGET:PWN_WRITE_FILE]" not in text
+        ):
+            return {
+                "messages": [HumanMessage(
+                    "[TASK_BUDGET:PWN_WRITE_FILE] The whole-task bounded Pwn write budget is "
+                    "exhausted. Stop rewriting solve.py; verify the latest evidence-backed "
+                    "revision locally and against the target."
+                )]
+            }
 
         if self.category == "pwn" and not calls and "[PHASE_GATE:TRIAGE]" not in text:
             return {

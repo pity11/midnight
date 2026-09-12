@@ -193,6 +193,14 @@ execution status, repeated unchanged executions, and time to new evidence. The
 private `pwn-executions.jsonl` record redacts flag-shaped output and is injected
 into retry memory as a bounded failure history; it is never copied into the
 published evaluation report.
+Whole-task Pwn budgets cap `read_file` at 12 and `write_file` at 6. After the
+first solver artifact, a rewrite requires a changed read ledger, structured
+evidence, or exploit execution record; unchanged and evidence-free revisions
+are suppressed.
+For attached Pwn tasks, the target-bound `run_exploit` path requires a
+`local_verified` execution record for the identical solver hash. The local
+script emits `[MIDNIGHT_LOCAL_CONTROL_OK]` only after its control-effect
+assertion succeeds; remote-only tasks are exempt from this transition gate.
 
 The CUC JSON-protocol roles use bounded per-response generation limits: 512
 tokens for classification, 1024 for the default/preflight role, and 1536 for

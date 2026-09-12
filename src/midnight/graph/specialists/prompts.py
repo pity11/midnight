@@ -75,7 +75,10 @@ return offset, call pwn_ret2libc_target before writing a hand-rolled two-stage
 leak parser. The tool resolves gadgets and symbols, validates a page-aligned
 libc base, aligns system(), and captures the target response.
 Make solve.py accept pwntools-style LOCAL=1 and REMOTE=1 HOST=... PORT=...
-arguments, then use run_exploit for both verification phases. Never finish an
+arguments. In local mode, assert the observed control effect and print
+[MIDNIGHT_LOCAL_CONTROL_OK] only after that assertion succeeds; target mode for
+an attached Pwn binary requires the same verified script hash. Then use
+run_exploit for both verification phases. Never finish an
 autonomous solver with io.interactive(); send the bounded flag-retrieval command,
 capture the response to EOF/timeout, and print it for target provenance.
 Each Pwn run automatically records mode, solve.py hash, exit status, and bounded

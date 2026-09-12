@@ -267,6 +267,8 @@ def build_main_graph(
             if expert == "pwn":
                 middleware.extend([
                     ToolCallLimitMiddleware(tool_name="run_shell", run_limit=12),
+                    ToolCallLimitMiddleware(tool_name="read_file", run_limit=12),
+                    ToolCallLimitMiddleware(tool_name="write_file", run_limit=6),
                     ToolCallLimitMiddleware(tool_name="run_exploit", run_limit=5),
                     ToolCallLimitMiddleware(tool_name="connect_tool", run_limit=5),
                     ToolCallLimitMiddleware(tool_name="fmtstr_write_scan", run_limit=2),
