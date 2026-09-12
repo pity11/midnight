@@ -160,6 +160,11 @@ in the resulting image environment:
 export MIDNIGHT_BUILD_PROXY=http://127.0.0.1:7890
 ```
 
+The bundled CUC model provider uses `network_mode: direct_ipv4`. This keeps
+model requests on IPv4-only campus VPN routes and ignores inherited shell proxy
+variables for that provider; other providers retain normal environment-based
+network selection.
+
 If the proxy has unreliable access to Ubuntu's default archive, select a
 compatible mirror for package installation:
 

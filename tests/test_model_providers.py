@@ -240,6 +240,12 @@ def test_cuc_factory_uses_registry_defaults_without_network(monkeypatch):
     assert model.delegate.model_name == "cuc/deepseek"
     assert str(model.delegate.openai_api_base) == "https://openai.cuc.edu.cn/v1"
     assert model.delegate.extra_body == {"max_tokens": 1024}
+    assert model.delegate.http_client is not None
+    assert model.delegate.http_async_client is not None
+    assert model.delegate.http_client._trust_env is False
+    assert model.delegate.http_async_client._trust_env is False
+    assert model.delegate.http_client._transport._pool._local_address == "0.0.0.0"
+    assert model.delegate.http_async_client._transport._pool._local_address == "0.0.0.0"
 
 
 def test_competition_llm_environment_overrides_legacy_gateway(monkeypatch):

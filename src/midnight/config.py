@@ -49,6 +49,7 @@ class ProviderSpec(BaseModel):
     max_retries: int = 0
     tool_mode: Literal["native", "json_protocol"] = "native"
     require_https: bool = True
+    network_mode: Literal["environment", "direct_ipv4"] = "environment"
 
 
 class ImageSpec(BaseModel):

@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
+import httpx
 from httpx import Timeout
 from pydantic import SecretStr
 
@@ -87,16 +88,37 @@ def _build_openai_compatible(
     )
     if provider.require_https and not base_url.startswith("https://"):
         raise RuntimeError(f"MODEL_BASE_URL_REQUIRES_HTTPS:{provider_id}")
+    timeout = Timeout(provider.timeout, connect=provider.connect_timeout)
+    http_client: httpx.Client | None = None
+    http_async_client: httpx.AsyncClient | None = None
+    if provider.network_mode == "direct_ipv4":
+        # Some institutional VPNs install only IPv4 routes. If the model host
+        # also publishes AAAA records, automatic address selection can escape
+        # the VPN over IPv6 and reach an SSO gateway instead of the API. Bind
+        # both OpenAI SDK transports to IPv4 and deliberately ignore inherited
+        # proxy variables for this explicitly configured direct mode.
+        http_client = httpx.Client(
+            transport=httpx.HTTPTransport(local_address="0.0.0.0"),
+            trust_env=False,
+            timeout=timeout,
+        )
+        http_async_client = httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(local_address="0.0.0.0"),
+            trust_env=False,
+            timeout=timeout,
+        )
     return ChatOpenAI(
         api_key=SecretStr(_api_key(provider, universal_env="MIDNIGHT_LLM_API_KEY")),
         base_url=base_url.rstrip("/"),
         model=model_name,
         temperature=spec.temperature,
         extra_body={"max_tokens": spec.max_tokens},
-        timeout=Timeout(provider.timeout, connect=provider.connect_timeout),
+        timeout=timeout,
         max_retries=provider.max_retries,
         streaming=False,
         use_responses_api=False,
+        http_client=http_client,
+        http_async_client=http_async_client,
     )
 
 

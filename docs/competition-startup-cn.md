@@ -129,7 +129,7 @@ env | grep -i proxy
 unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
 ```
 
-如果确实需要本机代理，先确认代理程序和端口可用。模型客户端可能读取这些环境变量；赛事平台适配器默认不读取环境代理。
+如果确实需要本机代理，先确认代理程序和端口可用。赛事平台适配器默认不读取环境代理。仓库内置的 CUC 模型 provider 使用 `network_mode: direct_ipv4`：它会忽略终端遗留代理并强制走 IPv4，避免校园 VPN 只接管 IPv4 时，模型域名的 IPv6 流量绕过 VPN 后被重定向到统一认证。其他模型 provider 默认仍按环境变量选择网络。
 
 ## 4. 正式比赛启动
 

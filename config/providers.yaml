@@ -15,6 +15,9 @@ providers:
     max_retries: 0
     tool_mode: json_protocol
     require_https: true
+    # The CUC VPN advertises IPv4 campus routes while the public AAAA address
+    # reaches WEngine SSO. Keep model traffic on the VPN and out of shell proxies.
+    network_mode: direct_ipv4
 
   # Legacy explicit selector retained for existing local configurations.
   cuc:
@@ -29,6 +32,7 @@ providers:
     max_retries: 0
     tool_mode: json_protocol
     require_https: true
+    network_mode: direct_ipv4
 
   anthropic:
     adapter: langchain

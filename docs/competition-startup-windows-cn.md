@@ -179,6 +179,7 @@ notepad config\platform.local.yaml
 - Docker 提示 WSL 问题：在管理员 PowerShell 中更新 WSL，然后重启电脑；
 - 模型 401/403：检查 `MIDNIGHT_LLM_API_KEY`；
 - 模型 404：检查 Base URL 的 `/v1` 和精确模型名；
+- CUC 模型跳转到统一认证：内置 provider 已用 `network_mode: direct_ipv4` 强制模型流量走 IPv4 校园 VPN；先确认 VPN 的 IPv4 路由正常，不需要关闭系统 IPv6；
 - 平台 401/403：检查 `MIDNIGHT_PLATFORM_TOKEN`；
 - `solved X/Y` 不是满分且退出码为 1：表示部分题未解，不代表启动失败；
 - Windows ARM 电脑：Pwn/Reverse 的 `linux/amd64` 镜像需要仿真，速度会明显降低。
