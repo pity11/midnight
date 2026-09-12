@@ -21,6 +21,7 @@ def test_report_aggregates_results_without_flag_values(tmp_path):
                 tool_calls=3,
                 repeated_tool_calls=1,
                 protocol_recoveries=2,
+                model_transport_failures=1,
             ),
             Result("b", "timeout", category="pwn", input_tokens=2, tool_errors=1),
             Result("c", "failed", error="candidate flag{private} caused model failure"),
@@ -42,6 +43,8 @@ def test_report_aggregates_results_without_flag_values(tmp_path):
     assert payload["repeated_tool_calls"] == 1
     assert payload["tool_errors"] == 1
     assert payload["protocol_recoveries"] == 2
+    assert payload["model_transport_failures"] == 1
+    assert payload["challenges"][0]["model_transport_failures"] == 1
     assert payload["category_results"]["pwn"] == {"solved": 1, "total": 2}
 
 

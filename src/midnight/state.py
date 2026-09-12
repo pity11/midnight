@@ -80,6 +80,7 @@ class CTFState(TypedDict, total=False):
     escalation_stack: list[str]  # call stack of help requests, forbid A->B->A
     status: Status
     error: str | None
+    model_transport_failures: int  # recovered timeout/connection/rate-limit turns
 
 
 def initial_state(challenge: Challenge, *, workdir: str = "/ctf") -> CTFState:
@@ -107,4 +108,5 @@ def initial_state(challenge: Challenge, *, workdir: str = "/ctf") -> CTFState:
         escalation_stack=[],
         status="running",
         error=None,
+        model_transport_failures=0,
     )

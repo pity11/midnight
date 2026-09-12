@@ -39,6 +39,7 @@ class ChallengeSummary:
     flags_solved: int = 0
     flags_available: int = 1
     protocol_recoveries: int = 0
+    model_transport_failures: int = 0
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,7 @@ class RunReport:
     flags_solved: int = 0
     flags_available: int = 0
     protocol_recoveries: int = 0
+    model_transport_failures: int = 0
 
     @classmethod
     def from_results(
@@ -95,6 +97,7 @@ class RunReport:
                 flags_solved=result.flags_solved,
                 flags_available=result.flags_available,
                 protocol_recoveries=result.protocol_recoveries,
+                model_transport_failures=result.model_transport_failures,
             )
             for result in materialized
         ]
@@ -127,6 +130,9 @@ class RunReport:
             flags_solved=sum(result.flags_solved for result in materialized),
             flags_available=sum(result.flags_available for result in materialized),
             protocol_recoveries=sum(result.protocol_recoveries for result in materialized),
+            model_transport_failures=sum(
+                result.model_transport_failures for result in materialized
+            ),
         )
 
     def write(self, path: str | Path) -> Path:

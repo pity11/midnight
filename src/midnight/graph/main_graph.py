@@ -342,6 +342,7 @@ def build_main_graph(
             invocation_messages = [HumanMessage(task_text)]
             result: dict = {"messages": invocation_messages}
             protocol_error: str | None = None
+            transport_failure = False
             for continuation in range(3):
                 try:
                     result = await agent.ainvoke(
@@ -353,6 +354,7 @@ def build_main_graph(
                         protocol_error = str(exc)
                     elif _is_transient_model_error(exc):
                         protocol_error = f"MODEL_TRANSIENT_{type(exc).__name__.upper()}"
+                        transport_failure = True
                     else:
                         raise
                     log.warning(
@@ -382,13 +384,18 @@ def build_main_graph(
                 ]
 
             if protocol_error:
-                return {
+                update = {
                     "messages": result.get("messages", []),
                     "candidate_flags": collected,
                     "attempt": attempt,
                     "container_id": container_id,
                     "error": protocol_error,
                 }
+                if transport_failure:
+                    update["model_transport_failures"] = (
+                        state.get("model_transport_failures", 0) + 1
+                    )
+                return update
             # also scan the whole transcript for flags (defense in depth)
             transcript = "\n".join(
                 getattr(m, "content", "") or ""

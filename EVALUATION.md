@@ -209,6 +209,9 @@ must remain identical across controlled comparisons.
 When a specialist exhausts its bounded transport retry, the graph records a
 normalized transient model error and advances through the ordinary bounded
 specialist retry path instead of failing the entire task immediately.
+Each recovered timeout, connection, or rate-limit turn increments the redacted
+`model_transport_failures` counter. The counter survives checkpoints and is
+reported even when a later specialist attempt solves the task.
 The validated bundle provider marks manifest categories as trusted; formal
 benchmarks route directly from that immutable metadata and do not spend model
 latency on redundant category classification.

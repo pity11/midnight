@@ -55,6 +55,7 @@ class Result:
     flags_solved: int = 0
     flags_available: int = 1
     protocol_recoveries: int = 0
+    model_transport_failures: int = 0
 
 
 def _transcript_metrics(messages: list) -> dict[str, int]:
@@ -97,8 +98,13 @@ def _checkpoint_progress(states: list[dict]) -> dict[str, int]:
     messages: list = []
     seen: set[str] = set()
     attempts = 0
+    model_transport_failures = 0
     for state in states:
         attempts = max(attempts, int(state.get("attempt", 0) or 0))
+        model_transport_failures = max(
+            model_transport_failures,
+            int(state.get("model_transport_failures", 0) or 0),
+        )
         for message in state.get("messages") or []:
             identity = getattr(message, "id", None)
             if not identity:
@@ -107,7 +113,11 @@ def _checkpoint_progress(states: list[dict]) -> dict[str, int]:
                 continue
             seen.add(identity)
             messages.append(message)
-    return {"attempts": attempts, **_transcript_metrics(messages)}
+    return {
+        "attempts": attempts,
+        "model_transport_failures": model_transport_failures,
+        **_transcript_metrics(messages),
+    }
 
 
 class Scheduler:
@@ -271,6 +281,7 @@ class Scheduler:
                         repeated_tool_calls=progress.get("repeated_tool_calls", 0),
                         tool_errors=progress.get("tool_errors", 0),
                         protocol_recoveries=progress.get("protocol_recoveries", 0),
+                        model_transport_failures=progress.get("model_transport_failures", 0),
                     )
                 except Exception as exc:  # noqa: BLE001
                     progress = await self._durable_progress(challenge_id, hydrated)
@@ -295,6 +306,7 @@ class Scheduler:
                         repeated_tool_calls=progress.get("repeated_tool_calls", 0),
                         tool_errors=progress.get("tool_errors", 0),
                         protocol_recoveries=progress.get("protocol_recoveries", 0),
+                        model_transport_failures=progress.get("model_transport_failures", 0),
                     )
                 finally:
                     if instance_started:
@@ -457,6 +469,7 @@ class Scheduler:
                 **_transcript_metrics(final.get("messages") or []),
                 flags_solved=len(final.get("accepted_flags") or []),
                 flags_available=ch.get("flag_count") or 1,
+                model_transport_failures=final.get("model_transport_failures", 0),
             )
         finally:
             await manager.cleanup_all()

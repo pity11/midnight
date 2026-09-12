@@ -273,6 +273,8 @@ structured observation, or Pwn execution record provides revision evidence.
 For attached Pwn artifacts, target execution is admitted only after the exact
 solver hash locally asserts its control effect and emits
 `[MIDNIGHT_LOCAL_CONTROL_OK]`; remote-only tasks remain compatible.
+Published redacted reports count recovered provider timeout, connection, and
+rate-limit turns as `model_transport_failures`, including runs that later solve.
 
 Mixed offline and target-only suites use `bundle_enforced`: every task retains
 its own immutable network policy, and the run manifest records the complete

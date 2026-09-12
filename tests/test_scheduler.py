@@ -150,14 +150,15 @@ def test_checkpoint_progress_deduplicates_nested_messages():
     )
     progress = _checkpoint_progress(
         [
-            {"attempt": 1, "messages": [message]},
-            {"attempt": 2, "messages": [message]},
+            {"attempt": 1, "model_transport_failures": 1, "messages": [message]},
+            {"attempt": 2, "model_transport_failures": 2, "messages": [message]},
         ]
     )
     assert progress["attempts"] == 2
     assert progress["input_tokens"] == 12
     assert progress["output_tokens"] == 3
     assert progress["tool_calls"] == 1
+    assert progress["model_transport_failures"] == 2
 
 
 def test_scheduler_rejects_unknown_agent_mode(tmp_path):
@@ -242,7 +243,7 @@ async def test_task_timeout_recovers_durable_checkpoint_metrics(tmp_path):
     class DurableStore:
         def latest_channel_values(self, thread_id):
             assert thread_id.startswith("timed-run:pwn-1:")
-            return [{"attempt": 2, "messages": [message]}]
+            return [{"attempt": 2, "model_transport_failures": 1, "messages": [message]}]
 
     scheduler = Scheduler(
         provider=FixtureProvider(source),
@@ -264,6 +265,7 @@ async def test_task_timeout_recovers_durable_checkpoint_metrics(tmp_path):
     assert result.input_tokens == 7
     assert result.output_tokens == 2
     assert result.tool_calls == 1
+    assert result.model_transport_failures == 1
 
 
 @pytest.mark.asyncio
@@ -282,7 +284,7 @@ async def test_solver_failure_recovers_durable_checkpoint_metrics(tmp_path):
     class DurableStore:
         def latest_channel_values(self, thread_id):
             assert thread_id.startswith("failed-run:pwn-1:")
-            return [{"attempt": 2, "messages": [message]}]
+            return [{"attempt": 2, "model_transport_failures": 2, "messages": [message]}]
 
     scheduler = Scheduler(
         provider=FixtureProvider(source),
@@ -303,6 +305,7 @@ async def test_solver_failure_recovers_durable_checkpoint_metrics(tmp_path):
     assert result.input_tokens == 11
     assert result.output_tokens == 4
     assert result.tool_calls == 1
+    assert result.model_transport_failures == 2
 
 
 @pytest.mark.asyncio
