@@ -32,6 +32,8 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
     prior_tool_counts: tuple[tuple[str, int], ...] = ()
     prior_tool_call_ids: frozenset[str] = frozenset()
     forensics_shell_limit: int = 12
+    forensics_read_limit: int = 18
+    forensics_write_limit: int = 6
     _observed_tool_names: set[str] = field(init=False, repr=False)
     _observed_tool_counts: dict[str, int] = field(init=False, repr=False)
     _observed_tool_call_ids: set[str] = field(init=False, repr=False)
@@ -368,6 +370,16 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
             and self._observed_tool_counts.get("run_shell", 0) >= self.forensics_shell_limit
         ):
             tools = [tool for tool in tools if getattr(tool, "name", "") != "run_shell"]
+        if (
+            self.category == "forensics"
+            and self._observed_tool_counts.get("read_file", 0) >= self.forensics_read_limit
+        ):
+            tools = [tool for tool in tools if getattr(tool, "name", "") != "read_file"]
+        if (
+            self.category == "forensics"
+            and self._observed_tool_counts.get("write_file", 0) >= self.forensics_write_limit
+        ):
+            tools = [tool for tool in tools if getattr(tool, "name", "") != "write_file"]
         return request.override(tools=tools) if tools != list(request.tools) else request
 
     def wrap_model_call(self, request, handler):
@@ -409,6 +421,28 @@ class ArtifactPhaseGateMiddleware(AgentMiddleware):
                     ),
                 }
                 return {"messages": [HumanMessage(f"{marker} {instructions[phase]}")]}
+            if (
+                self._observed_tool_counts.get("read_file", 0) >= self.forensics_read_limit
+                and "[TASK_BUDGET:READ_FILE]" not in text
+            ):
+                return {
+                    "messages": [HumanMessage(
+                        "[TASK_BUDGET:READ_FILE] The whole-task bounded read budget is exhausted. "
+                        "Do not request another file read. Use normalized forensic evidence, "
+                        "existing uncovered ranges, derived artifacts, and summarize_output to "
+                        "close the remaining evidentiary gap."
+                    )]
+                }
+            if (
+                self._observed_tool_counts.get("write_file", 0) >= self.forensics_write_limit
+                and "[TASK_BUDGET:WRITE_FILE]" not in text
+            ):
+                return {
+                    "messages": [HumanMessage(
+                        "[TASK_BUDGET:WRITE_FILE] The whole-task write budget is exhausted. "
+                        "Use existing artifacts and evidence; do not create another revision."
+                    )]
+                }
             # Do not fall through to exploit-artifact or target gates: forensic
             # work may close directly from a log, archive member, or capture.
             return None

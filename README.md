@@ -17,6 +17,8 @@ The benchmark policy and capability-claim criteria are defined in
 - Concurrent challenge scheduling with per-task timeouts.
 - Stateful wrappers for interactive tools such as GDB and network sessions.
 - Bounded retries and rejected-candidate tracking.
+- Range-aware file reads, duplicate-write guards, and whole-task forensic I/O budgets.
+- Deterministic forensic evidence compaction; retries receive facts and open questions instead of raw tool dumps.
 - Platform-neutral provider and submission interfaces.
 - A configurable JSON-over-HTTP competition adapter.
 - A dedicated organizer adapter for query, reset, attachment, and answer APIs.

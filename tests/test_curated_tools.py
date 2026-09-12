@@ -556,7 +556,8 @@ async def test_pcap_triage_and_follow_stream_quote_inputs() -> None:
     assert timeout == 300
 
     await action.ainvoke({"capture": "traffic sample.pcap", "follow_tcp_stream": 3})
-    assert "follow,tcp,ascii,3" in env.calls[1][0]
+    follow_command = next(command for command, _ in env.calls if "follow,tcp,ascii,3" in command)
+    assert "'traffic sample.pcap'" in follow_command
 
     with pytest.raises(ValueError, match="non-negative"):
         await action.ainvoke({"capture": "x.pcap", "follow_tcp_stream": -2})
@@ -592,7 +593,9 @@ async def test_pcap_normalized_and_tls_recovery_tools_quote_paths() -> None:
 
     tls = make_pcap_tls_recover(env=env)
     await tls.ainvoke({"capture": "tls sample.pcap", "output_dir": "tls out"})
-    command, timeout = env.calls[1]
+    command, timeout = next(
+        (command, timeout) for command, timeout in env.calls if "tls sample.pcap" in command
+    )
     assert "'tls sample.pcap' 'tls out'" in command
     assert timeout == 600
 

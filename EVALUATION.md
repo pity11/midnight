@@ -181,6 +181,13 @@ routing, cross-specialist help, persistent memory/checkpoints, context
 compression, and retry policy. This distinguishes model and tool-environment
 gains from orchestration gains.
 
+For forensic regressions, also compare whole-task `read_file`/`write_file`
+counts and input tokens. The runtime suppresses unchanged covered read ranges,
+unchanged writes, and evidence-free forensic rewrites; evaluation review remains
+limited to tool names/counts, errors, usage, and submission status. Workspace
+read/write ledgers and normalized evidence are private run artifacts and are not
+published with reports.
+
 ## Required measurements
 
 Each run records:

@@ -36,6 +36,8 @@ from midnight.interfaces.provider import ChallengeProvider
 from midnight.interfaces.submitter import FlagSubmitter
 from midnight.models import build_llm
 from midnight.state import Challenge, CTFState
+from midnight.tools.forensic_memory import read_retry_memory
+from midnight.tools.summarizer import simple_truncate
 from midnight.utils.flag import extract_flags
 from midnight.utils.logging import get_logger
 
@@ -66,6 +68,29 @@ _NODE_EXPERT = {
     "forensics_specialist": "forensics",
     "misc_specialist": "misc",
 }
+
+
+def _compact_continuation_messages(messages: list, *, tool_cycles: int = 4) -> list:
+    """Keep coherent recent tool exchanges while bounding returned content."""
+    tool_call_indexes = [
+        index
+        for index, message in enumerate(messages)
+        if getattr(message, "tool_calls", None)
+    ]
+    if tool_call_indexes:
+        start = tool_call_indexes[-tool_cycles]
+        selected = messages[start:]
+    else:
+        selected = messages[-6:]
+    compacted = []
+    for message in selected:
+        content = getattr(message, "content", None)
+        if getattr(message, "type", "") == "tool" and isinstance(content, str):
+            message = message.model_copy(
+                update={"content": simple_truncate(content, limit=2400)}
+            )
+        compacted.append(message)
+    return compacted
 
 
 def build_main_graph(
@@ -233,13 +258,9 @@ def build_main_graph(
             ch = state["challenge"]
             deadline = ch.get("deadline_epoch")
             remaining = max(0, int(deadline - time.time())) if deadline else None
-            evidence_tail = ""
+            retry_memory = ""
             if attempt > 1:
-                evidence_result = await env.exec(
-                    "test -f evidence.jsonl && tail -n 8 evidence.jsonl || true",
-                    timeout=15,
-                )
-                evidence_tail = evidence_result.stdout.strip()
+                retry_memory = await read_retry_memory(env)
             base_task = (
                 f"Challenge: {ch.get('name')}\n"
                 f"Type: {expert}\n"
@@ -275,8 +296,8 @@ def build_main_graph(
                         "phase reached, record the failed assumption, then choose a materially "
                         "different next experiment. Do not repeat prior probes or payloads."
                     )
-                if evidence_tail:
-                    feedback += f"\n\n[DURABLE EVIDENCE]\n{evidence_tail}"
+                if retry_memory:
+                    feedback += f"\n\n[COMPACT RETRY MEMORY]\n{retry_memory}"
                 if state.get("error"):
                     feedback += f" Previous runtime/model error: {state['error']}."
                 task_text = base_task + feedback
@@ -286,10 +307,10 @@ def build_main_graph(
             log.info("specialist %s attempt %d/%d", expert, attempt, cfg.settings.max_attempts)
             # A weak model often emits a plain-text conclusion after one useful
             # tool call, which LangChain correctly treats as a terminal answer.
-            # Retain a bounded tail from the previous lane and continue a
-            # prematurely terminated lane twice before spending an outer retry.
-            prior = list(state.get("messages") or [])[-16:] if attempt > 1 else []
-            invocation_messages = [*prior, HumanMessage(task_text)]
+            # Outer retries receive only normalized durable memory, not raw
+            # transcript output. This preserves phase counters separately while
+            # preventing failed lanes from multiplying the next prompt.
+            invocation_messages = [HumanMessage(task_text)]
             result: dict = {"messages": invocation_messages}
             protocol_error: str | None = None
             for continuation in range(3):
@@ -318,7 +339,7 @@ def build_main_graph(
                 if collected or tool_calls >= 12 or continuation == 2:
                     break
                 invocation_messages = [
-                    *current_messages[-24:],
+                    *_compact_continuation_messages(current_messages),
                     HumanMessage(
                         "[CONTINUE] No verified flag has been produced. Your previous "
                         "text was not a solution. Continue from the latest real observation: "

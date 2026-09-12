@@ -123,6 +123,35 @@ def test_forensics_shell_budget_counts_prior_and_current_unique_calls():
     assert gate._observed_tool_counts["run_shell"] == 12
 
 
+def test_forensics_read_and_write_budgets_span_prior_attempts():
+    gate = ArtifactPhaseGateMiddleware(
+        category="forensics",
+        prior_tool_counts=(("read_file", 18), ("write_file", 6)),
+        forensics_read_limit=18,
+        forensics_write_limit=6,
+    )
+
+    class Tool:
+        def __init__(self, name: str):
+            self.name = name
+
+    class Request:
+        def __init__(self, tools: list[Tool]):
+            self.tools = tools
+
+        def override(self, *, tools: list[Tool]):
+            return Request(tools)
+
+    constrained = gate._constrain_request(
+        Request([Tool("read_file"), Tool("write_file"), Tool("read_evidence")]),
+        None,
+    )
+    assert [tool.name for tool in constrained.tools] == ["read_evidence"]
+
+    update = gate.before_model({"messages": [_tool_message(1, "list_dir")]}, None)
+    assert update is not None
+    assert "TASK_BUDGET:READ_FILE" in update["messages"][0].content
+
 def test_forensics_detects_capture_path_from_tool_arguments():
     gate = ArtifactPhaseGateMiddleware(
         category="forensics",

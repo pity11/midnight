@@ -44,6 +44,17 @@ artifacts, and next steps to `evidence.jsonl`. The record is source-attributed
 and survives context trimming and outer retries. It is also the durable exchange
 format for the planned optional solver-racing layer.
 
+Forensic wrappers additionally normalize long log, EVTX, PCAP, and Linux IR
+output into bounded `forensic-evidence.jsonl` records containing provenance,
+status, an output hash, and selected findings. Outer retries are rebuilt from
+these records and the explicit evidence kinds; they do not receive prior raw
+tool messages. `read_file` records the resolved path, content hash, byte offsets,
+and line range in a workspace ledger, suppresses unchanged covered ranges, and
+is subject to a whole-task forensic budget. Forensic rewrites are no-ops when
+unchanged and require a new read range or structured evidence after the previous
+write. These ledgers live only in the challenge workspace and follow its revision
+and evaluation-attempt isolation.
+
 The submission ledger reserves a candidate before a platform call. It stores a
 SHA-256 digest instead of the flag value. A crash after sending a candidate but
 before receiving the verdict therefore produces an intentionally uncertain

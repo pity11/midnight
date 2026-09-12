@@ -139,6 +139,8 @@ notepad config\platform.local.yaml
 ```
 
 终端会显示脱敏事件。正式自主阶段是否允许打开监控窗口，以现场裁判要求为准。
+
+取证任务会在各自工作区内部维护文件读取范围、内容哈希和写入证据账本，并把长日志、EVTX、PCAP 与 Linux IR 输出压缩为短证据记录。监控和报告只使用脱敏的工具次数、错误、Token 与提交状态；不要打开工作区账本、模型推理正文、候选 Flag 或 evaluator oracle。
 每轮数据在 `logs\RUN_ID\`：
 
 - `events.jsonl`：脱敏生命周期事件；

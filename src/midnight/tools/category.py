@@ -14,6 +14,7 @@ import shlex
 from urllib.parse import urlsplit
 
 from midnight.env.ctf_environment import CTFEnvironment
+from midnight.tools.forensic_memory import compact_forensic_result
 from midnight.tools.interactive.session import DockerInteractiveSession
 from midnight.tools.registry import register_tool
 from midnight.tools.summarizer import summarize
@@ -1566,7 +1567,10 @@ print(json.dumps({"report": output.as_posix(), "files_scanned": scanned,
             f"python3 -c \"import base64;exec(base64.b64decode('{encoded}'))\" "
             f"{shlex.quote(root)} {shlex.quote(output)}"
         )
-        return _result_text(await env.exec(command, timeout=600))
+        result = await env.exec(command, timeout=600)
+        return await compact_forensic_result(
+            env=env, tool="linux_ir_triage", source=root, result=result
+        )
 
     return linux_ir_triage
 
@@ -1637,7 +1641,10 @@ def make_evtx_triage(*, env: CTFEnvironment, **_) -> object:
             f"echo '[high-value-records]'; grep -Eina -B4 -A14 {pattern} {destination} "
             "2>/dev/null | head -320"
         )
-        return _result_text(await env.exec(command, timeout=600))
+        result = await env.exec(command, timeout=600)
+        return await compact_forensic_result(
+            env=env, tool="evtx_triage", source=path, result=result
+        )
 
     return evtx_triage
 
@@ -1731,7 +1738,13 @@ def make_pcap_triage(*, env: CTFEnvironment, **_) -> object:
                 "-e http.host -e http.request.uri -e ftp.request.command -e ftp.request.arg "
                 "2>/dev/null | head -240"
             )
-        return _result_text(await env.exec(command, timeout=300))
+        result = await env.exec(command, timeout=300)
+        return await compact_forensic_result(
+            env=env,
+            tool="pcap_triage",
+            source=f"{capture} filter={display_filter!r} stream={follow_tcp_stream}",
+            result=result,
+        )
 
     return pcap_triage
 
@@ -1811,7 +1824,13 @@ print(json.dumps(records, ensure_ascii=False, indent=2))
             f"{shlex.quote(capture)} {shlex.quote(protocol)} {shlex.quote(output_dir)}; "
             f"find {shlex.quote(output_dir)}/normalized -maxdepth 1 -type f -exec file {{}} \\;"
         )
-        return _result_text(await env.exec(command, timeout=360))
+        result = await env.exec(command, timeout=360)
+        return await compact_forensic_result(
+            env=env,
+            tool="pcap_artifact_extract",
+            source=f"{capture} protocol={protocol}",
+            result=result,
+        )
 
     return pcap_artifact_extract
 

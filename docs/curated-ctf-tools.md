@@ -29,7 +29,7 @@ tool layer:
 | Forensics | tshark | `pcap_triage` | A capture needs protocol/conversation triage or an exact TCP stream transcript |
 | Forensics | tshark | `pcap_stream_payload` | An opaque TCP stream needs bounded packet-level hex plus directional byte streams for decoder development |
 | Forensics | Hayabusa | `hayabusa_timeline` | One or many EVTX logs need a normalized Sigma-enriched incident timeline |
-| Forensics | log-audit | `log_audit` | One Web, authentication, application, or database log (or an immediate same-format directory) needs normalized events, rule detections, profiles, and IOC correlation |
+| Forensics | log-audit | `log_audit` | One Web, authentication, application, or database log (or an immediate same-format directory) needs normalized events, rule detections, profiles, and IOC correlation; long output is automatically reduced to a hashed evidence record for retries |
 | Forensics | Linux IR triage | `linux_ir_triage` | A recovered Linux host tree needs bounded account, permission, persistence, web, network, or MySQL UDF pivots |
 | Misc/Forensics | 7-Zip | `archive_extract` | A supplied archive needs deterministic extraction and a bounded file inventory |
 | Misc/Forensics | ZBar | `qr_decode` | A reconstructed PBM/PNG or suspicious image contains QR finder patterns or a module grid |

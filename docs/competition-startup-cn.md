@@ -189,6 +189,8 @@ scripts/competition monitor rehearsal-1
 
 按 `Ctrl-C` 只会结束这个监控命令，不会停止另一个终端中的 Agent。正式自主阶段是否允许打开或操作监控终端，以现场规则和裁判指令为准。
 
+取证任务会在各自工作区内部维护文件读取范围、内容哈希和写入证据账本，并把长日志、EVTX、PCAP 与 Linux IR 输出压缩为短证据记录。监控和报告只使用脱敏的工具次数、错误、Token 与提交状态；不要打开工作区账本、模型推理正文、候选 Flag 或 evaluator oracle。
+
 运行数据分别位于：
 
 ```text

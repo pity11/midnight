@@ -9,6 +9,7 @@ from pathlib import PurePosixPath
 
 from midnight.env.ctf_environment import CTFEnvironment
 from midnight.tools.category import _challenge_url, _result_text
+from midnight.tools.forensic_memory import compact_forensic_result
 from midnight.tools.registry import register_tool
 
 
@@ -102,7 +103,10 @@ def make_log_audit(*, env: CTFEnvironment, **_) -> object:
             "log-audit-analyze ioc -e \"$dst\" -o \"$dst/iocs.json\" && "
             f"python3 -c \"import base64;exec(base64.b64decode('{encoded}'))\" \"$dst\""
         )
-        return _result_text(await env.exec(command, timeout=900))
+        result = await env.exec(command, timeout=900)
+        return await compact_forensic_result(
+            env=env, tool="log_audit", source=path, result=result
+        )
 
     return log_audit
 
@@ -214,7 +218,13 @@ print(json.dumps(manifest, indent=2))
             f"python3 -c \"import base64;exec(base64.b64decode('{encoded}'))\" "
             f"{shlex.quote(capture)} {stream} {shlex.quote(output_dir)} {packet_limit}"
         )
-        return _result_text(await env.exec(command, timeout=300))
+        result = await env.exec(command, timeout=300)
+        return await compact_forensic_result(
+            env=env,
+            tool="pcap_stream_payload",
+            source=f"{capture} tcp.stream={stream}",
+            result=result,
+        )
 
     return pcap_stream_payload
 
